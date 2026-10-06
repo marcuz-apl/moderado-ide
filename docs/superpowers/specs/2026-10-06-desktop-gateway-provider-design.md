@@ -49,9 +49,11 @@ uses the existing Node/TypeScript platform facilities. The Desktop-specific
 ownership exception will be recorded in contributor documentation so the
 provider-ownership rule cannot silently drift back to a CLI package update.
 
-The webview receives display-safe provider/model data only. API keys and OAuth
-tokens remain in the extension host and Windows Credential Manager. Model
-content and provider responses are untrusted and validated at their boundary.
+The webview receives display-safe provider/model data only. Manual API keys are
+collected with a native host-side password prompt; no secret is rendered into
+the webview DOM or sent in a webview message. API keys and OAuth tokens remain
+in the extension host and Windows Credential Manager. Model content and
+provider responses are untrusted and validated at their boundary.
 
 ## Gateway behavior
 
@@ -106,6 +108,8 @@ Use the Cline screenshots as interaction references, not pixel targets:
 - Settings groups Moderado Gateway login and direct provider configuration.
   Gateway offers public, browser, and manual-key choices. Direct providers
   include the four hosted presets, two local runtimes, and custom endpoint.
+- Manual Gateway and direct-provider keys are entered through native host-side
+  password prompts. The webview shows only whether a credential is stored.
 - The model picker supports Gateway `auto` plus searchable Gateway routes, and
   direct-provider AUTO plus the existing Recommended/Free list organization.
   Provider, model, cost class, and available catalog notes are shown without

@@ -715,7 +715,16 @@ published or signed.
   routing at the host boundary.
 - Design spec: `docs/superpowers/specs/2026-10-06-desktop-gateway-provider-design.md`.
   It is committed as `61a859a` and the owner approved it on 2026-10-06.
-  Implementation has not started; the implementation plan is being prepared.
+  The spec clarifies that manual keys use native host-side prompts and never
+  enter the webview. Implementation has not started.
+- Implementation plan:
+  `docs/superpowers/plans/2026-10-06-desktop-gateway-provider.md`. It splits
+  the work into nine test-first units across catalog, discovery, transport,
+  routing, login, host wiring, GUI, and docs. The owner must choose
+  subagent-driven or inline execution before implementation starts.
+- No source tests or builds were run while writing the design/plan. The spec
+  and plan checks were documentation review only; the implementation plan
+  lists the required verification commands.
 - Live catalog inspection command:
   `Invoke-RestMethod -Uri 'http://127.0.0.1:4788/v1/models' | ConvertTo-Json -Depth 12`.
   Outcome: HTTP success, 10 route entries with IDs, providers, owners,
