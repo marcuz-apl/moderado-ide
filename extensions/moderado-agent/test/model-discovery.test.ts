@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { discoverModelOptions } from '../src/model-discovery.js';
 
 describe('model discovery for the settings pane', () => {
+  it('preserves only display-safe Gateway metadata', async () => {
+    const result = await discoverModelOptions(async () => [{ id: 'route/Exact', accessTier: 'free_trial', toolSupport: 'supported',
+      isFree: true, provider: 'nvidia', ownedBy: 'owner', capabilities: ['tools'], dataNote: '<note>', apiKey: 'never-forward' }], 1000);
+    expect(result.models[0]).toEqual({ id: 'route/Exact', accessTier: 'free_trial', isFree: true,
+      provider: 'nvidia', ownedBy: 'owner', capabilities: ['tools'], dataNote: '<note>' });
+    expect(JSON.stringify(result)).not.toContain('never-forward');
+  });
   it('reports a definite result instead of leaving the placeholder', () => {
     // The regression: the pane re-assigned its in-flight placeholder text after a
     // successful load, so the UI stayed on "Loading models…" forever.

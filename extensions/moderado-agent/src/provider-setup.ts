@@ -180,7 +180,7 @@ export function buildDiscoveryConnection(
 
   const displayName = input.displayName?.trim() || choice.displayName || choice.label;
   return {
-    id: presetConnectionId(choice.value),
+    id: choice.value === 'openai-compatible' ? connectionIdFor(displayName) : presetConnectionId(choice.value),
     displayName,
     kind: 'openai-compatible',
     baseUrl: validateProviderBaseUrl(baseUrl),

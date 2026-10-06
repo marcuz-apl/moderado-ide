@@ -1,19 +1,14 @@
 import { escapeHtml } from './html.js';
+import { validateProviderBaseUrl } from './provider-setup.js';
+import type { GatewayLoginMethod } from './gateway-login.js';
 
 /**
  * The in-panel Moderado settings pane, as pure string building.
  *
  * Same split as chat-view.ts: no `vscode` import, so this is directly testable.
  *
- * SECURITY BOUNDARY. This pane collects a provider API key, so it is written to
- * be hostile to its own contents:
- *
- *  - The stored key is never sent into the pane. The field is a write-only
- *    masked input; an empty field means "leave the stored key alone" and can
- *    never erase one. Reading it back would put a live secret on screen.
- *  - The key leaves through a single `saveSettings` message and goes straight to
- *    the extension host, which writes it to Credential Manager. It is never put
- *    in `config.json`, an editor setting, or an event.
+ * SECURITY BOUNDARY. This pane carries nonsecret choices only. Keys are entered
+ * in the native extension-host prompt and stored directly in Credential Manager.
  *  - Everything rendered here (provider names, base URLs, model ids, profile
  *    errors) is untrusted data from the shared profile and is escaped.
  */
@@ -23,6 +18,10 @@ export interface SettingsModel {
   /** Engine `AccessTier`: free_trial | paid | local | unknown. */
   accessTier: string;
   isFree: boolean;
+  provider?: string;
+  ownedBy?: string;
+  capabilities?: string[];
+  dataNote?: string;
 }
 
 /** A saved connection read back from the shared `~/.moderado/config.json`. */
@@ -73,6 +72,9 @@ export interface SettingsState {
   apiKeyStored: boolean;
   models: SettingsModel[];
   defaultModel: string;
+  loginMethod?: GatewayLoginMethod;
+  allowPaid?: boolean;
+  allowUnknown?: boolean;
   /** Set when the profile could not be read; blocks saving rather than defaulting. */
   profileError?: string;
   /** Transient feedback line, e.g. "Saved." or a failure reason. */
@@ -96,6 +98,9 @@ export function emptySettings(): SettingsState {
     apiKeyStored: false,
     models: [],
     defaultModel: '',
+    loginMethod: 'public',
+    allowPaid: false,
+    allowUnknown: false,
   };
 }
 
@@ -130,12 +135,17 @@ function selectedChoice(state: SettingsState): SettingsProviderChoice | undefine
  * remain observable rather than hidden.
  */
 function modelOptions(state: SettingsState): string {
-  return state.models
+  return eligibleModels(state)
     .map(
       (model) =>
         `<option value="${escapeHtml(model.id)}"${model.id === state.defaultModel ? ' selected' : ''}>${escapeHtml(`${model.isFree ? '★ ' : ''}${model.id} — ${model.accessTier}`)}</option>`,
     )
     .join('');
+}
+
+function eligibleModels(state: SettingsState): SettingsModel[] {
+  return state.models.filter(model => model.id === 'auto' || model.isFree || model.accessTier === 'local'
+    || (model.accessTier === 'paid' && state.allowPaid) || (model.accessTier === 'unknown' && state.allowUnknown));
 }
 
 /** The left-hand settings navigation, matching the reference layout. */
@@ -155,18 +165,23 @@ function settingsNav(page: string): string {
 
 /** The model cards, as a name/description/free-badge list rather than a dropdown. */
 function modelCards(state: SettingsState): string {
-  const shown = state.modelTab === 'all' ? state.models : state.models.filter((m) => m.isFree);
+  const eligible = eligibleModels(state);
+  const shown = state.modelTab === 'all' ? eligible : eligible.filter((m) => m.isFree || m.id === 'auto');
   if (!shown.length) {
     return `<p class="note">${state.models.length ? 'No free models on this provider.' : 'No models loaded yet.'}</p>`;
   }
   return shown
     .map(
-      (model) => `<button type="button" class="model-card${model.id === state.defaultModel ? ' on' : ''}" data-model="${escapeHtml(model.id)}">
+      (model) => `<button type="button" class="model-card${model.id === state.defaultModel ? ' on' : ''}" data-model="${escapeHtml(model.id)}" aria-pressed="${model.id === state.defaultModel}"${state.profileError ? ' disabled' : ''}>
         <span class="model-top">
-          <span class="model-name">${escapeHtml(model.id)}</span>
+          <span class="model-name">${escapeHtml(model.id === 'auto' ? state.preset === 'moderado-cloud' ? 'AUTO · Gateway routing' : 'AUTO · Free-first' : model.id)}</span>
           ${model.isFree ? '<span class="model-badge">FREE</span>' : `<span class="model-badge paid">${escapeHtml(model.accessTier)}</span>`}
         </span>
-        <span class="model-desc">${escapeHtml(model.accessTier)}${model.isFree ? ' · no cost' : ' · may cost'}</span>
+        <span class="model-desc">${model.id === 'auto' ? state.preset === 'moderado-cloud' ? 'Gateway selects a free route.' : 'Ranks eligible models and permits fallback.' : escapeHtml(model.accessTier) + (model.isFree ? ' · no cost' : ' · may cost')}</span>
+        ${model.provider ? `<span class="model-desc">Provider: ${escapeHtml(model.provider)}</span>` : ''}
+        ${model.ownedBy ? `<span class="model-desc">Owner: ${escapeHtml(model.ownedBy)}</span>` : ''}
+        ${model.capabilities?.length ? `<span class="model-desc">Capabilities: ${escapeHtml(model.capabilities.join(', '))}</span>` : ''}
+        ${model.dataNote ? `<span class="model-desc">${escapeHtml(model.dataNote)}</span>` : ''}
       </button>`,
     )
     .join('');
@@ -189,10 +204,12 @@ export function settingsPaneHtml(state: SettingsState): string {
 
   const choice = selectedChoice(state);
   const generic = choice?.custom === true;
-  const needsKey = choice?.requiresApiKey ?? true;
+  const gateway = state.preset === 'moderado-cloud';
+  const loginMethod = state.loginMethod ?? 'public';
+  const needsKey = gateway ? loginMethod !== 'public' : choice?.requiresApiKey ?? true;
   // Per-provider credential state: picking a provider shows whether that one
   // already has a key, rather than the previous provider's.
-  const keyStored = choice?.hasCredential ?? false;
+  const keyStored = choice?.hasCredential ?? state.apiKeyStored;
 
   const problem = blocked
     ? `<p class="problem" role="alert">${escapeHtml(state.profileError as string)} Fix or move that file before changing settings; Desktop did not read it and will not overwrite it.</p>`
@@ -207,23 +224,25 @@ export function settingsPaneHtml(state: SettingsState): string {
     ? `<p class="active-line" title="Shared profile: ${escapeHtml(state.profilePath || '~/.moderado/config.json')}">Using <strong>${escapeHtml(active?.displayName ?? state.activeConnectionId)}</strong>${active?.hasCredential ? ' · key stored' : ''}</p>`
     : '';
 
-  // The key is write-only: an empty field keeps whatever is stored, so the saved
-  // key is never rendered back into the pane.
+  const loginField = gateway ? `<label for="settings-login-method">Gateway access</label>
+    <select id="settings-login-method"${disabled}>
+      ${(['public', 'browser', 'manual'] as const).map(method => `<option value="${method}"${method === loginMethod ? ' selected' : ''}>${{ public: 'Public access · no key', browser: 'Browser sign-in', manual: 'Manual Gateway key' }[method]}</option>`).join('')}
+    </select>` : '';
   const keyField = !needsKey
-    ? '<p class="note">This local runtime needs no API key.</p>'
-    : `<label for="settings-api-key">API key</label>
-    <input id="settings-api-key" type="password" autocomplete="off" spellcheck="false"
-           placeholder="${keyStored ? 'Stored — leave empty to keep' : 'Paste the key'}"${disabled} />
-    ${keyStored ? `<p class="note">A key is already stored for this provider. Leave the field empty to keep it.</p>` : ''}`;
+    ? `<p class="note">${gateway ? 'Public access uses the Gateway without a key.' : 'This local runtime needs no API key.'}</p>`
+    : `<p class="note">${keyStored ? 'Credential stored. A key is already stored for this provider.' : 'No credential stored.'}</p>
+      ${gateway && loginMethod === 'browser'
+        ? `<button id="settings-browser-login" type="button"${disabled}>Sign in with browser</button>`
+        : `<button id="settings-set-key" type="button"${disabled}>Set or update key</button><p class="note">Enter the key in the secure editor prompt.</p>`}`;
 
   // Only the generic endpoint has no preset-supplied values to fall back on.
-  const extra = generic
-    ? `<label for="settings-display-name">Provider name</label>
+  const extra = generic || gateway
+    ? `${generic ? `<label for="settings-display-name">Provider name</label>
     <input id="settings-display-name" type="text" spellcheck="false"
-           placeholder="OpenRouter" value="${escapeHtml(state.displayName)}"${disabled} />
+           placeholder="OpenRouter" value="${escapeHtml(state.displayName)}"${disabled} />` : ''}
     <label for="settings-base-url">Base URL</label>
     <input id="settings-base-url" type="text" spellcheck="false"
-           placeholder="https://api.example.com/v1" value="${escapeHtml(state.baseUrl)}"${disabled} />
+           placeholder="${gateway ? 'http://127.0.0.1:4788/v1' : 'https://api.example.com/v1'}" value="${escapeHtml(state.baseUrl || choice?.storedBaseUrl || choice?.baseUrl || '')}"${disabled} />
     <p class="note">HTTPS only. HTTP is accepted for localhost endpoints.</p>`
     : '';
 
@@ -234,10 +253,13 @@ export function settingsPaneHtml(state: SettingsState): string {
     </div>
     <label class="sr-only" for="settings-model">Default model</label>
     <select id="settings-model" class="sr-only"${disabled}>${modelOptions(state)}</select>
+    <label for="settings-model-search">Search models</label>
+    <input id="settings-model-search" type="search" placeholder="Model, provider, or capability"${disabled} />
+    <p class="note">Selected model: <strong>${escapeHtml(state.defaultModel || 'No model selected')}</strong></p>
     ${modelCards(state)}
     <p class="summary">
       <span>${state.models.filter((m) => m.isFree).length} free</span>
-      <span>${state.models.length} listed</span>
+      <span>${eligibleModels(state).length} listed</span>
     </p>`;
 
   const presetNote = choice ? `<p class="note">${escapeHtml(choice.description)}</p>` : '';
@@ -252,10 +274,11 @@ export function settingsPaneHtml(state: SettingsState): string {
       <div class="set-content">
         ${problem}
         ${compactActive}
-        <h3>API Provider</h3>
+        <label for="settings-provider">API Provider</label>
         <select id="settings-provider"${disabled}>${providerOptions(state)}</select>
         ${presetNote}
         ${extra}
+        ${loginField}
         ${keyField}
         ${modelField}
         <div class="row">
@@ -281,9 +304,8 @@ export interface SettingsFormValues {
   preset: string;
   displayName: string;
   baseUrl: string;
-  /** Undefined means "leave the stored key alone", never "clear it". */
-  apiKey?: string;
   modelId?: string;
+  loginMethod: GatewayLoginMethod;
 }
 
 export type ParsedSettings =
@@ -299,8 +321,15 @@ export type ParsedSettings =
  * implementation of them rather than two that can disagree.
  */
 export function parseSettingsForm(message: unknown): ParsedSettings {
-  if (!message || typeof message !== 'object') return { ok: false, error: 'Malformed settings message.' };
+  if (!message || typeof message !== 'object' || Array.isArray(message)) return { ok: false, error: 'Malformed settings message.' };
   const raw = message as Record<string, unknown>;
+  if (['apiKey', 'token', 'authorizationCode', 'credentialReference'].some(field => field in raw)) {
+    return { ok: false, error: 'Provider credentials must be entered in the secure editor prompt.' };
+  }
+  const loginMethod = raw.loginMethod ?? 'public';
+  if (loginMethod !== 'public' && loginMethod !== 'manual' && loginMethod !== 'browser') {
+    return { ok: false, error: 'Choose a valid Gateway login method.' };
+  }
 
   const preset = typeof raw.preset === 'string' ? raw.preset.trim() : '';
   if (!preset) return { ok: false, error: 'Choose a provider.' };
@@ -325,13 +354,9 @@ export function parseSettingsForm(message: unknown): ParsedSettings {
     return { ok: false, error: 'Malformed base URL.' };
   }
 
-  let apiKey: string | undefined;
-  if (typeof raw.apiKey === 'string') {
-    const trimmed = raw.apiKey.trim();
-    // Whitespace is not a request to erase the stored key.
-    if (trimmed) apiKey = trimmed;
-  } else if (raw.apiKey !== undefined && raw.apiKey !== null) {
-    return { ok: false, error: 'Malformed API key.' };
+  if (baseUrl) {
+    try { baseUrl = validateProviderBaseUrl(baseUrl); }
+    catch { return { ok: false, error: 'Use HTTPS, or HTTP for a loopback endpoint, without credentials, query, or fragment.' }; }
   }
 
   let modelId: string | undefined;
@@ -342,5 +367,6 @@ export function parseSettingsForm(message: unknown): ParsedSettings {
     return { ok: false, error: 'Malformed model id.' };
   }
 
-  return { ok: true, value: { preset, displayName, baseUrl, apiKey, modelId } };
+  if (modelId && /[\u0000-\u001f\u007f]/.test(modelId)) return { ok: false, error: 'Malformed model id.' };
+  return { ok: true, value: { preset, displayName, baseUrl, loginMethod, modelId } };
 }

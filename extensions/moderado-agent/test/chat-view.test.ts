@@ -338,7 +338,7 @@ describe('moderado settings pane', () => {
       ],
     }));
     expect(pane).not.toContain('already stored for this provider');
-    expect(pane).toContain('placeholder="Paste the key"');
+    expect(pane).toContain('No credential stored.');
   });
 
   it('marks the key as stored for the provider that has one', () => {
@@ -350,7 +350,9 @@ describe('moderado settings pane', () => {
       ],
     }));
     expect(pane).toContain('already stored for this provider');
-    expect(pane).toContain('Stored — leave empty to keep');
+    // The secret is collected by a native host prompt, not an editable field.
+    expect(pane).toContain('Set or update key');
+    expect(pane).not.toContain('type="password"');
   });
 
   it('badges free models and summarises the counts', () => {
@@ -361,7 +363,7 @@ describe('moderado settings pane', () => {
         { id: 'free-a', accessTier: 'free_trial', isFree: true },
         { id: 'paid-b', accessTier: 'paid', isFree: false },
       ],
-      defaultModel: 'free-a',
+      defaultModel: 'free-a', allowPaid: true,
     }));
     // Free models are cards with a FREE badge, as in the reference layout.
     expect(pane).toContain('class="model-card on" data-model="free-a"');
@@ -412,7 +414,7 @@ describe('moderado settings pane', () => {
       { value: 'nvidia-nim', label: 'NVIDIA NIM', description: 'Free-first routing.', requiresApiKey: true },
     ] }));
     expect(pane).toContain('id="settings-provider"');
-    expect(pane).toContain('id="settings-api-key"');
+    expect(pane).toContain('id="settings-set-key"');
     expect(pane).toContain('id="settings-model"');
   });
 
@@ -453,13 +455,14 @@ describe('moderado settings pane', () => {
     expect(pane).toContain('Ollama · Local');
   });
 
-  it('masks the API key field', () => {
+  it('opens key entry in the host rather than rendering a secret input', () => {
     // A visible key field would put a provider secret on screen and in shoulder
     // surfing. The value is write-only: it is sent out and never sent back.
     const pane = settingsPaneHtml(settings({ preset: 'nvidia-nim', providers: [
       { value: 'nvidia-nim', label: 'NVIDIA NIM', description: 'd', requiresApiKey: true },
     ] }));
-    expect(pane).toMatch(/id="settings-api-key"[^>]*type="password"/);
+    expect(pane).not.toContain('type="password"');
+    expect(pane).toContain('id="settings-set-key"');
   });
 
   it('never echoes a stored API key back into the pane', () => {
@@ -471,7 +474,8 @@ describe('moderado settings pane', () => {
     }));
     expect(pane).not.toContain('sk-live-secret');
     expect(pane).toContain('already stored for this provider');
-    expect(pane).toMatch(/id="settings-api-key"[^>]*type="password"/);
+    expect(pane).not.toContain('type="password"');
+    expect(pane).toContain('id="settings-set-key"');
   });
 
   it('marks the selected provider and model', () => {
@@ -486,7 +490,7 @@ describe('moderado settings pane', () => {
           { id: 'model-a', accessTier: 'free_trial', isFree: true },
           { id: 'model-b', accessTier: 'paid', isFree: false },
         ],
-        defaultModel: 'model-b',
+        defaultModel: 'model-b', allowPaid: true,
       }),
     );
     expect(pane).toContain('<option value="ollama" selected');
@@ -498,7 +502,7 @@ describe('moderado settings pane', () => {
     // tier stays in the label so the free-first rule remains observable.
     const pane = settingsPaneHtml(
       settings({
-        preset: 'nvidia-nim',
+        preset: 'nvidia-nim', allowPaid: true, allowUnknown: true,
         models: [
           { id: 'model-a', accessTier: 'free_trial', isFree: true },
           { id: 'model-b', accessTier: 'paid', isFree: false },
@@ -536,7 +540,6 @@ describe('moderado settings pane', () => {
   it('parses a submitted form into validated values', () => {
     const parsed = parseSettingsForm({
       preset: 'nvidia-nim',
-      apiKey: 'sk-test',
       modelId: 'model-a',
     });
     expect(parsed.ok).toBe(true);
@@ -555,12 +558,11 @@ describe('moderado settings pane', () => {
     expect(parseSettingsForm({ preset: 'openai-compatible', displayName: '///' }).ok).toBe(false);
   });
 
-  it('treats an empty API key as "leave the stored key alone"', () => {
+  it('rejects even an empty API key sent by a webview', () => {
     // The pane never receives the existing key, so an empty field must not be
     // read as a request to erase it.
     const parsed = parseSettingsForm({ preset: 'openrouter', apiKey: '   ' });
-    expect(parsed.ok).toBe(true);
-    expect(parsed.value?.apiKey).toBeUndefined();
+    expect(parsed.ok).toBe(false);
   });
 
   it('rejects a malformed message instead of guessing', () => {

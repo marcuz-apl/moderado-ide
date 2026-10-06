@@ -9,6 +9,7 @@ import {
   MemoryCredentialStore,
   credentialManagerAvailable,
   credentialReference,
+  resolveCredential,
 } from './credentials.js';
 import { ChatViewState, TranscriptEntry, AutoApproveState, chatHtml, viewSnapshot } from './chat-view.js';
 import {
@@ -16,6 +17,7 @@ import {
   SettingsConnectionView,
   emptySettings,
   parseSettingsForm,
+  SettingsFormValues,
 } from './settings-view.js';
 import {
   ProviderConnectionRecord,
@@ -26,9 +28,12 @@ import {
   sortFreeFirst,
   pickDefaultModel,
 } from './provider-setup.js';
-import type { ConnectProviderPresetId, ConnectProvidersConfig } from '@moderado/providers';
+import type { ConnectProvidersConfig } from './provider-setup.js';
 import { discoverModelOptions } from './model-discovery.js';
-import { resolveProvider } from './host.js';
+import { DesktopOpenAIAdapter } from './provider-transport.js';
+import { DesktopModelRouter } from './model-router.js';
+import { fetchGatewayRoutes } from './provider-discovery.js';
+import { authorizeGatewayInBrowser, buildGatewayConnection, persistGatewayLogin } from './gateway-login.js';
 
 /**
  * Model discovery bound for the settings pane.
@@ -73,6 +78,10 @@ export function activate(context: vscode.ExtensionContext): ModeradoApi {
    */
   const pendingApprovalRequests = new Map<string, ApprovalRequest>();
   const settings: SettingsState = emptySettings();
+  const credentialStore = credentialManagerAvailable() ? new WindowsCredentialStore() : new MemoryCredentialStore();
+  let discoveryRequest = 0;
+  let settingsBusy = false;
+  let loginAbort: AbortController | undefined;
   /** Auto-approve categories. Every one starts denied (AGENTS.md section 4). */
   const autoApprove: AutoApproveState & { requiresApprovalByDefault: boolean } = {
     expanded: false,
@@ -109,9 +118,7 @@ export function activate(context: vscode.ExtensionContext): ModeradoApi {
     nonInteractive: false,
     // On Windows the key comes from Credential Manager; elsewhere the in-memory
     // default keeps Desktop usable without a keychain.
-    credentialStore: credentialManagerAvailable()
-      ? new WindowsCredentialStore()
-      : undefined,
+    credentialStore,
     approvalTimeoutMs: config().get<number>('approvalTimeoutSeconds', 120) * 1000,
     allowPaid: config().get<boolean>('allowPaidModels', false),
     allowUnknown: config().get<boolean>('allowUnknownModels', false),
@@ -244,6 +251,8 @@ async function openDiffTab(requestId: string): Promise<void> {
     settings.open = true;
     settings.profileError = undefined;
     settings.models = [];
+    settings.allowPaid = config().get<boolean>('allowPaidModels', false);
+    settings.allowUnknown = config().get<boolean>('allowUnknownModels', false);
     if (status) {
       // Show the in-flight text immediately, then let the settled outcome below
       // replace it. Re-using the placeholder as the final value is what left the
@@ -252,8 +261,7 @@ async function openDiffTab(requestId: string): Promise<void> {
       render();
     }
 
-    // The picker is built from the engine's own preset metadata, so Desktop
-    // offers the same providers the CLI does and cannot drift from the pin.
+    // Desktop owns the provider presets; the shared profile controls availability.
     const connectConfig = readConnectProviders(state);
     settings.providers = buildProviderChoices(connectConfig).map((choice) => ({
       value: choice.value,
@@ -280,11 +288,11 @@ async function openDiffTab(requestId: string): Promise<void> {
       return;
     }
 
-    const config = state.kind === 'ok' ? state.config : {};
-    settings.savedConnections = connectionsFromConfig(config);
+    const profileConfig = state.kind === 'ok' ? state.config : {};
+    settings.savedConnections = connectionsFromConfig(profileConfig);
     settings.activeConnectionId =
-      typeof config.activeConnectionId === 'string' ? config.activeConnectionId : '';
-    settings.defaultModel = typeof config.defaultModel === 'string' ? config.defaultModel : '';
+      typeof profileConfig.activeConnectionId === 'string' ? profileConfig.activeConnectionId : '';
+    settings.defaultModel = typeof profileConfig.defaultModel === 'string' ? profileConfig.defaultModel : '';
     // The resolved path is shown so the user can confirm Desktop is reading the
     // same `~/.moderado/config.json` the CLI writes, on Windows included.
     settings.profilePath = configPath();
@@ -295,11 +303,12 @@ async function openDiffTab(requestId: string): Promise<void> {
       settings.providers[0]?.value ||
       '';
 
-    const record = (config.connections ?? {}) as Record<string, Record<string, unknown>>;
+    const record = (profileConfig.connections ?? {}) as Record<string, Record<string, unknown>>;
     const activeRecord = record[settings.activeConnectionId];
     settings.displayName =
       typeof activeRecord?.displayName === 'string' ? activeRecord.displayName : '';
     settings.baseUrl = typeof activeRecord?.baseUrl === 'string' ? activeRecord.baseUrl : '';
+    settings.loginMethod = activeRecord?.authMethod === 'manual' || activeRecord?.authMethod === 'browser' ? activeRecord.authMethod : 'public';
 
     // Only the *presence* of a credential reaches the renderer. The key itself
     // must never be read back, so it is never loaded here.
@@ -343,159 +352,99 @@ async function openDiffTab(requestId: string): Promise<void> {
       )
       : undefined;
     const enabled = Array.isArray(record.enabled)
-      ? (record.enabled.filter((id) => typeof id === 'string') as ConnectProviderPresetId[])
+      ? (record.enabled.filter((id): id is string => typeof id === 'string'))
       : undefined;
     return { ...(enabled ? { enabled } : {}), ...(custom ? { custom } : {}) };
   }
 
-  /**
- * Loads the model list for one picker value and preselects a free model.
- *
- * Runs when the picker opens and again whenever the provider changes, so the list
- * always belongs to what is currently selected.
- *
- * The stored key is resolved HERE, on the host side, and used only to query the
- * provider. It is never put into `settings`, so it never reaches the webview; the
- * pane is told only that a credential exists.
- */
-async function loadModelsForPreset(preset: string): Promise<void> {
-  settings.open = true;
-  settings.preset = preset;
-  settings.models = [];
-  settings.defaultModel = '';
-  settings.status = 'Loading models…';
-  render();
+  /** Resolve secrets only in the extension host. */
+  async function storedKey(id: string, stored: Record<string, unknown> | undefined): Promise<string | undefined> {
+    return resolveCredential(
+      process.env[`MODERADO_${id.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}_API_KEY`],
+      typeof stored?.credentialReference === 'string' ? stored.credentialReference : undefined,
+      typeof stored?.apiKey === 'string' ? stored.apiKey : undefined,
+      credentialStore,
+    );
+  }
 
-  const profile = readConfig();
-  const connectConfig = readConnectProviders(profile);
-  const config = profile.kind === 'ok' ? profile.config : {};
-  const record = (config.connections ?? {}) as Record<string, Record<string, unknown>>;
-  const id = presetConnectionId(preset);
-  const stored = record[id];
-  const choice = settings.providers.find((p) => p.value === preset);
+  function connectionRecord(config: Record<string, unknown>, id: string): Record<string, unknown> | undefined {
+    const records = config.connections;
+    if (!records || typeof records !== 'object' || Array.isArray(records)) return undefined;
+    const value = (records as Record<string, unknown>)[id];
+    return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+  }
 
-  // Resolve an existing credential for this provider, if there is one. The value
-  // stays local to this function.
-  let apiKey: string | undefined;
-  try {
-    const reference = typeof stored?.credentialReference === 'string' ? stored.credentialReference : undefined;
-    if (reference && credentialManagerAvailable()) {
-      apiKey = await new WindowsCredentialStore().get(reference);
-    } else if (typeof stored?.apiKey === 'string') {
-      apiKey = stored.apiKey;
+  function applySettingsForm(form: SettingsFormValues): void {
+    settings.preset = form.preset;
+    settings.displayName = form.displayName;
+    settings.baseUrl = form.baseUrl;
+    settings.loginMethod = form.loginMethod;
+    if (form.modelId) settings.defaultModel = form.modelId;
+  }
+
+  /** Discover a pending connection without requiring or revealing a new key. */
+  async function loadModelsForPreset(preset: string, pending?: SettingsFormValues): Promise<void> {
+    const request = ++discoveryRequest;
+    settings.open = true;
+    const profile = readConfig();
+    if (profile.kind === 'invalid') {
+      settings.profileError = profile.error;
+      settings.status = profile.error;
+      render();
+      return;
     }
-  } catch {
-    // A credential service that cannot answer is not fatal: many providers list
-    // their catalog without a key.
-    apiKey = undefined;
-  }
-
-  // Surface only the presence of a credential, for the key field's hint.
-  if (choice) choice.hasCredential = Boolean(apiKey);
-  const storedBaseUrl = typeof stored?.baseUrl === 'string' ? stored.baseUrl : undefined;
-  if (choice) choice.storedBaseUrl = storedBaseUrl;
-
-  let connection: ProviderConnectionRecord;
-  try {
-    connection = buildDiscoveryConnection(
-      { preset, apiKey, storedBaseUrl, defaultModel: typeof stored?.defaultModel === 'string' ? stored.defaultModel : undefined },
-      connectConfig,
-    );
-  } catch (error) {
-    settings.status = (error as Error).message;
+    const profileConfig = profile.kind === 'ok' ? profile.config : {};
+    const stored = connectionRecord(profileConfig, presetConnectionId(preset));
+    const choice = settings.providers.find(p => p.value === preset);
+    settings.preset = preset;
+    settings.models = [];
+    settings.baseUrl = pending?.baseUrl || (typeof stored?.baseUrl === 'string' ? stored.baseUrl : choice?.baseUrl ?? '');
+    settings.displayName = pending?.displayName || (typeof stored?.displayName === 'string' ? stored.displayName : '');
+    settings.loginMethod = pending?.loginMethod ?? (stored?.authMethod === 'manual' || stored?.authMethod === 'browser' ? stored.authMethod : 'public');
+    const currentModel = pending?.modelId || (profileConfig.activeConnectionId === presetConnectionId(preset) && typeof profileConfig.defaultModel === 'string' ? profileConfig.defaultModel : undefined)
+      || (typeof stored?.defaultModel === 'string' ? stored.defaultModel : 'auto');
+    settings.defaultModel = currentModel;
+    settings.status = 'Loading models?';
     render();
-    return;
+
+    const result = await discoverModelOptions(async () => {
+      const apiKey = settings.loginMethod === 'public' && preset === 'moderado-cloud' ? undefined : await storedKey(presetConnectionId(preset), stored);
+      // A public catalog may work without a stored credential.
+      const connection = buildDiscoveryConnection({ preset, apiKey, storedBaseUrl: settings.baseUrl,
+        displayName: settings.displayName, defaultModel: currentModel }, readConnectProviders(profile));
+      if (choice) { choice.hasCredential = Boolean(apiKey); choice.storedBaseUrl = connection.baseUrl; }
+      if (request === discoveryRequest) settings.apiKeyStored = Boolean(apiKey);
+      const routes = connection.id === 'moderado-cloud' ? await fetchGatewayRoutes(connection.baseUrl) : undefined;
+      const inventory = routes ? routes.map(route => ({ id: route.id, object: 'model' as const, owned_by: route.owned_by ?? route.provider ?? 'moderado-cloud',
+        ...(route.capabilities.includes('tools') || route.capabilities.includes('tool_calling') ? { supported_parameters: ['tools'] } : {}) }))
+        : await new DesktopOpenAIAdapter({ id: connection.id, name: connection.displayName, baseUrl: connection.baseUrl, apiKey }).discoverModels();
+      const router = new DesktopModelRouter({ providerId: connection.id, inventory, allowPaid: settings.allowPaid ?? false,
+        allowUnknown: settings.allowUnknown ?? false, requireTools: true });
+      return [{ id: 'auto', accessTier: routes ? 'free_trial' : 'unknown', isFree: Boolean(routes), toolSupport: 'supported' }, ...inventory.map(entry => {
+        const classification = router.classifyModel(entry.id);
+        const route = routes?.find(item => item.id === entry.id);
+        return { id: entry.id, accessTier: classification.accessTier, toolSupport: classification.toolSupport,
+          isFree: classification.accessTier === 'free_trial' || classification.accessTier === 'local',
+          ownedBy: entry.owned_by, ...(route ? { provider: route.provider, capabilities: route.capabilities, dataNote: route.data_note } : {}) };
+      })];
+    }, MODEL_DISCOVERY_TIMEOUT_MS);
+    if (request !== discoveryRequest || !settings.open) return;
+    settings.models = sortFreeFirst(result.models);
+    settings.defaultModel = pickDefaultModel(settings.models, currentModel);
+    settings.status = result.status;
+    render();
   }
 
-  const result = await discoverModelOptions(async () => {
-    const { adapter, reason } = await resolveProvider(
-      { kind: 'ok', config: { connections: { [connection.id]: { ...connection, apiKey } }, activeConnectionId: connection.id } },
-      new MemoryCredentialStore(),
-    );
-    if (reason) throw new Error(reason);
-    const inventory = await adapter.discoverModels();
-    return inventory.map((entry) => ({
-      id: entry.id,
-      accessTier: host.classifyModel(entry.id),
-      toolSupport: 'unknown',
-      // Free is decided by the engine's own policy for this connection id, so
-      // the star shown in the pane matches what routing will actually do.
-      isFree: host.isFreeModel(entry.id, connection.id),
-    }));
-  }, MODEL_DISCOVERY_TIMEOUT_MS);
-
-  const ordered = sortFreeFirst(result.models);
-  settings.models = ordered;
-  settings.defaultModel = pickDefaultModel(ordered, connection.defaultModel ?? '');
-  settings.status = result.status;
-  render();
-}
-
-async function openSettingsPane(): Promise<void> {
-    // Read the profile first so the picker starts on the connection that is
-    // actually active, then load that provider's models once.
+  async function openSettingsPane(): Promise<void> {
     await loadSettingsState(undefined, { skipModels: true });
-    await loadModelsForPreset(settings.preset || settings.providers[0]?.value || 'nvidia-nim');
+    if (!settings.profileError) await loadModelsForPreset(settings.preset || settings.providers[0]?.value || 'moderado-cloud');
   }
 
-  /**
-   * Lists models for the connection currently in the form, not the saved one.
-   *
-   * Without this, pressing "Reload models" after picking a provider and typing a
-   * key queried whatever was last written to the profile, so the list never
-   * matched what the user had just entered. The key stays in memory for this
-   * call only; it is never written here.
-   */
   async function refreshModelsForPendingForm(message: unknown): Promise<void> {
     const parsed = parseSettingsForm(message);
     settings.open = true;
-    settings.models = [];
-    if (!parsed.ok) {
-      settings.status = parsed.error;
-      render();
-      return;
-    }
-    const { preset, displayName, baseUrl, apiKey, modelId } = parsed.value;
-    settings.status = 'Loading models…';
-    render();
-
-    let connection: ProviderConnectionRecord;
-    try {
-      connection = buildProviderConnection(
-        { preset, apiKey, baseUrl, displayName, defaultModel: modelId },
-        readConnectProviders(readConfig()),
-      );
-    } catch (error) {
-      settings.status = (error as Error).message;
-      render();
-      return;
-    }
-
-    // Build a throwaway profile so the engine's own resolver picks the right
-    // adapter and endpoint for what is on screen.
-    const synthetic = {
-      kind: 'ok' as const,
-      config: {
-        connections: { [connection.id]: { ...connection, apiKey } },
-        activeConnectionId: connection.id,
-      },
-    };
-
-    const result = await discoverModelOptions(async () => {
-      const { adapter, reason } = await resolveProvider(synthetic, new MemoryCredentialStore());
-      if (reason) throw new Error(reason);
-      const inventory = await adapter.discoverModels();
-      return inventory.map((entry) => ({
-        id: entry.id,
-        accessTier: host.classifyModel(entry.id),
-        toolSupport: 'unknown',
-        isFree: false,
-      }));
-    }, MODEL_DISCOVERY_TIMEOUT_MS);
-
-    settings.models = result.models;
-    settings.status = result.status;
-    render();
+    if (!parsed.ok) { settings.status = parsed.error; render(); return; }
+    await loadModelsForPreset(parsed.value.preset, parsed.value);
   }
 
   /** Points an existing profile connection at being active. */
@@ -521,88 +470,103 @@ async function openSettingsPane(): Promise<void> {
     await loadSettingsState(`Active connection is now ${id}.`);
   }
 
-  /**
- * Applies a submitted settings form.
- *
- * The connection is built by `buildProviderConnection`, which carries the CLI's
- * rule set. That guarantees the stored entry has the id, kind, and baseUrl the
- * CLI's reader requires — an entry missing any of those is silently dropped on
- * the CLI's next read, which is exactly the failure this replaces.
- *
- * The API key is written to Windows Credential Manager first and only the
- * *reference* goes into config.json. If the credential write fails, nothing is
- * written to the profile at all, so the two can never disagree.
- */
-  async function saveSettings(message: unknown): Promise<void> {
+  /** Nonsecret form values are validated before native login or coordinated writes. */
+  async function saveSettings(message: unknown, action: 'save' | 'key' | 'browser' = 'save'): Promise<void> {
+    settings.open = true;
     const parsed = parseSettingsForm(message);
-    if (!parsed.ok) {
-      settings.status = parsed.error;
-      render();
-      return;
-    }
-    const { preset, displayName, baseUrl, apiKey, modelId } = parsed.value;
-
-    let connection: ProviderConnectionRecord;
+    if (!parsed.ok) { settings.status = parsed.error; render(); return; }
+    if (settingsBusy) return;
+    const profile = readConfig();
+    if (profile.kind === 'invalid') { settings.profileError = profile.error; settings.status = profile.error; render(); return; }
+    const form = parsed.value;
+    const profileConfig = profile.kind === 'ok' ? profile.config : {};
+    const connectConfig = readConnectProviders(profile);
+    const choice = buildProviderChoices(connectConfig).find(item => item.value === form.preset);
+    if (!choice) { settings.status = 'That provider is no longer available.'; render(); return; }
+    if (action === 'browser' && (form.preset !== 'moderado-cloud' || form.loginMethod !== 'browser')) return;
+    if (action === 'key' && form.preset === 'moderado-cloud' && form.loginMethod !== 'manual') return;
+    applySettingsForm(form);
+    settingsBusy = true;
+    loginAbort = new AbortController();
+    const signal = loginAbort.signal;
     try {
-      connection = buildProviderConnection(
-        { preset, apiKey, baseUrl, displayName, defaultModel: modelId },
-        readConnectProviders(readConfig()),
-      );
-    } catch (error) {
-      // These are the CLI's own validation messages, surfaced verbatim so both
-      // applications explain a rejected connection the same way.
-      settings.status = (error as Error).message;
-      render();
-      return;
-    }
-
-    let credentialRef: string | undefined;
-    if (apiKey) {
-      if (!credentialManagerAvailable()) {
-        settings.status = 'This platform has no Credential Manager. Set the provider environment variable instead.';
-        render();
-        return;
+      // Validate the endpoint before collecting a credential or opening a browser.
+      const discovery = buildDiscoveryConnection({ preset: form.preset, storedBaseUrl: form.baseUrl,
+        displayName: form.displayName, defaultModel: form.modelId || 'auto' }, connectConfig);
+      const stored = connectionRecord(profileConfig, discovery.id);
+      let apiKey = await storedKey(discovery.id, stored);
+      let connection: ProviderConnectionRecord;
+      if (discovery.id === 'moderado-cloud') {
+        if (form.loginMethod === 'public') {
+          connection = buildGatewayConnection('public', { baseUrl: discovery.baseUrl });
+        } else {
+          if (!credentialManagerAvailable()) throw new Error('Windows Credential Manager is required to store a Gateway login.');
+          if (form.loginMethod === 'browser') {
+            const expiry = typeof stored?.credentialExpiresAt === 'number' ? stored.credentialExpiresAt : undefined;
+            if (action === 'browser' || !apiKey || !expiry || expiry <= Date.now() || stored?.authMethod !== 'browser') {
+              settings.status = 'Waiting for browser sign-in?'; render();
+              const credential = await authorizeGatewayInBrowser({ openExternal: url => Promise.resolve(vscode.env.openExternal(vscode.Uri.parse(url))), signal });
+              if (signal.aborted) throw new Error('Gateway login cancelled.');
+              connection = await persistGatewayLogin('browser', { baseUrl: discovery.baseUrl, key: credential.accessToken, expiresAt: credential.expiresAt }, credentialStore);
+            } else connection = buildGatewayConnection('browser', { baseUrl: discovery.baseUrl, key: apiKey, expiresAt: expiry });
+          } else {
+            if (action === 'key' || !apiKey || stored?.authMethod === 'browser') {
+              apiKey = await vscode.window.showInputBox({ prompt: 'Gateway key beginning with mrd_ (stored in Windows Credential Manager)', password: true, ignoreFocusOut: true });
+              if (apiKey === undefined || signal.aborted) throw new Error('Gateway key entry cancelled.');
+            }
+            connection = await persistGatewayLogin('manual', { baseUrl: discovery.baseUrl, key: apiKey.trim() }, credentialStore);
+          }
+        }
+        connection.defaultModel = form.modelId || 'auto';
+      } else {
+        if ((action === 'key' || (choice.requiresApiKey && !apiKey))) {
+          if (!credentialManagerAvailable()) throw new Error('This platform has no Credential Manager. Set the provider environment variable instead.');
+          apiKey = await vscode.window.showInputBox({ prompt: 'API key (stored in Windows Credential Manager)', password: true, ignoreFocusOut: true });
+          if (apiKey === undefined || signal.aborted) throw new Error('API key entry cancelled.');
+          if (!apiKey.trim()) throw new Error('Enter a nonempty API key.');
+        }
+        connection = buildProviderConnection({ preset: form.preset, apiKey, baseUrl: form.baseUrl,
+          displayName: form.displayName, defaultModel: form.modelId || 'auto' }, connectConfig);
+        // NVIDIA's fixed endpoint still needs to persist the chosen model.
+        connection.defaultModel = form.modelId || 'auto';
+        if (apiKey && (action === 'key' || !stored?.credentialReference)) {
+          if (!credentialManagerAvailable()) throw new Error('This platform has no Credential Manager. Set the provider environment variable instead.');
+          await credentialStore.set(credentialReference(connection.id), apiKey.trim());
+          connection.credentialReference = credentialReference(connection.id);
+        } else if (typeof stored?.credentialReference === 'string') connection.credentialReference = stored.credentialReference;
       }
-      try {
-        credentialRef = credentialReference(connection.id);
-        await new WindowsCredentialStore().set(credentialRef, apiKey);
-      } catch {
-        // Deliberately vague: the error must not carry the key or the target.
-        settings.status = 'Could not store the API key in Windows Credential Manager. Nothing was written to config.json.';
-        render();
-        return;
-      }
-    }
-
-    const patch: Record<string, unknown> = {
-      connections: {
-        [connection.id]: {
-          ...connection,
-          // A plaintext key is never persisted; the reference replaces it.
-          apiKey: undefined,
-          ...(credentialRef ? { credentialReference: credentialRef } : {}),
-        },
-      },
-      activeConnectionId: connection.id,
-      ...(connection.defaultModel ? { defaultModel: connection.defaultModel } : {}),
-    };
-
-    const result = updateConfigCoordinated(configPath(), patch);
-    if (!result.written) {
-      settings.status = result.conflict?.reason ?? result.reason ?? 'Could not save the settings.';
+      if (signal.aborted) throw new Error('Provider connection cancelled.');
+      const saved = { ...stored, ...connection, apiKey: undefined,
+        ...(discovery.id === 'moderado-cloud' ? {
+          credentialReference: connection.credentialReference,
+          credentialExpiresAt: 'credentialExpiresAt' in connection ? connection.credentialExpiresAt : undefined,
+        } : {}) };
+      const result = updateConfigCoordinated(configPath(), {
+        connections: { [connection.id]: saved }, activeConnectionId: connection.id, defaultModel: connection.defaultModel,
+      }, { expected: { connections: profileConfig.connections, activeConnectionId: profileConfig.activeConnectionId, defaultModel: profileConfig.defaultModel } });
+      if (!result.written) { settings.status = result.conflict?.reason ?? result.reason ?? 'Could not save the settings.'; render(); return; }
+      await loadSettingsState('Saved.', { skipModels: true });
+      await loadModelsForPreset(form.preset);
+    } catch {
+      // Never expose native input, credential service errors, or OAuth responses.
+      settings.status = signal.aborted ? 'Provider connection cancelled.' : 'Provider connection failed or key entry was cancelled. Check the endpoint, key, and login method, then retry.';
       render();
-      return;
+    } finally {
+      settingsBusy = false;
+      loginAbort = undefined;
     }
-    settings.status = 'Saved.';
-    // Reread so the pane reflects exactly what is on disk, including whether a
-    // credential now exists, rather than what this call intended to write.
-    await loadSettingsState('Saved.');
   }
 
   /** Handles every message the chat webview can send. */
   function handleWebviewMessage(message: unknown): void {
     if (!message || typeof message !== 'object') return;
     const msg = message as Record<string, unknown>;
+    if (['apiKey', 'token', 'authorizationCode', 'credentialReference'].some(field => field in msg)) {
+      settings.open = true;
+      settings.status = 'Provider credentials must be entered in the secure editor prompt.';
+      render();
+      return;
+    }
     if (msg.type === 'toggleAutoApprovePanel') {
       autoApprove.expanded = !autoApprove.expanded;
       render();
@@ -625,6 +589,8 @@ async function openSettingsPane(): Promise<void> {
       return;
     }
     if (msg.type === 'setModelTab' && (msg.tab === 'free' || msg.tab === 'all')) {
+      const parsed = parseSettingsForm(msg);
+      if (parsed.ok) applySettingsForm(parsed.value);
       settings.modelTab = msg.tab;
       render();
       return;
@@ -635,6 +601,9 @@ async function openSettingsPane(): Promise<void> {
       return;
     }
     if (msg.type === 'chooseModel' && typeof msg.id === 'string') {
+      const parsed = parseSettingsForm(msg);
+      if (!parsed.ok || !settings.models.some(model => model.id === msg.id)) return;
+      applySettingsForm(parsed.value);
       settings.defaultModel = msg.id;
       render();
       return;
@@ -654,6 +623,8 @@ async function openSettingsPane(): Promise<void> {
       return;
     }
     if (msg.type === 'closeSettings') {
+      loginAbort?.abort();
+      discoveryRequest++;
       settings.open = false;
       render();
       return;
@@ -674,6 +645,21 @@ async function openSettingsPane(): Promise<void> {
     }
     if (msg.type === 'saveSettings') {
       void saveSettings(msg);
+      return;
+    }
+    if (msg.type === 'setProviderKey') {
+      void saveSettings(msg, 'key');
+      return;
+    }
+    if (msg.type === 'gatewayBrowserLogin') {
+      void saveSettings(msg, 'browser');
+      return;
+    }
+    if (msg.type === 'setGatewayLoginMethod') {
+      const parsed = parseSettingsForm(msg);
+      if (!parsed.ok) { settings.status = parsed.error; render(); return; }
+      applySettingsForm(parsed.value);
+      render();
       return;
     }
     if (msg.type === 'prompt' && typeof msg.text === 'string') {
@@ -718,6 +704,8 @@ async function openSettingsPane(): Promise<void> {
       documentRendered = true;
       webviewView.webview.onDidReceiveMessage(handleWebviewMessage);
       webviewView.onDidDispose(() => {
+        loginAbort?.abort();
+        discoveryRequest++;
         chatView = undefined;
         documentRendered = false;
         // Losing the view must deny anything still awaiting a decision.

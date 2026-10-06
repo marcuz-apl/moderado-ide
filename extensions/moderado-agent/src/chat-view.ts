@@ -291,11 +291,13 @@ body { font-family: var(--vscode-font-family); font-size: 13px; color: var(--vsc
   .settings .set-content h3 { font-size: 0.9rem; margin: 0 0 0.4rem; }
   .settings .model-card { display: flex; flex-direction: column; gap: 0.15rem; width: 100%; text-align: left; padding: 0.5rem 0.6rem; margin-bottom: 0.35rem; border: 1px solid var(--vscode-panel-border); border-radius: 4px; }
   .settings .model-card:hover { background: var(--vscode-list-hoverBackground); }
+  .settings .model-card[hidden] { display: none; }
+  .settings input:focus-visible, .settings select:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 2px; }
   .settings .model-card.on { border-color: var(--vscode-focusBorder); }
   .settings .model-top { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; }
-  .settings .model-name { font-weight: 600; font-size: 0.85rem; }
+  .settings .model-name { font-weight: 600; font-size: 0.85rem; overflow-wrap: anywhere; }
   .settings .model-badge { font-size: 0.62rem; letter-spacing: 0.05em; padding: 0.05rem 0.35rem; border-radius: 3px; background: var(--vscode-charts-blue, #2f7ae5); color: #fff; }
-  .settings .model-desc { font-size: 0.72rem; opacity: 0.75; }
+  .settings .model-desc { font-size: 0.75rem; color: var(--vscode-descriptionForeground); overflow-wrap: anywhere; }
   .settings .tab-row { display: flex; gap: 1rem; border-bottom: 1px solid var(--vscode-panel-border); margin: 0.4rem 0 0.6rem; }
   .settings .tab-row button { padding: 0.35rem 0.2rem; font-size: 0.8rem; opacity: 0.75; border-bottom: 2px solid transparent; }
   .settings .tab-row button.on { opacity: 1; border-bottom-color: var(--vscode-textLink-foreground); }
@@ -376,13 +378,13 @@ ${toolbarHtml()}
     const provider = document.getElementById('settings-provider');
     const displayName = document.getElementById('settings-display-name');
     const baseUrl = document.getElementById('settings-base-url');
-    const apiKey = document.getElementById('settings-api-key');
+    const loginMethod = document.getElementById('settings-login-method');
     const model = document.getElementById('settings-model');
     return {
       preset: provider ? provider.value : '',
       displayName: displayName ? displayName.value : '',
       baseUrl: baseUrl ? baseUrl.value : '',
-      apiKey: apiKey ? apiKey.value : '',
+      loginMethod: loginMethod ? loginMethod.value : 'public',
       modelId: model ? model.value : '',
     };
   }
@@ -392,6 +394,10 @@ ${toolbarHtml()}
     const save = document.getElementById('settings-save');
     const refresh = document.getElementById('settings-refresh');
     const provider = document.getElementById('settings-provider');
+    const setKey = document.getElementById('settings-set-key');
+    const browserLogin = document.getElementById('settings-browser-login');
+    const loginMethod = document.getElementById('settings-login-method');
+    const search = document.getElementById('settings-model-search');
     if (close) close.addEventListener('click', () => vscode.postMessage({ type: 'closeSettings' }));
     if (save) save.addEventListener('click', () => {
       say('Saving…');
@@ -406,12 +412,19 @@ ${toolbarHtml()}
     // Changing the preset switches provider, so the host reloads that provider's
     // key state and model list rather than leaving the previous one's on screen.
     if (provider) provider.addEventListener('change', () => vscode.postMessage({ type: 'selectPreset', preset: provider.value }));
+    if (setKey) setKey.addEventListener('click', () => vscode.postMessage({ type: 'setProviderKey', ...readSettings() }));
+    if (browserLogin) browserLogin.addEventListener('click', () => vscode.postMessage({ type: 'gatewayBrowserLogin', ...readSettings() }));
+    if (loginMethod) loginMethod.addEventListener('change', () => vscode.postMessage({ type: 'setGatewayLoginMethod', ...readSettings() }));
+    if (search) search.addEventListener('input', () => {
+      const query = search.value.trim().toLowerCase();
+      for (const card of document.querySelectorAll('.model-card')) card.hidden = !card.textContent.toLowerCase().includes(query);
+    });
     // Model cards, the free/recommended tabs, and the settings nav.
     for (const card of document.querySelectorAll('.model-card')) {
-      card.addEventListener('click', () => vscode.postMessage({ type: 'chooseModel', id: card.getAttribute('data-model') }));
+      card.addEventListener('click', () => vscode.postMessage({ type: 'chooseModel', ...readSettings(), id: card.getAttribute('data-model') }));
     }
     for (const tab of document.querySelectorAll('.tab-row button')) {
-      tab.addEventListener('click', () => vscode.postMessage({ type: 'setModelTab', tab: tab.getAttribute('data-tab') }));
+      tab.addEventListener('click', () => vscode.postMessage({ type: 'setModelTab', ...readSettings(), tab: tab.getAttribute('data-tab') }));
     }
     for (const nav of document.querySelectorAll('.set-nav button')) {
       nav.addEventListener('click', () => vscode.postMessage({ type: 'setSettingsPage', page: nav.getAttribute('data-page') }));
