@@ -1,12 +1,6 @@
 import { AgentLoop, PolicyManager, Router } from '@moderado/core';
-import {
-  FakeProviderAdapter,
-  NvidiaAdapter,
-  OpenAICompatibleAdapter,
-  findProviderPreset,
-  freeModelPolicyFor,
-  isFreeModelOption,
-} from '@moderado/providers';
+import { FakeProviderAdapter } from '@moderado/providers';
+import { z } from 'zod';
 import { createDefaultToolRegistry, resolveInJail } from '@moderado/tools';
 import {
   AgentEvent,
@@ -15,12 +9,17 @@ import {
   ChatMessage,
   IApprovalHandler,
   IProviderAdapter,
-  ModelClassification,
+  ModelInventoryEntry,
 } from '@moderado/contracts';
 import { ApprovalCoordinator, RawDecision } from './approval.js';
 import { ConfigState, canonicalWorkspaceRoot, readConfig } from './profile.js';
 import { CredentialStore, MemoryCredentialStore, resolveCredential } from './credentials.js';
 import { SessionStore, StoredSession, conversationOf, createSession, saveSessionChecked } from './sessions.js';
+import { DESKTOP_PROVIDER_PRESETS } from './provider-catalog.js';
+import { fetchGatewayRoutes, type GatewayRoute } from './provider-discovery.js';
+import { DesktopOpenAIAdapter } from './provider-transport.js';
+import { DesktopModelRouter } from './model-router.js';
+import { validateProviderBaseUrl } from './provider-setup.js';
 
 export interface AgentHostOptions {
   workspaceRoot: string;
@@ -41,6 +40,8 @@ export interface AgentHostOptions {
    * non-Windows host never touches the real keychain.
    */
   credentialStore?: CredentialStore;
+  /** Offline tests inject HTTP; production uses the native fetch transport. */
+  fetchImpl?: typeof fetch;
 }
 
 /**
@@ -48,7 +49,7 @@ export interface AgentHostOptions {
  *
  * The key is resolved here and injected into the adapter. It is never written to
  * an editor setting, returned to a renderer, or placed in an event. The adapter
- * is a vendored class, not a model-directed object, so this keeps the "no
+ * is a Desktop-owned class, not a model-directed object, so this keeps the "no
  * renderer holds provider secrets" boundary intact.
  */
 
@@ -62,12 +63,20 @@ export interface ProviderConnection {
   credentialReference?: string;
   /** Legacy plaintext key, still honoured by the CLI's resolution order. */
   apiKey?: string;
+  defaultModel?: string;
+  authMethod?: 'public' | 'manual' | 'browser';
+  credentialExpiresAt?: number;
 }
 
 export interface ProviderResolution {
   adapter: IProviderAdapter;
   /** Set when the run fell back to the fake provider, for user-facing events. */
   reason?: string;
+  /** Display/profile-safe identity. Never includes a resolved key. */
+  connectionId?: string;
+  defaultModel?: string;
+  /** Validated Gateway metadata retained separately from the core inventory. */
+  discoverGatewayRoutes?: (signal?: AbortSignal) => Promise<GatewayRoute[]>;
 }
 
 /** The provider environment variable the CLI would consult for this connection. */
@@ -75,12 +84,28 @@ function envVarFor(connectionId: string): string {
   return `MODERADO_${connectionId.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_')}_API_KEY`;
 }
 
-function baseUrlFor(connection: ProviderConnection): string | undefined {
-  const trimmed = connection.baseUrl?.trim();
-  if (trimmed) return trimmed;
-  // Fall back to the pinned preset's own endpoint for a known provider id.
-  if (connection.kind === 'nvidia-nim') return undefined;
-  return undefined;
+const ModelIdSchema = z.string().min(1).refine(value => value.trim().length > 0 && !/[\x00-\x1f\x7f]/.test(value));
+const ConnectionSchema = z.object({
+  id: z.string().min(1).refine(value => /^[a-zA-Z0-9_-]+$/.test(value)),
+  displayName: z.string().optional(),
+  kind: z.enum(['nvidia-nim', 'openai-compatible']).optional(),
+  baseUrl: z.string().optional(),
+  credentialReference: z.string().min(1).optional(),
+  apiKey: z.string().optional(),
+  defaultModel: ModelIdSchema.optional(),
+  authMethod: z.enum(['public', 'manual', 'browser']).optional(),
+  credentialExpiresAt: z.number().finite().optional(),
+});
+
+function fakeResolution(reason: string): ProviderResolution {
+  const adapter = new FakeProviderAdapter();
+  // The demo inventory lacks prices. Add explicit evidence only to this
+  // built-in fake fixture; no real catalog inherits the core's cost heuristics.
+  const fixtureRouter = new Router();
+  adapter.models = adapter.models.map(entry => ({ ...entry, pricing: {
+    prompt: fixtureRouter.classifyModel(entry.id).accessTier === 'paid' ? '1' : '0', completion: '0',
+  } }));
+  return { adapter, reason };
 }
 
 /**
@@ -94,22 +119,31 @@ export async function resolveProvider(
   state: ConfigState,
   store: CredentialStore = new MemoryCredentialStore(),
   env: NodeJS.ProcessEnv = process.env,
+  fetchImpl?: typeof fetch,
 ): Promise<ProviderResolution> {
   if (state.kind !== 'ok') {
-    return { adapter: new FakeProviderAdapter(), reason: 'The shared profile could not be read.' };
+    return fakeResolution('The shared profile could not be read.');
   }
 
-  const connections = (state.config.connections ?? {}) as Record<string, ProviderConnection>;
+  const parsedConnections = z.record(z.unknown()).safeParse(state.config.connections ?? {});
+  if (!parsedConnections.success) throw new Error('The saved provider connections are malformed.');
+  const connections = parsedConnections.data;
   const activeId = state.config.activeConnectionId;
-  const connection =
-    (typeof activeId === 'string' ? connections[activeId] : undefined) ??
-    Object.values(connections).find((c) => c && typeof c === 'object');
-
-  if (!connection?.id) {
-    return {
-      adapter: new FakeProviderAdapter(),
-      reason: 'No provider connection is configured. Run "Moderado: Configure Provider Connection".',
-    };
+  if (activeId !== undefined && typeof activeId !== 'string') throw new Error('The active provider connection is malformed.');
+  const connectionId = typeof activeId === 'string' ? activeId : Object.keys(connections)[0];
+  if (connectionId === undefined) {
+    return fakeResolution('No provider connection is configured. Run "Moderado: Configure Provider Connection".');
+  }
+  const parsed = ConnectionSchema.safeParse(connections[connectionId]);
+  if (!parsed.success || parsed.data.id !== connectionId) throw new Error('The saved provider connection is malformed. Open Moderado Settings to review it.');
+  const connection = parsed.data;
+  const preset = DESKTOP_PROVIDER_PRESETS.find(item => item.id === connectionId);
+  const rawBaseUrl = connection.baseUrl?.trim() || preset?.baseUrl;
+  if (!rawBaseUrl) throw new Error('A base URL is required for the saved provider connection.');
+  const baseUrl = validateProviderBaseUrl(rawBaseUrl);
+  if (connectionId === 'moderado-cloud' && connection.authMethod === 'browser'
+    && (connection.credentialExpiresAt === undefined || connection.credentialExpiresAt <= Date.now())) {
+    throw new Error('Gateway browser credential has expired. Open Moderado Settings to sign in again.');
   }
 
   const apiKey = await resolveCredential(
@@ -121,26 +155,25 @@ export async function resolveProvider(
 
   // A local runtime (Ollama, LM Studio) needs no key, so a missing key is only
   // an error when the preset actually requires one.
-  const preset = findProviderPreset(connection.kind ?? 'openai-compatible');
-  const requiresKey = preset ? preset.requiresApiKey : true;
+  const requiresKey = connectionId === 'moderado-cloud' && connection.authMethod && connection.authMethod !== 'public'
+    ? true : preset?.requiresApiKey ?? true;
   if (requiresKey && !apiKey) {
-    return {
-      adapter: new FakeProviderAdapter(),
-      reason: `No API key resolved for connection '${connection.id}'.`,
-    };
+    return fakeResolution(`No API key resolved for connection '${connection.id}'.`);
   }
 
-  const baseUrl = baseUrlFor(connection);
-  if (connection.kind === 'nvidia-nim') {
-    return { adapter: new NvidiaAdapter({ apiKey, baseUrl }) };
-  }
   return {
-    adapter: new OpenAICompatibleAdapter({
+    adapter: new DesktopOpenAIAdapter({
       apiKey,
       baseUrl,
-      providerId: connection.id,
-      providerName: connection.displayName ?? connection.id,
+      id: connection.id,
+      name: connection.displayName ?? preset?.label ?? connection.id,
+      fetchImpl,
     }),
+    connectionId,
+    defaultModel: connection.defaultModel,
+    ...(connectionId === 'moderado-cloud' ? {
+      discoverGatewayRoutes: (signal?: AbortSignal) => fetchGatewayRoutes(baseUrl, { fetchImpl, signal }),
+    } : {}),
   };
 }
 
@@ -160,6 +193,10 @@ export interface ModelOption {
   accessTier: string;
   toolSupport: string;
   isFree: boolean;
+  provider?: string;
+  ownedBy?: string;
+  capabilities?: string[];
+  dataNote?: string;
 }
 
 /**
@@ -173,7 +210,8 @@ export interface ModelOption {
 export class AgentHost implements IApprovalHandler {
   private readonly options: AgentHostOptions;
   private readonly approvals: ApprovalCoordinator;
-  private readonly router = new Router();
+  private router = new DesktopModelRouter({ providerId: 'fake', inventory: [], allowPaid: false, allowUnknown: false, requireTools: true });
+  private catalogConnectionId = 'fake';
   /**
    * Where provider keys come from. Overridable so tests never reach the real
    * Windows Credential Manager; production injects `WindowsCredentialStore`.
@@ -235,6 +273,7 @@ export class AgentHost implements IApprovalHandler {
     planMode?: boolean;
     conversationHistory?: ChatMessage[];
     session?: StoredSession;
+    modelId?: string;
   }): Promise<RunOutcome> {
     if (this.running) throw new Error('A Moderado run is already in progress.');
 
@@ -254,10 +293,14 @@ export class AgentHost implements IApprovalHandler {
       // The provider is resolved from the shared profile. When no usable
       // connection exists it falls back to the fake adapter and says so, rather
       // than silently pretending a real run happened.
-      const { adapter: provider, reason } = await resolveProvider(
-        readConfig(this.options.moderadoHome),
+      const state = readConfig(this.options.moderadoHome);
+      const resolution = await resolveProvider(
+        state,
         this.credentials,
+        process.env,
+        this.options.fetchImpl,
       );
+      const { adapter: provider, reason } = resolution;
       if (reason) {
         this.options.onEvent({
           type: 'error',
@@ -267,7 +310,13 @@ export class AgentHost implements IApprovalHandler {
           timestamp: Date.now(),
         });
       }
-      const inventory = await provider.discoverModels(controller.signal);
+      const { inventory } = await this.discoverInventory(resolution, controller.signal);
+      this.catalogConnectionId = resolution.connectionId ?? provider.id;
+      this.router = this.routerFor(resolution, inventory);
+      const requested = input.modelId || this.options.pinnedModelId
+        || (state.kind === 'ok' && typeof state.config.defaultModel === 'string' ? state.config.defaultModel : undefined)
+        || resolution.defaultModel;
+      if (requested !== undefined && !ModelIdSchema.safeParse(requested).success) throw new Error('The selected model ID is malformed.');
       const policy = new PolicyManager({
         readOnly: input.planMode ?? false,
         nonInteractive: this.options.nonInteractive ?? false,
@@ -286,7 +335,7 @@ export class AgentHost implements IApprovalHandler {
         modelInventory: inventory,
         eventListener: (event) => this.options.onEvent(event),
         routeOptions: {
-          pinnedModelId: this.options.pinnedModelId,
+          pinnedModelId: requested === 'auto' ? undefined : requested,
           allowPaid: this.options.allowPaid ?? false,
           allowUnknown: this.options.allowUnknown ?? false,
           requireTools: true,
@@ -367,13 +416,10 @@ export class AgentHost implements IApprovalHandler {
    * uses, or a model shown as free would still be skipped (or vice versa).
    */
   isFreeModel(modelId: string, connectionId?: string): boolean {
-    const classification = this.router.classifyModel(modelId);
-    const policy = freeModelPolicyFor(connectionId);
-    return isFreeModelOption(
-      { id: modelId },
-      classification,
-      policy,
-    );
+    const tier = connectionId && connectionId !== this.catalogConnectionId
+      ? new DesktopModelRouter({ providerId: connectionId, inventory: [], allowPaid: false, allowUnknown: false, requireTools: true }).classifyModel(modelId).accessTier
+      : this.router.classifyModel(modelId).accessTier;
+    return tier === 'free_trial' || tier === 'local';
   }
 
   /**
@@ -381,25 +427,46 @@ export class AgentHost implements IApprovalHandler {
    * can show paid and unknown-cost models behind their explicit opt-ins.
    */
   async discoverModels(): Promise<ModelOption[]> {
-    const { adapter: provider } = await resolveProvider(
+    const resolution = await resolveProvider(
       readConfig(this.options.moderadoHome),
       this.credentials,
+      process.env,
+      this.options.fetchImpl,
     );
-    const inventory = await provider.discoverModels();
-    const state = readConfig(this.options.moderadoHome);
-    const connectionId =
-      state.kind === 'ok' ? (state.config.activeConnectionId as string | undefined) : undefined;
-    const policy = freeModelPolicyFor(connectionId);
+    const { inventory, routes } = await this.discoverInventory(resolution);
+    this.catalogConnectionId = resolution.connectionId ?? resolution.adapter.id;
+    this.router = this.routerFor(resolution, inventory);
 
-    return inventory.map((entry) => {
-      const classification: ModelClassification = this.router.classifyModel(entry.id);
+    const models: ModelOption[] = inventory.map((entry) => {
+      const classification = this.router.classifyModel(entry.id);
+      const route = routes?.find(item => item.id === entry.id);
       return {
         id: entry.id,
         accessTier: classification.accessTier,
         toolSupport: classification.toolSupport,
-        isFree: isFreeModelOption(entry, classification, policy),
+        isFree: classification.accessTier === 'free_trial' || classification.accessTier === 'local',
+        ownedBy: entry.owned_by,
+        ...(route ? { provider: route.provider, capabilities: route.capabilities, dataNote: route.data_note } : {}),
       };
     });
+    if (resolution.adapter.id !== 'fake') models.unshift({
+      id: 'auto', accessTier: resolution.connectionId === 'moderado-cloud' ? 'free_trial' : 'unknown',
+      toolSupport: 'supported', isFree: resolution.connectionId === 'moderado-cloud',
+    });
+    return models;
+  }
+
+  private routerFor(resolution: ProviderResolution, inventory: ModelInventoryEntry[]): DesktopModelRouter {
+    return new DesktopModelRouter({ providerId: resolution.connectionId ?? resolution.adapter.id, inventory,
+      allowPaid: this.options.allowPaid ?? false, allowUnknown: this.options.allowUnknown ?? false, requireTools: true });
+  }
+
+  private async discoverInventory(resolution: ProviderResolution, signal?: AbortSignal): Promise<{ inventory: ModelInventoryEntry[]; routes?: GatewayRoute[] }> {
+    if (!resolution.discoverGatewayRoutes) return { inventory: await resolution.adapter.discoverModels(signal) };
+    const routes = await resolution.discoverGatewayRoutes(signal);
+    return { routes, inventory: routes.map(route => ({ id: route.id, object: 'model', owned_by: route.owned_by ?? route.provider ?? 'moderado-cloud',
+      ...(route.capabilities.includes('tools') || route.capabilities.includes('tool_calling') ? { supported_parameters: ['tools'] } : {}),
+    })) };
   }
 
   /** Sessions recorded for this workspace, newest first. */

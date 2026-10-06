@@ -1,10 +1,13 @@
-import { mkdtempSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { AgentEvent, ApprovalRequest } from '@moderado/contracts';
 import { resolveInJail } from '@moderado/tools';
-import { AgentHost, previewFor } from '../src/host.js';
+import { AgentHost, previewFor, resolveProvider } from '../src/host.js';
+import { MemoryCredentialStore } from '../src/credentials.js';
+import { readConfig } from '../src/profile.js';
+import { DesktopOpenAIAdapter } from '../src/provider-transport.js';
 import { SessionStore } from '../src/sessions.js';
 
 function workspace(): string {
@@ -15,6 +18,122 @@ function collector() {
   const events: AgentEvent[] = [];
   return { events, onEvent: (event: AgentEvent) => events.push(event) };
 }
+
+function configuredHome(id: string, connection: Record<string, unknown>, extra: Record<string, unknown> = {}): string {
+  const home = mkdtempSync(join(tmpdir(), 'moderado-host-'));
+  mkdirSync(join(home, '.moderado'));
+  writeFileSync(join(home, '.moderado', 'config.json'), JSON.stringify({
+    activeConnectionId: id, connections: { [id]: { id, kind: 'openai-compatible', ...connection } }, ...extra,
+  }));
+  return home;
+}
+
+function fakeHTTP(data: unknown[]) {
+  return vi.fn<typeof fetch>().mockImplementation(async (_url, init) => init?.method === 'POST'
+    ? new Response('data: {"choices":[{"delta":{"content":"Hello."},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n')
+    : Response.json({ object: 'list', data }));
+}
+
+describe('Desktop provider host integration', () => {
+  const route = { id: 'moonshotai/kimi-k3', provider: 'nvidia-nim', owned_by: 'moonshotai', capabilities: ['chat', 'tools'], data_note: 'Gateway route' };
+  const gateway = { baseUrl: 'http://127.0.0.1:4788/v1' };
+
+  it('resolves public keyless Gateway using the Desktop transport', async () => {
+    const home = configuredHome('moderado-cloud', gateway);
+    const fetchImpl = fakeHTTP([route]);
+    const result = await resolveProvider(readConfig(home), new MemoryCredentialStore(), {}, fetchImpl);
+    expect(result.adapter).toBeInstanceOf(DesktopOpenAIAdapter);
+    expect(result.adapter.id).toBe('moderado-cloud');
+    expect(result.reason).toBeUndefined();
+  });
+
+  it('resolves manual Gateway credentials in the host and preserves exact pinned route/session identity', async () => {
+    const home = configuredHome('moderado-cloud', { ...gateway, credentialReference: 'moderado/provider/moderado-cloud' });
+    const credentials = new MemoryCredentialStore();
+    await credentials.set('moderado/provider/moderado-cloud', 'mrd_offline_fixture');
+    const get = vi.spyOn(credentials, 'get');
+    const fetchImpl = fakeHTTP([route]);
+    const { events, onEvent } = collector();
+    const host = new AgentHost({ workspaceRoot: workspace(), moderadoHome: home, credentialStore: credentials, fetchImpl, onEvent, promptForApproval: async () => undefined });
+    const result = await host.startRun({ task: 'Say hello.', modelId: route.id });
+    expect(result.model).toBe(route.id);
+    expect(host.session?.modelId).toBe(route.id);
+    expect(host.listSessions().sessions[0].modelId).toBe(route.id);
+    expect(get).toHaveBeenCalledWith('moderado/provider/moderado-cloud');
+    const post = fetchImpl.mock.calls.find(([, init]) => init?.method === 'POST')!;
+    expect(JSON.parse(String(post[1]?.body)).model).toBe(route.id);
+    expect(post[1]?.headers).toMatchObject({ Authorization: 'Bearer mrd_offline_fixture' });
+    expect(fetchImpl.mock.calls.filter(([, init]) => init?.method === 'GET')).toHaveLength(1);
+    expect(JSON.stringify(events)).not.toContain('mrd_offline_fixture');
+  });
+
+  it('sends Gateway AUTO to the server without pinning a catalog route', async () => {
+    const fetchImpl = fakeHTTP([route]);
+    const host = new AgentHost({ workspaceRoot: workspace(), moderadoHome: configuredHome('moderado-cloud', gateway), fetchImpl, onEvent: () => {}, promptForApproval: async () => undefined });
+    const result = await host.startRun({ task: 'Say hello.', modelId: 'auto' });
+    expect(result.model).toBe('auto');
+    const post = fetchImpl.mock.calls.find(([, init]) => init?.method === 'POST')!;
+    expect(JSON.parse(String(post[1]?.body)).model).toBe('auto');
+    expect(post[1]?.headers).not.toHaveProperty('Authorization');
+  });
+
+  it('exposes Free Gateway models with validated metadata and an AUTO row', async () => {
+    const host = new AgentHost({ workspaceRoot: workspace(), moderadoHome: configuredHome('moderado-cloud', gateway), fetchImpl: fakeHTTP([route]), onEvent: () => {}, promptForApproval: async () => undefined });
+    const models = await host.discoverModels();
+    expect(models[0]).toMatchObject({ id: 'auto', isFree: true, accessTier: 'free_trial' });
+    expect(models[1]).toMatchObject({ id: route.id, isFree: true, provider: route.provider, ownedBy: route.owned_by, capabilities: route.capabilities, dataNote: route.data_note, toolSupport: 'supported' });
+  });
+
+  it('uses the saved connection selection when the run does not override it', async () => {
+    const home = configuredHome('moderado-cloud', { ...gateway, defaultModel: route.id });
+    const fetchImpl = fakeHTTP([route]);
+    const host = new AgentHost({ workspaceRoot: workspace(), moderadoHome: home, fetchImpl, onEvent: () => {}, promptForApproval: async () => undefined });
+    expect((await host.startRun({ task: 'Say hello.' })).model).toBe(route.id);
+  });
+
+  it('treats direct AUTO as unpinned free-first selection', async () => {
+    const fetchImpl = fakeHTTP([{ id: 'paid', pricing: { prompt: '1', completion: '1' } }, { id: 'free', pricing: { prompt: '0', completion: '0' }, supported_parameters: ['tools'] }]);
+    const home = configuredHome('openrouter', { baseUrl: 'https://example.invalid/v1', apiKey: 'offline-key', defaultModel: 'paid' });
+    const { events, onEvent } = collector();
+    const host = new AgentHost({ workspaceRoot: workspace(), moderadoHome: home, fetchImpl, onEvent, promptForApproval: async () => undefined });
+    expect((await host.startRun({ task: 'Say hello.', modelId: 'auto' })).model).toBe('free');
+    expect(events).toContainEqual(expect.objectContaining({ type: 'model_change', reason: 'initial_selection' }));
+  });
+
+  it('keeps direct paid and unknown candidates excluded without explicit opt-in', async () => {
+    const home = configuredHome('openrouter', { baseUrl: 'https://example.invalid/v1', apiKey: 'offline-key' });
+    const host = new AgentHost({ workspaceRoot: workspace(), moderadoHome: home, fetchImpl: fakeHTTP([{ id: 'paid', pricing: { prompt: '1', completion: '1' } }, { id: 'unknown' }]), onEvent: () => {}, promptForApproval: async () => undefined });
+    await expect(host.startRun({ task: 'Say hello.', modelId: 'auto' })).rejects.toThrow(/No eligible models/);
+    expect(host.isRunning).toBe(false);
+  });
+
+  it('uses the same catalog pricing for picker labels and the public free-model helper', async () => {
+    const home = configuredHome('openrouter', { baseUrl: 'https://example.invalid/v1', apiKey: 'offline-key' });
+    const host = new AgentHost({ workspaceRoot: workspace(), moderadoHome: home, fetchImpl: fakeHTTP([{ id: 'free', pricing: { prompt: '0', completion: '0' } }]), onEvent: () => {}, promptForApproval: async () => undefined });
+    expect((await host.discoverModels()).find(model => model.id === 'free')?.isFree).toBe(true);
+    expect(host.isFreeModel('free', 'openrouter')).toBe(true);
+    expect(host.isFreeModel('free', 'unrelated-provider')).toBe(false);
+  });
+
+  it.each([
+    { id: 'moderado-cloud', kind: 'openai-compatible', baseUrl: 'http://remote.invalid/v1' },
+    { id: 'moderado-cloud', kind: 'openai-compatible', baseUrl: 12 },
+    { id: 'other-id', kind: 'openai-compatible', baseUrl: 'https://example.invalid/v1' },
+    { id: 'moderado-cloud', kind: 'made-up', baseUrl: 'https://example.invalid/v1' },
+  ])('rejects malformed saved connection before HTTP or credential lookup: %j', async (connection) => {
+    const store = new MemoryCredentialStore();
+    const get = vi.spyOn(store, 'get');
+    const fetchImpl = fakeHTTP([route]);
+    await expect(resolveProvider({ kind: 'ok', config: { activeConnectionId: 'moderado-cloud', connections: { 'moderado-cloud': { ...connection, credentialReference: 'moderado/provider/moderado-cloud' } } } }, store, {}, fetchImpl)).rejects.toThrow(/connection|URL|HTTPS/i);
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it('requires renewed browser login instead of silently using public access after expiry', async () => {
+    const home = configuredHome('moderado-cloud', { ...gateway, authMethod: 'browser', credentialExpiresAt: Date.now() - 1, credentialReference: 'moderado/provider/moderado-cloud' });
+    await expect(resolveProvider(readConfig(home), new MemoryCredentialStore(), {}, fakeHTTP([route]))).rejects.toThrow(/expired.*sign in/i);
+  });
+});
 
 describe('previewFor', () => {
   it('canonicalizes the target path inside the workspace jail', () => {

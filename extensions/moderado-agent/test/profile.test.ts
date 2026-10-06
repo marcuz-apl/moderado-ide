@@ -52,7 +52,8 @@ describe('canonicalWorkspaceRoot', () => {
 });
 
 import { describe, expect, it } from 'vitest';
-import { FakeProviderAdapter, NvidiaAdapter, OpenAICompatibleAdapter } from '@moderado/providers';
+import { FakeProviderAdapter } from '@moderado/providers';
+import { DesktopOpenAIAdapter } from '../src/provider-transport.js';
 import { resolveProvider } from '../src/host.js';
 import { MemoryCredentialStore } from '../src/credentials.js';
 import { readConfig } from '../src/profile.js';
@@ -100,22 +101,22 @@ describe('provider resolution', () => {
       new MemoryCredentialStore(),
       { MODERADO_MY_PROVIDER_API_KEY: 'sk-from-env' } as NodeJS.ProcessEnv,
     );
-    expect(adapter).toBeInstanceOf(OpenAICompatibleAdapter);
+    expect(adapter).toBeInstanceOf(DesktopOpenAIAdapter);
     expect(reason).toBeUndefined();
   });
 
   it('reads the key from the credential store when there is no environment value', async () => {
     const home = homeWithConfig({
       activeConnectionId: 'p1',
-      connections: { p1: { id: 'p1', kind: 'openai-compatible', credentialReference: 'moderado/provider/p1' } },
+      connections: { p1: { id: 'p1', kind: 'openai-compatible', baseUrl: 'https://example.invalid/v1', credentialReference: 'moderado/provider/p1' } },
     });
     const store = new MemoryCredentialStore();
     await store.set('moderado/provider/p1', 'secret-from-credman');
     const { adapter } = await resolveProvider(readConfig(home), store, noEnv);
-    expect(adapter).toBeInstanceOf(OpenAICompatibleAdapter);
+    expect(adapter).toBeInstanceOf(DesktopOpenAIAdapter);
   });
 
-  it('uses the Nvidia adapter for an nvidia-nim connection', async () => {
+  it('uses the Desktop transport for an nvidia-nim connection', async () => {
     const home = homeWithConfig({
       activeConnectionId: 'nvidia-nim',
       connections: { 'nvidia-nim': { id: 'nvidia-nim', kind: 'nvidia-nim' } },
@@ -125,13 +126,14 @@ describe('provider resolution', () => {
       new MemoryCredentialStore(),
       { MODERADO_NVIDIA_NIM_API_KEY: 'k' } as NodeJS.ProcessEnv,
     );
-    expect(adapter).toBeInstanceOf(NvidiaAdapter);
+    expect(adapter).toBeInstanceOf(DesktopOpenAIAdapter);
+    expect(adapter.id).toBe('nvidia-nim');
   });
 
   it('falls back and names the connection when no key can be resolved', async () => {
     const home = homeWithConfig({
       activeConnectionId: 'p1',
-      connections: { p1: { id: 'p1', kind: 'openai-compatible' } },
+      connections: { p1: { id: 'p1', kind: 'openai-compatible', baseUrl: 'https://example.invalid/v1' } },
     });
     const { adapter, reason } = await resolveProvider(readConfig(home), new MemoryCredentialStore(), noEnv);
     expect(adapter).toBeInstanceOf(FakeProviderAdapter);
@@ -141,7 +143,7 @@ describe('provider resolution', () => {
   it('never leaks the resolved key into the resolution result', async () => {
     const home = homeWithConfig({
       activeConnectionId: 'p1',
-      connections: { p1: { id: 'p1', kind: 'openai-compatible' } },
+      connections: { p1: { id: 'p1', kind: 'openai-compatible', baseUrl: 'https://example.invalid/v1' } },
     });
     const { adapter, reason } = await resolveProvider(
       readConfig(home),
