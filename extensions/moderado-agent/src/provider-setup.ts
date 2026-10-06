@@ -1,27 +1,14 @@
-import {
-  CONNECT_PROVIDER_PRESET_META,
-  type ConnectProvidersConfig,
-  type ProviderConnectionKind,
-} from '@moderado/providers';
+import type { ConnectProvidersConfig as PinnedConnectProvidersConfig, ProviderConnectionKind } from '@moderado/providers';
+import { DESKTOP_PROVIDER_PRESETS } from './provider-catalog.js';
+
+/** Existing profile shape with Desktop's additional Gateway preset id. */
+export interface ConnectProvidersConfig extends Omit<PinnedConnectProvidersConfig, 'enabled'> {
+  enabled?: string[];
+}
 
 /**
- * Provider setup, matching the Moderado CLI's `/connect` behaviour.
- *
- * WHY THIS EXISTS. An earlier version of the settings pane invented its own
- * shape and wrote `kind: 'openai-compatible'` with an optional `baseUrl`. Both
- * are wrong against the pinned engine:
- *
- *  - The CLI's config reader (`parseConnections` in apps/cli/src/config.ts)
- *    requires `typeof baseUrl === 'string'` and silently *discards* any
- *    connection that fails, so a saved connection can vanish with no error.
- *  - The engine builds `NvidiaAdapter` only when `kind === 'nvidia-nim'`.
- *    Hardcoding one kind routes NVIDIA through the generic adapter and loses
- *    its `freeCatalog` free-tier declaration.
- *  - `freeModelPolicyFor()` resolves a preset by *connection id*, so the id
- *    must be the preset id or the free-first rule silently stops applying.
- *
- * The preset list comes from the engine's own `CONNECT_PROVIDER_PRESET_META`
- * rather than a copy, so Desktop cannot drift from the pinned provider set.
+ * Desktop provider setup retains CLI-readable connection kinds, required base
+ * URLs, and stable provider ids used by credentials and provider cost policy.
  */
 
 export type ProviderChoiceValue = string;
@@ -35,7 +22,7 @@ export interface ProviderChoice {
   baseUrl?: string;
   defaultModel?: string;
   kind: ProviderConnectionKind;
-  /** False for local runtimes, which authenticate with no key. */
+  /** False for local runtimes and public Gateway access. */
   requiresApiKey: boolean;
 }
 
@@ -63,7 +50,7 @@ export function connectionIdFor(name: string): string {
 }
 
 /**
- * The provider picker, in the engine's own preset order.
+ * The provider picker, in Desktop's preset order.
  *
  * `connectProviders` from the shared profile is honoured: `enabled` filters the
  * built-ins and `custom` appends user endpoints, so a CLI user sees the same
@@ -71,7 +58,7 @@ export function connectionIdFor(name: string): string {
  */
 export function buildProviderChoices(config?: ConnectProvidersConfig): ProviderChoice[] {
   const enabled = config?.enabled;
-  const builtIns: ProviderChoice[] = CONNECT_PROVIDER_PRESET_META
+  const builtIns: ProviderChoice[] = DESKTOP_PROVIDER_PRESETS
     .filter((preset) => enabled === undefined || enabled.includes(preset.id))
     .map((preset) => ({
       value: preset.id,
@@ -81,8 +68,7 @@ export function buildProviderChoices(config?: ConnectProvidersConfig): ProviderC
       baseUrl: preset.baseUrl,
       defaultModel: preset.defaultModel,
       requiresApiKey: preset.requiresApiKey,
-      // Mirrors the CLI's tags so both surfaces describe a preset identically.
-      tag: preset.freeCatalog ? 'Free Models' : preset.requiresApiKey ? undefined : 'Local',
+      tag: preset.freeCatalog ? 'Free Models' : preset.local ? 'Local' : undefined,
     }));
 
   const custom: ProviderChoice[] = (config?.custom ?? []).map((provider) => ({
@@ -97,24 +83,7 @@ export function buildProviderChoices(config?: ConnectProvidersConfig): ProviderC
     requiresApiKey: true,
   }));
 
-  // `CONNECT_PROVIDER_PRESET_IDS` includes 'openai-compatible', but the preset
-  // *metadata* table deliberately has no entry for it: it is the generic
-  // "bring your own endpoint" escape hatch rather than a known provider. The CLI
-  // supplies it from its own list, so Desktop adds it here rather than leaving
-  // a selectable id with nothing behind it.
-  const generic: ProviderChoice = {
-    value: 'openai-compatible',
-    label: 'Other OpenAI-compatible provider',
-    description: 'Connect any compatible endpoint with its base URL, key, and model ID.',
-    kind: 'openai-compatible',
-    requiresApiKey: true,
-  };
-
-  const withGeneric = enabled === undefined || enabled.includes('openai-compatible')
-    ? [...builtIns, generic]
-    : builtIns;
-
-  return [...withGeneric, ...custom];
+  return [...builtIns, ...custom];
 }
 
 /** The preset behind a picker value, or undefined for a removed custom entry. */
@@ -139,6 +108,20 @@ function findChoice(value: string, config?: ConnectProvidersConfig): ProviderCho
 
 function isLoopback(hostname: string): boolean {
   return ['localhost', '127.0.0.1', '::1', '[::1]'].includes(hostname);
+}
+
+/** Validate endpoints for both discovery and inference before attaching a key. */
+export function validateProviderBaseUrl(rawBaseUrl: string): string {
+  let url: URL;
+  try { url = new URL(rawBaseUrl); }
+  catch { throw new Error('Enter a valid provider base URL.'); }
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && isLoopback(url.hostname))) {
+    throw new Error('Provider base URLs must use HTTPS (HTTP is allowed only for localhost).');
+  }
+  if (url.username || url.password || url.search || url.hash) {
+    throw new Error('Provider base URLs cannot contain credentials, a query, or a fragment.');
+  }
+  return url.toString().replace(/\/+$/, '');
 }
 
 // --- Listing models before a connection is saved -------------------------------
@@ -200,7 +183,7 @@ export function buildDiscoveryConnection(
     id: presetConnectionId(choice.value),
     displayName,
     kind: 'openai-compatible',
-    baseUrl,
+    baseUrl: validateProviderBaseUrl(baseUrl),
     ...(apiKey ? { apiKey } : {}),
     ...(input.defaultModel?.trim() || choice.defaultModel
       ? { defaultModel: (input.defaultModel?.trim() || choice.defaultModel) as string }
@@ -228,8 +211,7 @@ export function pickDefaultModel<T extends { id: string }>(models: T[], current:
 }
 
 /**
- * Validates and normalizes one connection exactly as the CLI's `buildConnection`
- * does, so a connection saved here is readable by the CLI unchanged.
+ * Validates and normalizes a connection using the shared CLI-readable shape.
  */
 export function buildProviderConnection(
   input: ConnectionInput,
@@ -259,7 +241,7 @@ export function buildProviderConnection(
   const displayName = input.displayName?.trim() || choice.displayName || choice.label;
   const id = choice.value.startsWith('custom:')
     ? choice.value.slice('custom:'.length)
-    : connectionIdFor(displayName);
+    : choice.value === 'openai-compatible' ? connectionIdFor(displayName) : choice.value;
   const defaultModel = input.defaultModel?.trim() || choice.defaultModel;
   const rawBaseUrl = input.baseUrl?.trim() || choice.baseUrl;
 
@@ -268,22 +250,11 @@ export function buildProviderConnection(
   // a preset may supply its own.
   if (!defaultModel) throw new Error('A default model is required for an OpenAI-compatible provider.');
 
-  let url: URL;
-  try {
-    url = new URL(rawBaseUrl);
-  } catch {
-    throw new Error('Enter a valid provider base URL.');
-  }
-  // HTTPS only, except loopback. Anything else would send the key in cleartext.
-  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && isLoopback(url.hostname))) {
-    throw new Error('Provider base URLs must use HTTPS (HTTP is allowed only for localhost).');
-  }
-
   return {
     id,
     displayName,
     kind: 'openai-compatible',
-    baseUrl: url.toString().replace(/\/+$/, ''),
+    baseUrl: validateProviderBaseUrl(rawBaseUrl),
     ...(apiKey ? { apiKey } : {}),
     defaultModel,
   };

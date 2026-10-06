@@ -15,6 +15,20 @@ import {
 // of them silently discard a connection rather than erroring.
 
 describe('provider setup parity with the CLI', () => {
+  it('offers and saves the keyless Gateway with its stable profile id and AUTO route', () => {
+    expect(buildProviderChoices().map((choice) => choice.value)).toContain('moderado-cloud');
+    const connection = buildProviderConnection({ preset: 'moderado-cloud', displayName: 'My Gateway' });
+    expect(connection.id).toBe('moderado-cloud');
+    expect(connection.defaultModel).toBe('auto');
+    expect(connection.baseUrl).toBe('https://mod.alfazen.org/v1');
+    expect(connection.apiKey).toBeUndefined();
+    expect(buildProviderConnection({ preset: 'moderado-cloud', apiKey: 'mrd_test', baseUrl: 'http://127.0.0.1:4788/v1' }).apiKey).toBe('mrd_test');
+  });
+
+  it('keeps preset ids stable when the display name changes', () => {
+    expect(buildProviderConnection({ preset: 'openrouter', apiKey: 'k', defaultModel: 'm', displayName: 'My Router' }).id).toBe('openrouter');
+  });
+
   it('always writes a baseUrl, because the CLI drops a connection without one', () => {
     // apps/cli/src/config.ts parseConnections requires typeof baseUrl === 'string'
     // and `continue`s past the entry otherwise. A connection saved without a
@@ -177,6 +191,13 @@ describe('provider setup parity with the CLI', () => {
 });
 
 describe('discovery connections', () => {
+  it('validates discovery endpoints before sending credentials', () => {
+    for (const storedBaseUrl of ['http://evil.example.com/v1', 'ftp://localhost/v1', 'https://user:secret@example.com/v1', 'not-a-url']) {
+      expect(() => buildDiscoveryConnection({ preset: 'moderado-cloud', storedBaseUrl })).toThrow();
+    }
+    expect(buildDiscoveryConnection({ preset: 'moderado-cloud', storedBaseUrl: 'http://127.0.0.1:4788/v1/' }).baseUrl).toBe('http://127.0.0.1:4788/v1');
+  });
+
   // Listing models must work *before* a key is entered: OpenRouter and several
   // other providers serve /models without authentication, and the CLI lists the
   // free catalog as its first step. Requiring a key here would leave the user
