@@ -1,0 +1,90 @@
+import { describe, expect, it, vi } from 'vitest';
+import { fetchDirectModels, fetchGatewayRoutes } from '../src/provider-discovery.js';
+
+describe('Gateway model discovery', () => {
+  it('preserves a Gateway route ID and provider metadata', async () => {
+    const routes = await fetchGatewayRoutes('http://127.0.0.1:4788/v1', {
+      fetchImpl: async () => Response.json({
+        object: 'list',
+        data: [{ id: 'thinkingmachines/inkling:free', provider: 'openrouter', owned_by: 'openrouter', capabilities: ['text'], data_note: 'Owner verified for private use' }],
+      }),
+    });
+    expect(routes[0]).toMatchObject({ id: 'thinkingmachines/inkling:free', provider: 'openrouter' });
+  });
+
+  it('accepts an empty catalog and all optional metadata fields', async () => {
+    const routes = await fetchGatewayRoutes('https://gateway.example/v1', {
+      fetchImpl: async () => Response.json({ object: 'list', data: [] }),
+    });
+    expect(routes).toEqual([]);
+    const complete = await fetchGatewayRoutes('https://gateway.example/v1', {
+      fetchImpl: async () => Response.json({
+        object: 'list', data: [{ id: 'vendor/model:route', provider: 'vendor', owned_by: 'org', capabilities: ['text', 'tools'], data_note: 'verified' }],
+      }),
+    });
+    expect(complete[0]).toEqual({ id: 'vendor/model:route', provider: 'vendor', owned_by: 'org', capabilities: ['text', 'tools'], data_note: 'verified' });
+  });
+
+  it.each([
+    ['wrong envelope', { object: 'array', data: [] }],
+    ['missing ID', { object: 'list', data: [{ capabilities: [] }] }],
+    ['empty ID', { object: 'list', data: [{ id: '', capabilities: [] }] }],
+    ['malformed capabilities', { object: 'list', data: [{ id: 'route', capabilities: 'text' }] }],
+    ['malformed metadata', { object: 'list', data: [{ id: 'route', capabilities: [], provider: 5 }] }],
+    ['mixed valid and malformed entries', { object: 'list', data: [{ id: 'good', capabilities: [] }, { id: 'bad', capabilities: null }] }],
+  ])('rejects %s', async (_name, payload) => {
+    await expect(fetchGatewayRoutes('https://gateway.example/v1', {
+      fetchImpl: async () => Response.json(payload),
+    })).rejects.toThrow();
+  });
+
+  it('surfaces HTTP errors without parsing server bodies', async () => {
+    await expect(fetchGatewayRoutes('https://gateway.example/v1', {
+      fetchImpl: async () => new Response('secret body', { status: 503 }),
+    })).rejects.toThrow(/503/);
+  });
+});
+
+describe('direct provider model discovery', () => {
+  it.each([
+    ['array', [{ id: 'array/model', pricing: { prompt: '0', completion: '0' }, supported_parameters: ['tools'] }]],
+    ['OpenAI envelope', { object: 'list', data: [{ id: 'envelope/model', pricing: { prompt: '0.2', completion: '0.4' }, supported_parameters: ['reasoning'] }] }],
+  ])('accepts %s catalogs and preserves pricing', async (_name, payload) => {
+    const models = await fetchDirectModels('https://provider.example/v1', 'key', {
+      fetchImpl: async (input, init) => {
+        expect(String(input)).toBe('https://provider.example/v1/models');
+        expect(new Headers(init?.headers).get('authorization')).toBe('Bearer key');
+        return Response.json(payload);
+      },
+    });
+    expect(models[0].pricing).toBeDefined();
+    expect(models[0].supported_parameters).toBeDefined();
+  });
+
+  it('rejects malformed direct entries rather than dropping them', async () => {
+    await expect(fetchDirectModels('https://provider.example/v1', undefined, {
+      fetchImpl: async () => Response.json({ object: 'list', data: [{ id: 'good' }, { id: '' }] }),
+    })).rejects.toThrow();
+  });
+});
+
+describe('discovery timeout and cancellation', () => {
+  it('aborts a stalled request at the requested bounded timeout', async () => {
+    const fetchImpl = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+    }));
+    await expect(fetchGatewayRoutes('https://gateway.example/v1', { fetchImpl, timeoutMs: 5 })).rejects.toThrow(/timed out/i);
+    expect(fetchImpl.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+  });
+
+  it('passes caller cancellation to the request', async () => {
+    const controller = new AbortController();
+    const fetchImpl = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+      controller.abort();
+    }));
+    await expect(fetchDirectModels('https://provider.example/v1', undefined, {
+      fetchImpl, signal: controller.signal, timeoutMs: 100,
+    })).rejects.toThrow(/abort/i);
+  });
+});
