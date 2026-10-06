@@ -1,7 +1,7 @@
 # Moderado Desktop Gateway and Provider Design
 
 **Date:** 2026-10-06
-**Status:** Approved design; awaiting spec review
+**Status:** Approved by owner on 2026-10-06
 **Reference behavior:** Moderado CLI `v0.4.8`
 **Desktop package baseline:** Keep the current pinned contracts, core, tools, and vendored source snapshot.
 

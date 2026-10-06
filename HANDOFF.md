@@ -714,8 +714,8 @@ published or signed.
   core/contracts/tools remain in use; Desktop will own provider transport and
   routing at the host boundary.
 - Design spec: `docs/superpowers/specs/2026-10-06-desktop-gateway-provider-design.md`.
-  It is committed as `61a859a`; implementation has not started and the owner
-  must review the spec before planning/implementation.
+  It is committed as `61a859a` and the owner approved it on 2026-10-06.
+  Implementation has not started; the implementation plan is being prepared.
 - Live catalog inspection command:
   `Invoke-RestMethod -Uri 'http://127.0.0.1:4788/v1/models' | ConvertTo-Json -Depth 12`.
   Outcome: HTTP success, 10 route entries with IDs, providers, owners,
