@@ -95,6 +95,14 @@ describe('Desktop provider transport', () => {
     await expect(collect(adapter)).rejects.toMatchObject({ code: 'ERR_MALFORMED_RESPONSE' });
   });
 
+  it.each(['', frame({ choices: [{ delta: { content: 'partial' }, finish_reason: null }] })])('rejects EOF without a terminal completion', async text => {
+    await expect(collect(adapterFor(text))).rejects.toMatchObject({ code: 'ERR_MALFORMED_RESPONSE' });
+  });
+
+  it('accepts EOF after a terminal finish reason', async () => {
+    expect(await collect(adapterFor(frame({ choices: [{ delta: { content: 'complete' }, finish_reason: 'stop' }] })))).toEqual([{ contentDelta: 'complete', finishReason: 'stop' }]);
+  });
+
   it('does not expose network exception details', async () => {
     const adapter = new DesktopOpenAIAdapter({ id: 'x', name: 'X', baseUrl: 'https://example.test/v1', fetchImpl: async () => { throw new Error('secret-key'); } });
     await expect(collect(adapter)).rejects.toMatchObject({ code: 'ERR_NETWORK_ERROR', message: 'Provider network request failed' });

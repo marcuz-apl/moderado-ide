@@ -144,6 +144,7 @@ export class DesktopOpenAIAdapter implements IProviderAdapter {
       let pending = '';
       let dataLines: string[] = [];
       let frameSize = 0;
+      let terminalCompletion = false;
       while (true) {
         const { value, done } = await bounded(() => reader!.read());
         pending += done ? decoder.decode() : decoder.decode(value, { stream: true });
@@ -157,7 +158,10 @@ export class DesktopOpenAIAdapter implements IProviderAdapter {
             if (dataLines.length) {
               const data = dataLines.join('\n');
               if (data === '[DONE]') return;
-              yield* parseFrame(data);
+              for (const chunk of parseFrame(data)) {
+                if (chunk.finishReason != null) terminalCompletion = true;
+                yield chunk;
+              }
             }
             dataLines = []; frameSize = 0;
           } else if (line.startsWith('data:')) dataLines.push(line.slice(5).replace(/^ /, ''));
@@ -165,6 +169,7 @@ export class DesktopOpenAIAdapter implements IProviderAdapter {
         if (pending.length + frameSize > MAX_FRAME_CHARS) throw new MalformedResponseError('Provider stream frame exceeded size limit');
         if (done) {
           if (pending.trim() || dataLines.length) throw new MalformedResponseError('Provider stream ended within a frame');
+          if (!terminalCompletion) throw new MalformedResponseError('Provider stream ended before completion');
           return;
         }
       }
