@@ -705,3 +705,23 @@ packaged files. The panel has not been re-opened in a running editor after this
 build, so the visual result is asserted from the emitted markup rather than
 from a screenshot, and a live model call still has not been made. Nothing is
 published or signed.
+
+## Gateway/provider design checkpoint (2026-10-06 UTC)
+
+- The owner approved a Desktop-owned Gateway/provider implementation that
+  borrows CLI `v0.4.8` behavior without changing the sibling CLI repository or
+  advancing Desktop's current vendored package snapshot. The existing pinned
+  core/contracts/tools remain in use; Desktop will own provider transport and
+  routing at the host boundary.
+- Design spec: `docs/superpowers/specs/2026-10-06-desktop-gateway-provider-design.md`.
+  It is committed as `61a859a`; implementation has not started and the owner
+  must review the spec before planning/implementation.
+- Live catalog inspection command:
+  `Invoke-RestMethod -Uri 'http://127.0.0.1:4788/v1/models' | ConvertTo-Json -Depth 12`.
+  Outcome: HTTP success, 10 route entries with IDs, providers, owners,
+  capabilities, and data notes; no pricing fields. The owner confirmed every
+  route in this Gateway catalog is Free.
+- Documentation whitespace check: `git diff --cached --check` passed after
+  removing trailing whitespace. Desktop-local `.githooks` were active at
+  `.githooks`; the design commit ran them and produced connected version
+  `v0.1.0+2610061`.
