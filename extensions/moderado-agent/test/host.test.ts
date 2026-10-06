@@ -133,6 +133,18 @@ describe('Desktop provider host integration', () => {
     const home = configuredHome('moderado-cloud', { ...gateway, authMethod: 'browser', credentialExpiresAt: Date.now() - 1, credentialReference: 'moderado/provider/moderado-cloud' });
     await expect(resolveProvider(readConfig(home), new MemoryCredentialStore(), {}, fakeHTTP([route]))).rejects.toThrow(/expired.*sign in/i);
   });
+
+  it('rejects a run selection that is neither auto nor available from this connection', async () => {
+    // The webview never supplies the model, but the host still refuses an
+    // explicit selection the discovered catalog does not contain instead of
+    // sending an unknown id to the provider.
+    const fetchImpl = fakeHTTP([route]);
+    const host = new AgentHost({ workspaceRoot: workspace(), moderadoHome: configuredHome('moderado-cloud', gateway), fetchImpl, onEvent: () => {}, promptForApproval: async () => undefined });
+    await expect(host.startRun({ task: 'Say hello.', modelId: 'missing/route' })).rejects.toThrow(/not available.*Settings/i);
+    expect(host.isRunning).toBe(false);
+    // The discovery GET may have run, but no completion request may carry the unknown id.
+    expect(fetchImpl.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+  });
 });
 
 describe('previewFor', () => {

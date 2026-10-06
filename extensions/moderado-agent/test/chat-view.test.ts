@@ -195,6 +195,27 @@ describe('chat view', () => {
     expect(snap.approval).not.toContain('<script>');
     expect(escapeHtml('<b>')).toBe('&lt;b&gt;');
   });
+
+  it('shows the active provider and model in the composer footer', () => {
+    const html = chatHtml(state({ activeProviderName: 'Moderado Gateway', activeModelId: 'auto' }), preview);
+    const footer = html.slice(html.indexOf('id="panel-foot"'));
+    expect(footer).toContain('Moderado Gateway');
+    expect(footer).toContain('auto');
+  });
+
+  it('escapes the active provider and model before they reach the footer', () => {
+    const html = chatHtml(state({ activeProviderName: '<script>bad</script>', activeModelId: 'a"b' }), preview);
+    expect(html).not.toContain('<script>bad</script>');
+    const snap = viewSnapshot(state({ activeProviderName: '<b>p</b>', activeModelId: 'a"b' }), preview);
+    // The snapshot feeds live updates, so it must be escaped too.
+    expect(snap.activeContext).toBe('&lt;b&gt;p&lt;/b&gt; · a&quot;b');
+  });
+
+  it('preserves an exact pinned route id in the footer context', () => {
+    const snap = viewSnapshot(state({ activeProviderName: 'Moderado Gateway', activeModelId: 'moonshotai/kimi-k3' }), preview);
+    expect(snap.activeContext).toBe('Moderado Gateway · moonshotai/kimi-k3');
+    expect(viewSnapshot(state(), preview).activeContext).toBe('');
+  });
 });
 
 describe('moderado settings pane', () => {

@@ -317,6 +317,18 @@ export class AgentHost implements IApprovalHandler {
         || (state.kind === 'ok' && typeof state.config.defaultModel === 'string' ? state.config.defaultModel : undefined)
         || resolution.defaultModel;
       if (requested !== undefined && !ModelIdSchema.safeParse(requested).success) throw new Error('The selected model ID is malformed.');
+      // The GUI passes the host-side selection, but the host still refuses an
+      // explicit id the connection cannot serve: it must be AUTO, a discovered
+      // route, or a pin already saved in the profile. Saved pins stay valid so
+      // a stale catalog cannot brick an existing configuration.
+      if (input.modelId && input.modelId !== 'auto') {
+        const savedPin = (state.kind === 'ok' && state.config.defaultModel === input.modelId)
+          || resolution.defaultModel === input.modelId
+          || this.options.pinnedModelId === input.modelId;
+        if (!savedPin && !inventory.some((entry) => entry.id === input.modelId)) {
+          throw new Error(`The selected model '${input.modelId}' is not available from this connection. Open Moderado Settings to refresh models or choose another.`);
+        }
+      }
       const policy = new PolicyManager({
         readOnly: input.planMode ?? false,
         nonInteractive: this.options.nonInteractive ?? false,

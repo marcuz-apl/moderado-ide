@@ -4,6 +4,7 @@ const harness = vi.hoisted(() => ({
   profile: {} as Record<string, unknown>, invalid: false,
   messages: [] as Record<string, unknown>[], keys: new Map<string, string>(),
   provider: undefined as any, receive: undefined as any,
+  runs: [] as Record<string, unknown>[],
   prompt: vi.fn(), browser: vi.fn(), write: vi.fn(), openExternal: vi.fn(),
 }));
 vi.mock('vscode', () => ({
@@ -22,6 +23,10 @@ vi.mock('../src/profile.js', () => ({ configPath: () => 'isolated/config.json',
 vi.mock('../src/host.js', () => ({ AgentHost: class {
   listSessions() { return { sessions: [], invalid: [] }; }
   async discoverModels() { return []; }
+  async startRun(input: Record<string, unknown>) {
+    harness.runs.push(input);
+    return { status: 'completed', finalMessage: null, model: String(input.modelId ?? 'auto'), totalSteps: 0, sessionId: 's' };
+  }
   dispose() {} cancel() {}
 } }));
 vi.mock('../src/credentials.js', async (original) => {
@@ -44,7 +49,7 @@ function send(type: string, values: Record<string, unknown> = {}) { harness.rece
 const html = () => String(harness.messages.at(-1)?.settings ?? '');
 
 beforeEach(() => {
-  vi.clearAllMocks(); harness.messages = []; harness.keys.clear(); harness.profile = {}; harness.invalid = false;
+  vi.clearAllMocks(); harness.messages = []; harness.keys.clear(); harness.profile = {}; harness.invalid = false; harness.runs = [];
   harness.prompt.mockResolvedValue('mrd_native-secret');
   harness.browser.mockResolvedValue({ accessToken: 'mrd_browser-secret', expiresAt: Date.now() + 60_000 });
   harness.write.mockImplementation((_path, patch) => {
@@ -113,5 +118,29 @@ describe('host-only Settings credentials', () => {
     harness.invalid = true; send('setProviderKey', form);
     await vi.waitFor(() => expect(html()).toContain('corrupt profile'));
     expect(harness.prompt).not.toHaveBeenCalled(); expect(harness.write).not.toHaveBeenCalled();
+  });
+});
+
+describe('composer run wiring', () => {
+  it('passes the host-side active model to startRun and ignores a webview-supplied one', async () => {
+    // The active selection lives in the shared profile; the webview only ever
+    // sends prompt text, so a modelId echoed back in the message is ignored.
+    harness.profile = {
+      activeConnectionId: 'moderado-cloud', defaultModel: 'Exact/Route',
+      connections: { 'moderado-cloud': { id: 'moderado-cloud', kind: 'openai-compatible', baseUrl: 'http://127.0.0.1:4788/v1' } },
+    };
+    send('openSettings');
+    await vi.waitFor(() => expect(html()).toContain('Exact/Route'));
+    send('prompt', { text: 'Say hi.', modelId: 'evil/route' });
+    await vi.waitFor(() => expect(harness.runs).toHaveLength(1));
+    expect(harness.runs[0]).toMatchObject({ task: 'Say hi.', modelId: 'Exact/Route' });
+    expect(JSON.stringify(harness.runs)).not.toContain('evil/route');
+  });
+
+  it('runs with no model id when the profile selects none', async () => {
+    send('prompt', { text: 'Say hi.' });
+    await vi.waitFor(() => expect(harness.runs).toHaveLength(1));
+    expect(harness.runs[0]).toMatchObject({ task: 'Say hi.' });
+    expect(harness.runs[0].modelId).toBeUndefined();
   });
 });

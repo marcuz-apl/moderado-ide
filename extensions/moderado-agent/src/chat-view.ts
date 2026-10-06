@@ -55,6 +55,10 @@ export interface ChatViewState {
   autoApprove?: AutoApproveState;
   /** Workspace folder name shown in the footer. */
   workspaceLabel?: string;
+  /** Display-safe active connection name for the composer footer. */
+  activeProviderName?: string;
+  /** Display-safe active model id (`auto` or an exact route) for the footer. */
+  activeModelId?: string;
 }
 
 /** The parts of the view the webview updates in place. */
@@ -71,6 +75,8 @@ export interface ViewSnapshot {
   autoApproveExpanded: boolean;
   planMode: boolean;
   empty: boolean;
+  /** Escaped `provider · model` footer context, refreshed with the connection. */
+  activeContext: string;
 }
 
 /** A fresh per-render nonce, which is what a VS Code webview CSP expects. */
@@ -243,6 +249,7 @@ body { font-family: var(--vscode-font-family); font-size: 13px; color: var(--vsc
   .foot-left { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
   .foot-left button { padding: 0.1rem 0.3rem; opacity: 0.8; }
   .ws-label { opacity: 0.75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ctx-label { opacity: 0.75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 14rem; }
   .mode-toggle { display: flex; border: 1px solid var(--vscode-panel-border); border-radius: 4px; overflow: hidden; }
   .mode-toggle button { padding: 0.15rem 0.5rem; font-size: 0.72rem; opacity: 0.8; }
   .mode-toggle button.on { background: var(--vscode-button-background); color: var(--vscode-button-foreground); opacity: 1; }
@@ -328,6 +335,7 @@ ${toolbarHtml()}
     <button type="button" id="foot-new" title="New task" aria-label="New task">&#43;</button>
     <button type="button" id="foot-history" title="Sessions" aria-label="Sessions">&#128340;</button>
     <span class="ws-label">${escapeHtml(state.workspaceLabel ?? '')}</span>
+    <span class="ctx-label" id="active-ctx" title="Active provider and model">${snapshot.activeContext}</span>
   </span>
   <span class="mode-toggle">
     <button type="button" id="mode-plan" class="${snapshot.planMode ? 'on' : ''}">Plan</button>
@@ -471,6 +479,7 @@ ${toolbarHtml()}
   // section does not rewrite its DOM (which would drop focus or a selection).
   let renderedRecents = ${JSON.stringify(snapshot.recents)};
   let aaHtml = ${JSON.stringify(snapshot.autoApprove)};
+  let renderedContext = ${JSON.stringify(snapshot.activeContext)};
 
   function bindRecents() {
     for (const row of document.querySelectorAll('.recent-row')) {
@@ -510,6 +519,13 @@ ${toolbarHtml()}
       aaHtml = update.autoApprove;
       aaHost.innerHTML = update.autoApprove;
       bindAutoApprove();
+    }
+    // The active provider/model footer follows the connection and model, so it
+    // is only rewritten when the escaped context actually differs.
+    if (update.activeContext !== undefined && update.activeContext !== renderedContext) {
+      renderedContext = update.activeContext;
+      const ctx = document.getElementById('active-ctx');
+      if (ctx) ctx.innerHTML = update.activeContext;
     }
     // The pane is replaced only when the host sends one. Rewriting it on every
     // streamed token would discard a half-typed API key mid-entry.
@@ -551,6 +567,12 @@ export function viewSnapshot(
     useMcp: false,
   };
   const planMode = (state as { planMode?: boolean }).planMode === true;
+  // Only display-safe strings reach the DOM, and only after escaping: the
+  // provider name comes from the shared profile and the model id from the
+  // validated Settings selection, but both are still treated as untrusted.
+  const activeContext = escapeHtml(
+    [state.activeProviderName, state.activeModelId].filter((part) => part && part.trim()).join(' · '),
+  );
   return {
     rows,
     approval: approvalHtml(state.pendingApproval, preview),
@@ -567,5 +589,6 @@ export function viewSnapshot(
     // Empty unless open, so the pane never reaches the document unasked.
     settings: settings.open ? settingsPaneHtml(settings) : '',
     settingsStatus: settings.status ?? '',
+    activeContext,
   };
 }

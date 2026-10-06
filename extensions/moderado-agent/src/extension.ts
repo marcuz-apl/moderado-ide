@@ -113,6 +113,37 @@ export function activate(context: vscode.ExtensionContext): ModeradoApi {
     workspaceLabel: workspaceRoot.split(/[\\/]/).pop() ?? '',
   };
 
+  /**
+   * Refreshes the composer footer's provider/model identity from validated
+   * host state only. The webview never contributes to these fields; the model
+   * id comes from the shared profile or the validated Settings selection.
+   */
+  function syncActiveContext(): void {
+    // Mirror the run's connection precedence: the active connection, else the
+    // first saved one. An unsaved preset selection in the pane is not the
+    // connection a run would use, so it never appears here.
+    const connectionId = settings.activeConnectionId || settings.savedConnections[0]?.id || '';
+    const active = settings.savedConnections.find((c) => c.id === connectionId);
+    const choice = settings.providers.find((p) => p.value === connectionId);
+    const name = active?.displayName || choice?.label || connectionId;
+    view.activeProviderName = name || undefined;
+    view.activeModelId = settings.defaultModel || undefined;
+  }
+
+  // Seed the footer from the shared profile so the composer shows the active
+  // context before Settings is ever opened. A corrupt profile seeds nothing;
+  // it is reported when the pane opens rather than guessed at here.
+  (() => {
+    const state = readConfig();
+    if (state.kind !== 'ok') return;
+    settings.activeConnectionId =
+      typeof state.config.activeConnectionId === 'string' ? state.config.activeConnectionId : '';
+    settings.savedConnections = connectionsFromConfig(state.config);
+    settings.defaultModel =
+      typeof state.config.defaultModel === 'string' ? state.config.defaultModel : '';
+    syncActiveContext();
+  })();
+
   const host = new AgentHost({
     workspaceRoot,
     nonInteractive: false,
@@ -882,6 +913,9 @@ async function openDiffTab(requestId: string): Promise<void> {
   /** Renders the current chat state into the open sidebar view, if there is one. */
   function render(): void {
     if (!chatView) return;
+    // The footer follows the connection and model, so it is recomputed from
+    // the current host-side settings state on every render.
+    syncActiveContext();
     refreshRecents();
     // The document is written once. Later updates are pushed into the live DOM,
     // because reassigning `webview.html` destroys and rebuilds the whole webview:
@@ -907,7 +941,9 @@ async function openDiffTab(requestId: string): Promise<void> {
     view.running = true;
     render();
     try {
-      const result = await host.startRun({ task: text, planMode: view.planMode });
+      // The model identity is host-side state (profile or validated Settings
+      // selection). The webview contributes only the prompt text.
+      const result = await host.startRun({ task: text, planMode: view.planMode, modelId: view.activeModelId });
       if (result.finalMessage) append({ kind: 'assistant', label: 'Moderado', text: result.finalMessage });
       append({ kind: 'tool', label: 'Session', text: `${result.status} · ${result.model} · ${result.totalSteps} step(s) · session ${result.sessionId}` });
     } catch (error) {
