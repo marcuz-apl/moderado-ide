@@ -31,13 +31,18 @@ meet the need.
 - `@moderado/contracts` owns pure types and validation schemas.
 - `@moderado/core` owns the provider-neutral agent loop and policy; inject
   concrete providers, tools, approval handlers, and event consumers.
-- `@moderado/providers` owns provider adapters, presets, discovery, and cost
-  policy. The Desktop must use the same pinned logic as the CLI.
 - `@moderado/tools` owns workspace jail, file/process operations, and MCP tool
   boundaries. The jail protects built-in file tools; a configured MCP server
   is an external process with the user's OS privileges. Do not describe it as
   jailed. Do not bypass built-in tool policy by giving model-directed actions
   raw editor filesystem or process APIs.
+- Desktop-owned provider code (`extensions/moderado-agent/src/provider-*.ts`,
+  `model-router.ts`, `gateway-login.ts`) owns Gateway/provider adapters,
+  presets, discovery, model policy, transport, and routing. It adapts CLI
+  `v0.4.8` behavior without using CLI provider code at runtime. Contracts,
+  core, and tools stay at the existing pinned CLI source revision. Do not
+  reintroduce a rule requiring provider transport, presets, or policy to come
+  from the CLI source.
 - Desktop-owned code composes those packages and renders UI. A renderer or
   webview never holds provider secrets or grants its own tool permissions.
 

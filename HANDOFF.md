@@ -706,6 +706,28 @@ build, so the visual result is asserted from the emitted markup rather than
 from a screenshot, and a live model call still has not been made. Nothing is
 published or signed.
 
+## Desktop-owned Gateway/provider checkpoint (2026-10-06 UTC)
+
+- Implementation is complete in this worktree across Tasks 1-8: Desktop-owned
+  provider catalog, discovery, OpenAI-compatible transport, free-first model
+  router, Gateway login, host wiring, and Settings/chat GUI. Every step used
+  offline fake providers/mocks; no live inference ran.
+- Contributor guidance now states Desktop owns Gateway/provider adapters,
+  discovery, model policy, transport, and routing, adapting CLI `v0.4.8`
+  behavior without using CLI provider code at runtime. Pinned contracts, core,
+  and tools remain at CLI `v0.3.10` (`a293c1d8…`); only the `sources.lock.json`
+  role description changed, not the tag or commit.
+- Offline verification (run from `extensions/moderado-agent` in this worktree):
+  `npm test` 14 files / 296 tests pass; `npx tsc -p tsconfig.json --noEmit`
+  exit 0; `npm run compile` emits `dist/agent-core.js` 506.6 KiB with
+  `activate()`.
+- Editor-host build not run: `.\scripts\build-m1.ps1 -AssetsOnly` from the
+  worktree root fails because this worktree has no `.cache/vscodium` checkout
+  (`Resolve-Path` on `.cache\vscodium` throws). No packaged-asset manifest,
+  real-editor Gateway UI inspection, or live inference is claimed.
+- Public release remains blocked on owner authorization; nothing is published
+  or signed.
+
 ## Gateway/provider design checkpoint (2026-10-06 UTC)
 
 - The owner approved a Desktop-owned Gateway/provider implementation that

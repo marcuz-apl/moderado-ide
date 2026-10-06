@@ -2,7 +2,10 @@
 
 **Project version:** see [VERSION](VERSION) (planning scaffold, unpublished)  
 **Initial platform:** Windows x64  
-**Reference agent baseline:** Moderado CLI `v0.3.10`; the exact source commit will be pinned when implementation begins.
+**Reference agent baseline:** Moderado CLI `v0.3.10` pinned contracts, core, and
+tools source; Desktop-owned provider behavior adapts CLI `v0.4.8` fixtures and
+behavior without using CLI provider code at runtime. The exact source commits
+are pinned in `sources.lock.json` and recorded when implementation begins.
 
 ## 1. Purpose
 
@@ -49,8 +52,8 @@ agent in a complete editor. The first complete flow is:
 | ID | Requirement | Acceptance evidence |
 | --- | --- | --- |
 | F1 | Produce a Moderado-branded Windows x64 IDE package from pinned Code OSS/VSCodium inputs. | Install and launch on a clean Windows test account; product name, icon, data directory, URL scheme, and installer IDs do not collide with VSCodium or VS Code. |
-| F2 | Bundle the pinned Moderado agent packages and provider presets. | With no CLI executable installed, connect to a fake provider and complete a bounded agent turn. |
-| F3 | Preserve model inventory, free-first AUTO routing, model pinning, and paid/unknown-cost opt-in. | Shared offline fixtures yield equivalent eligibility and routing outcomes in CLI and Desktop for the pinned engine revision. |
+| F2 | Bundle the pinned Moderado agent contracts, core, and tools with a Desktop-owned provider layer and presets. | With no CLI executable installed, connect to a fake provider and complete a bounded agent turn. |
+| F3 | Preserve model inventory, free-first AUTO routing, model pinning, and paid/unknown-cost opt-in in the Desktop-owned provider layer with offline parity to CLI `v0.4.8`. | Shared offline fixtures yield equivalent eligibility and routing outcomes in CLI and Desktop for the Desktop-owned provider revision. |
 | F4 | Render structured agent events, tool previews, usage, cancellation, and actionable errors. | A real editor-host test observes ordered events and can cancel a running turn. |
 | F5 | Require a human decision for every file mutation and command by default; deny on closed UI, approval timeout, cancellation, malformed or mismatched decision, or non-interactive execution. Plan mode blocks mutations. | Tests demonstrate no mutation or command runs without an affirmative matching decision; preview shows every affected path and complete proposed replacement/patch or command and working directory. A missing complete preview denies the action. |
 | F6 | Reuse the same local Moderado configuration, skills, and session schema on the same OS. | Desktop reads a CLI-created profile/session and the CLI reads a Desktop-created session after restart. |

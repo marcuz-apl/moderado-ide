@@ -26,7 +26,7 @@
       "tagObject": "638008f99eb59209d0d2830b95d9b0cd2a09b225",
       "commit": "a293c1d84d28d1b126fc7054a0f57011edc9d62c",
       "version": "v0.3.10+260930e",
-      "role": "contracts-core-providers-tools",
+      "role": "contracts-core-tools; Desktop owns Gateway/provider adapters, discovery, model policy, transport, and routing, adapting CLI v0.4.8 behavior without CLI provider code at runtime",
       "verification": "Annotated tag object and peeled commit verified with git ls-remote and full Desktop-local clone. This is not the earlier 44251dce bootstrap snapshot."
     }
   },

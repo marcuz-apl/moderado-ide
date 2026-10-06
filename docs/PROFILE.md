@@ -17,6 +17,13 @@ so cross-OS sharing is outside the first release.
 | `logs/` | CLI diagnostic output | Use a distinct Desktop log file and redact secrets. |
 | `desktop/` | Unused by the CLI | Reserved for Desktop-specific Moderado state that does not belong in shared config. |
 
+The Gateway connection uses connection ID `moderado-cloud` with
+`kind: 'openai-compatible'` and model identity `defaultModel: 'auto'`
+(or an exact discovered route ID for a pinned route). It introduces no
+config-schema migration: Gateway and direct-provider connections,
+`defaultModel`, route IDs, and cost-policy flags reuse the existing
+shared fields alongside the CLI.
+
 The editor's own layout, extension database, caches, and update metadata use
 separate application data identified by Moderado Desktop. Their location must
 not collide with VS Code, VSCodium, or the shared files above.
@@ -26,7 +33,9 @@ not collide with VS Code, VSCodium, or the shared files above.
 `config.json` may contain a credential reference, not the credential value.
 The current Windows CLI uses Credential Manager targets of the form
 `moderado/provider/<normalized-provider-id>`. Desktop must use the same target
-when a connection has such a reference. Environment variables take precedence
+when a connection has such a reference, including
+`moderado/provider/moderado-cloud` for Gateway OAuth tokens and manual keys.
+Environment variables take precedence
 in the existing CLI resolution path. A Desktop UI must never send the secret
 to a renderer, store it in an editor setting, or print it in logs.
 
@@ -64,7 +73,11 @@ must cover these existing CLI behaviors.
 ## Behavior parity boundary
 
 Provider/model eligibility and agent engine behavior follow the pinned CLI
-source. Desktop deliberately requires a human decision for each mutation or
+contracts/core/tools source. The Desktop-owned provider layer adapts CLI
+`v0.4.8` cost, AUTO, and routing fixtures/behavior without using CLI provider
+code at runtime; it does not claim simultaneous config-write safety beyond
+the coordinated-writer guarantees above.
+Desktop deliberately requires a human decision for each mutation or
 command by default. Current CLI handlers can auto-approve actions despite
 the CLI repository's approval-first guideline. That discrepancy is known and
 must be covered in Desktop compatibility documentation and tests; do not

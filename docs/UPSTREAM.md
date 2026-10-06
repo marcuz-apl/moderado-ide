@@ -9,7 +9,10 @@ Moderado Desktop plans to use three independent source inputs:
 2. [Microsoft Code OSS](https://github.com/microsoft/vscode), the MIT-licensed
    editor source fetched by the downstream build process.
 3. [Moderado CLI](https://github.com/marcuz-apl/moderado), the source of the
-   agent contracts, core, provider adapters, and workspace tools.
+   agent contracts, provider-neutral core, and workspace tools.
+   Gateway/provider adapters, presets, discovery, model policy, transport,
+   and routing are Desktop-owned code that adapts CLI `v0.4.8` behavior
+   without using CLI provider code at runtime.
 
 VSCodium is not a vendored editor library and its released executable is not
 the Desktop application. The Desktop project will build its own product from
@@ -22,8 +25,11 @@ from the MIT-licensed Code OSS source.
 
 Before implementation, record exact immutable revisions for VSCodium,
 Code OSS, and Moderado in a Desktop-owned source lock/manifest. The first
-Moderado behavior reference is CLI release `v0.3.10`; do not assume its npm
-package exposes the internal workspaces as separate installable packages.
+Moderado contracts/core/tools reference is CLI release `v0.3.10`; do not
+assume its npm package exposes the internal workspaces as separate
+installable packages. Desktop-owned Gateway/provider behavior instead
+adapts CLI `v0.4.8` fixtures and behavior without vendoring CLI `v0.4.8`
+provider code.
 Build Moderado's internal packages from the pinned source revision and bundle
 them with Desktop. A build must record source revisions and Desktop `VERSION`.
 
