@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
-import { MemoryCredentialStore, credentialReference } from '../src/credentials.js';
+import { MemoryCredentialStore, WindowsCredentialStore, credentialReference } from '../src/credentials.js';
 import {
   authorizeGatewayInBrowser, buildGatewayConnection, createGatewayOAuthRequest,
   exchangeGatewayOAuthCode, persistGatewayLogin, validateGatewayOAuthCallback,
@@ -39,6 +39,10 @@ describe('Gateway connection and host-only credential persistence', () => {
     await store.set(credentialReference('moderado-cloud'), key);
     await persistGatewayLogin('public', {}, store);
     expect(await store.get(credentialReference('moderado-cloud'))).toBeUndefined();
+  });
+  it('propagates a Windows credential deletion failure for public access', async () => {
+    const store = new WindowsCredentialStore(async () => ({ stdout: '{"ok":false,"errorCode":5}', stderr: '' }));
+    await expect(persistGatewayLogin('public', {}, store)).rejects.toThrow(/Credential Manager/);
   });
   it.each(['', 'wrong-prefix', 'mrd_', 'mrd_bad\nkey'])('rejects invalid manual keys without writing', async (value) => {
     const store = new MemoryCredentialStore();

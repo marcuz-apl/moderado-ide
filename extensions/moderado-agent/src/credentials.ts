@@ -85,7 +85,15 @@ export class WindowsCredentialStore implements CredentialStore {
   }
 
   async delete(reference: string): Promise<void> {
-    await this.invoke('delete', reference);
+    try {
+      const parsed: unknown = JSON.parse(await this.invoke('delete', reference));
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Invalid bridge result.');
+      const result = parsed as Record<string, unknown>;
+      // ERROR_NOT_FOUND is an idempotent delete success; other errors deny.
+      if (result.ok !== true && !(result.ok === false && result.errorCode === 1168)) throw new Error('Credential deletion failed.');
+    } catch {
+      throw new Error('Windows Credential Manager operation failed. Set the provider environment variable to continue.');
+    }
   }
 
   private async invoke(
@@ -142,7 +150,8 @@ const BRIDGE_SOURCE = [
   '$c=New-Object ModeradoCred+C;$c.Type=1;$c.TargetName=$r.reference;$c.CredentialBlobSize=$b.Length;$c.CredentialBlob=$p;$c.Persist=2;$c.UserName="Moderado";',
   'if(-not [ModeradoCred]::CredWrite([ref]$c,0)){throw "write"};[Console]::Out.Write(\'{"ok":true}\')}',
   'finally{[Runtime.InteropServices.Marshal]::FreeHGlobal($p)}}',
-  'else{[ModeradoCred]::CredDelete($r.reference,1,0)|Out-Null;[Console]::Out.Write(\'{"ok":true}\')}',
+  'else{if([ModeradoCred]::CredDelete($r.reference,1,0)){[Console]::Out.Write(\'{"ok":true}\')}else{',
+  '$e=[Runtime.InteropServices.Marshal]::GetLastWin32Error();[Console]::Out.Write((@{ok=$false;errorCode=$e}|ConvertTo-Json -Compress))}}',
   '}catch{[Console]::Error.Write($_.Exception.Message);exit 1}',
 ].join('\n');
 
