@@ -7,6 +7,17 @@ and verified against CLI **v0.4.8**. Linux build stopped at the owner's request.
 Local and remote repositories are renamed, and source checkpoint `7ec0923`
 is pushed. Next priority: improve the existing Windows IDE GUI. Signing/publication remain unauthorized.
 
+## Center-workspace logo accent (2026-10-07 UTC)
+
+- Added the app icon's `#ff8b5c` accent dot to all four center-workspace
+  watermarks: dark, light, high-contrast dark and high-contrast light. Its
+  coordinates/radius are scaled from the icon by 0.4, and it sits outside
+  the faint letter group so its color remains visible.
+- Offline Python XML validation failed first because the dot was missing;
+  after the edit, all four SVGs parsed and matched the icon's color and
+  scaled geometry. `node --test scripts/test/build-linux.test.mjs`: 4/4 pass.
+  `git diff --check`: pass. No application rebuild or live visual check was run.
+
 ## Current checkpoint (2026-10-07 UTC)
 
 - Owner confirmed Linux, macOS, and Windows editions, then paused Linux

@@ -11,4 +11,5 @@
      stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round">
     <path d="M11.2,29.6 L11.2,15.2 L20,22.4 L28.8,15.2 L28.8,29.6"/>
   </g>
+  <circle cx="28.2" cy="11.8" r="2.6" fill="#ff8b5c"/>
 </svg>
