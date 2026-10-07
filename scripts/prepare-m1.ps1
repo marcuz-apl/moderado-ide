@@ -34,6 +34,7 @@ $env:npm_config_python = $python
 $vswhere = 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe'
 $vs = (& $vswhere -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath | Select-Object -First 1).Trim()
 if (!$vs) { throw 'Visual Studio C++ Build Tools are required.' }
+Write-Output "Detected Visual Studio installation: $vs"
 $env:vs2022_install = $vs
 & $bash -c "cd '$posixCheckout/vscode' && npm ci"
 if ($LASTEXITCODE -ne 0) { throw 'Pinned Code OSS dependency installation failed.' }
