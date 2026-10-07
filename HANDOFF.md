@@ -7,6 +7,21 @@ and verified against CLI **v0.4.8**. Linux build stopped at the owner's request.
 Local and remote repositories are renamed, and source checkpoint `7ec0923`
 is pushed. Next priority: improve the existing Windows IDE GUI. Signing/publication remain unauthorized.
 
+## Auto-Approve defaults (2026-10-07 UTC)
+
+- Enabled Read files, Edit files, Fetch web content, and Use MCP servers on
+  startup. Execute commands remains approval-gated. The host automatically
+  approves matching requests; users can turn off categories to require review.
+  Cancellation, Plan mode, explicit MCP server trust, and complete-preview
+  checks remain in force.
+- `npm --prefix extensions/moderado-agent test -- test/auto-approve.test.ts test/chat-view.test.ts test/settings-host.test.ts -t 'auto-approve|default auto-approval'`:
+  15 passed. `npm --prefix extensions/moderado-agent run typecheck`: exit 0.
+  `npm --prefix extensions/moderado-agent run compile`: exit 0.
+- Full extension suite: 330 passed, 4 skipped, 3 failed in pre-existing
+  worktree changes: two RECENT-list tests conflict with the new history-closed
+  default, and one settings navigation test conflicts with pending settings UI
+  changes. These unrelated changes were left untouched.
+
 ## Center-workspace logo accent (2026-10-07 UTC)
 
 - Added the app icon's `#ff8b5c` accent dot to all four center-workspace

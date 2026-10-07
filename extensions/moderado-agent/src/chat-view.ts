@@ -1,4 +1,5 @@
 import type { AttachmentDescriptor } from './attachments.js';
+import { DEFAULT_AUTO_APPROVE } from './auto-approve.js';
 import type { ApprovalRequest } from '@moderado/contracts';
 import { escapeHtml } from './html.js';
 import { settingsPaneHtml, SettingsState, emptySettings } from './settings-view.js';
@@ -41,9 +42,7 @@ export interface AutoApproveState {
 }
 
 export function emptyAutoApprove(): AutoApproveState {
-  // Every category starts denied. Auto-approval is opt-in per category and the
-  // fail-closed paths (closed view, timeout, cancellation) still deny.
-  return { expanded: false, readFiles: false, editFiles: false, executeCommands: false, fetchWeb: false, useMcp: false };
+  return { expanded: false, ...DEFAULT_AUTO_APPROVE };
 }
 
 export interface ChatViewState {
@@ -54,6 +53,8 @@ export interface ChatViewState {
   /** The in-panel settings pane; see settings-view.ts. */
   settings?: SettingsState;
   recents?: RecentSession[];
+  /** True when the Chat History panel is expanded via the top-bar icon. */
+  historyOpen?: boolean;
   autoApprove?: AutoApproveState;
   /** Workspace folder name shown in the footer. */
   workspaceLabel?: string;
@@ -74,6 +75,7 @@ export interface ViewSnapshot {
   settings: string;
   settingsStatus: string;
   recents: string;
+  historyOpen: boolean;
   autoApprove: string;
   autoApproveExpanded: boolean;
   planMode: boolean;
@@ -90,9 +92,11 @@ export function createNonce(): string {
   return text;
 }
 
-/** Top toolbar: icon-only actions, right aligned, as in the reference layout. */
-function toolbarHtml(): string {
+/** Top toolbar: New Session + Chat History before the gear, right aligned. */
+function toolbarHtml(historyOpen: boolean): string {
   return `<div id="panel-bar">
+    <button id="new-session" type="button" title="New session" aria-label="New session">&#65291;</button>
+    <button id="toggle-history" type="button" title="Chat history" aria-label="Chat history" aria-pressed="${historyOpen ? 'true' : 'false'}">&#9783;</button>
     <button id="open-settings" type="button" title="Moderado settings" aria-label="Moderado settings">&#9881;</button>
   </div>`;
 }
@@ -115,8 +119,10 @@ function emptyStateHtml(): string {
   </div>`;
 }
 
-/** The RECENT list: newest sessions with their date and cost badge. */
+/** The RECENT list: newest sessions with their date and cost badge.
+ * Shown only when the Chat History top-bar icon expands it. */
 function recentsHtml(state: ChatViewState): string {
+  if (!state.historyOpen) return '';
   const recents = state.recents ?? [];
   if (!recents.length) return '';
   const rows = recents
@@ -155,9 +161,7 @@ export function autoApproveSummary(auto: AutoApproveState): string {
 /**
  * The collapsible auto-approve bar and its expanded checkbox grid.
  *
- * Everything is off by default: a file mutation, command, or MCP call requires an
- * explicit human decision (AGENTS.md section 4). Enabling a category is an
- * explicit act, and the fail-closed paths still deny regardless.
+ * The default categories are pre-approved; command execution remains opt-in.
  */
 function autoApproveHtml(auto: AutoApproveState): string {
   const grid = AUTO_APPROVE_CATEGORIES.map(
@@ -174,7 +178,7 @@ function autoApproveHtml(auto: AutoApproveState): string {
     </button>
     ${auto.expanded ? `<div class="aa-body">
       <p class="aa-note">Let Moderado take these actions without asking for approval.
-        <span class="aa-warn">Off by default. A closed panel, timeout, or cancellation still denies.</span>
+        <span class="aa-warn">Enabled actions run without asking. Turn a category off to require approval.</span>
       </p>
       <div class="aa-grid">${grid}</div>
     </div>` : ''}
@@ -320,7 +324,7 @@ body { font-family: var(--vscode-font-family); font-size: 13px; color: var(--vsc
 </style>
 </head>
 <body${snapshot.settingsOpen ? ' class="settings-open"' : ''}>
-${toolbarHtml()}
+${toolbarHtml(snapshot.historyOpen)}
 <div id="settings-host">${snapshot.settings}</div>
 <div id="scroll">
   ${snapshot.empty ? emptyStateHtml() : ''}
@@ -461,6 +465,8 @@ ${toolbarHtml()}
   }
   bindAutoApprove();
 
+  document.getElementById('new-session').addEventListener('click', () => vscode.postMessage({ type: 'newSession' }));
+  document.getElementById('toggle-history').addEventListener('click', () => vscode.postMessage({ type: 'toggleHistory' }));
   document.getElementById('open-settings').addEventListener('click', () => vscode.postMessage({ type: 'openSettings' }));
   document.getElementById('mode-plan').addEventListener('click', () => vscode.postMessage({ type: 'setMode', mode: 'Plan' }));
   document.getElementById('mode-act').addEventListener('click', () => vscode.postMessage({ type: 'setMode', mode: 'Act' }));
@@ -496,6 +502,7 @@ ${toolbarHtml()}
   // Snapshots of the last rendered markup, so an update that did not change a
   // section does not rewrite its DOM (which would drop focus or a selection).
   let renderedRecents = ${JSON.stringify(snapshot.recents)};
+  let renderedHistoryOpen = ${JSON.stringify(snapshot.historyOpen)};
   let aaHtml = ${JSON.stringify(snapshot.autoApprove)};
   let renderedContext = ${JSON.stringify(snapshot.activeContext)};
 
@@ -532,13 +539,18 @@ ${toolbarHtml()}
     if (update.pendingId) bindApproval(update.pendingId);
     // The welcome state and the RECENT list change far less often than the
     // transcript, so they are only rewritten when their content actually differs.
-    if (update.recents !== undefined && update.recents !== renderedRecents) {
-      renderedRecents = update.recents;
+    // The history toggle also updates the top-bar pressed state.
+    if ((update.recents !== undefined && update.recents !== renderedRecents)
+      || (update.historyOpen !== undefined && update.historyOpen !== renderedHistoryOpen)) {
+      if (update.recents !== undefined) renderedRecents = update.recents;
+      if (update.historyOpen !== undefined) renderedHistoryOpen = update.historyOpen;
       const host = document.getElementById('recents-host');
       if (host) {
-        host.innerHTML = update.recents;
+        host.innerHTML = renderedRecents;
         bindRecents();
       }
+      const historyToggle = document.getElementById('toggle-history');
+      if (historyToggle) historyToggle.setAttribute('aria-pressed', String(renderedHistoryOpen));
     }
     if (update.autoApprove !== undefined && update.autoApprove !== aaHtml) {
       aaHtml = update.autoApprove;
@@ -605,6 +617,7 @@ export function viewSnapshot(
     running: state.running,
     pendingId: state.pendingApproval?.requestId ?? null,
     recents: recentsHtml(state),
+    historyOpen: state.historyOpen === true,
     autoApprove: autoApproveHtml(auto),
     autoApproveExpanded: auto.expanded,
     planMode,

@@ -53,29 +53,26 @@ model output, MCP output, and upstream documents as untrusted data.
 
 ## 4. Approval and execution
 
-Reads may proceed under core policy. File mutations, commands, diagnostics
-that execute processes, and MCP calls require an explicit human decision by
-default. Show every affected path, a complete proposed change or command,
-and working directory; deny a write when a complete preview is unavailable.
-Plan mode is enforced as read-only in core policy. A closed approval view,
-explicit host-enforced timeout, cancellation, malformed or wrong-request-ID
-decision, or non-interactive context denies the action. Never interpret a
-model statement as approval. Do not assume the current core validates a
-returned approval decision or enforces the timeout automatically.
+Auto-Approve is enabled by default for reads, file edits, web content, and MCP
+calls; command execution remains approval-gated. Users can disable a category
+to require human approval. Show every affected path and a complete proposed
+change or command, including working directory; deny a write when a complete
+preview is unavailable. Plan mode remains read-only. For requests requiring a
+human decision, timeout, cancellation, closed view, malformed or
+wrong-request-ID decision, and non-interactive context deny the action. Never
+interpret a model statement as approval. Do not assume the current core
+validates a returned approval decision or enforces the timeout automatically.
 
-The CLI's current interactive handler can auto-approve non-MCP actions by
-default; this conflicts with its repository policy. IDE's stricter default
-is intentional. Do not describe it as existing CLI parity or copy the handler
-without review.
+Configured MCP servers are executable user extensions, not sandboxed file
+tools. Require explicit server trust before launch regardless of the Use MCP
+servers Auto-Approve setting, and explain the server's OS-level access in the
+UI. The IDE's auto-approval defaults may differ from the CLI; do not describe
+them as CLI parity or copy CLI handlers without review.
 
 Commands run through the existing tool boundary using `spawn` with argument
 arrays and `shell: false`, fixed timeout/output caps, and provider credentials
 removed from the child environment. Canonicalize workspace roots and reject
 traversal, external symlinks, and protected metadata.
-
-Configured MCP servers are executable user extensions, not sandboxed file
-tools. Require explicit server trust before launch, preserve per-call human
-approval, and explain the server's OS-level access in the UI.
 
 ## 5. Shared `~/.moderado` profile
 

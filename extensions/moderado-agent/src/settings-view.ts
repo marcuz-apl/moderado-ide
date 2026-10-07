@@ -81,7 +81,7 @@ export interface SettingsState {
   status?: string;
   /** Which settings section the left nav has selected. */
   page?: string;
-  /** 'free' shows only cost-free models; 'all' shows everything. */
+  /** 'free' shows cost-free models (default); 'paid' shows paid models. */
   modelTab?: string;
 }
 
@@ -135,7 +135,7 @@ function selectedChoice(state: SettingsState): SettingsProviderChoice | undefine
  * remain observable rather than hidden.
  */
 function modelOptions(state: SettingsState): string {
-  return eligibleModels(state)
+  return tabModels(state)
     .map(
       (model) =>
         `<option value="${escapeHtml(model.id)}"${model.id === state.defaultModel ? ' selected' : ''}>${escapeHtml(`${model.isFree ? '★ ' : ''}${model.id} — ${model.accessTier}`)}</option>`,
@@ -148,11 +148,22 @@ function eligibleModels(state: SettingsState): SettingsModel[] {
     || (model.accessTier === 'paid' && state.allowPaid) || (model.accessTier === 'unknown' && state.allowUnknown));
 }
 
+/** True when the Paid tab is selected; Free is the default. */
+function paidTab(state: SettingsState): boolean {
+  return state.modelTab === 'paid';
+}
+
+/** Models shown in the drop-down: Free shows free + AUTO, Paid shows paid. */
+function tabModels(state: SettingsState): SettingsModel[] {
+  const eligible = eligibleModels(state);
+  if (paidTab(state)) return eligible.filter((m) => !m.isFree && m.id !== 'auto' && m.accessTier !== 'local');
+  return eligible.filter((m) => m.isFree || m.id === 'auto' || m.accessTier === 'local');
+}
+
 /** The left-hand settings navigation, matching the reference layout. */
 const SETTINGS_PAGES = [
-  { id: 'api', label: 'API Configuration' },
+  { id: 'api', label: 'API Config' },
   { id: 'features', label: 'Features' },
-  { id: 'terminal', label: 'Terminal' },
   { id: 'general', label: 'General' },
   { id: 'about', label: 'About' },
 ] as const;
@@ -165,10 +176,9 @@ function settingsNav(page: string): string {
 
 /** The model cards, as a name/description/free-badge list rather than a dropdown. */
 function modelCards(state: SettingsState): string {
-  const eligible = eligibleModels(state);
-  const shown = state.modelTab === 'all' ? eligible : eligible.filter((m) => m.isFree || m.id === 'auto');
+  const shown = tabModels(state);
   if (!shown.length) {
-    return `<p class="note">${state.models.length ? 'No free models on this provider.' : 'No models loaded yet.'}</p>`;
+    return `<p class="note">${state.models.length ? (paidTab(state) ? 'No paid models listed. Enable paid models or load models first.' : 'No free models on this provider.') : 'No models loaded yet.'}</p>`;
   }
   return shown
     .map(
@@ -248,9 +258,11 @@ export function settingsPaneHtml(state: SettingsState): string {
 
   const modelField = `<h3>Model</h3>
     <div class="tab-row">
-      <button type="button" data-tab="all" class="${state.modelTab === 'all' ? 'on' : ''}">Recommended</button>
-      <button type="button" data-tab="free" class="${state.modelTab === 'free' ? 'on' : ''}">Free</button>
+      <button type="button" data-tab="free" class="${paidTab(state) ? '' : 'on'}">Free</button>
+      <button type="button" data-tab="paid" class="${paidTab(state) ? 'on' : ''}">Paid</button>
     </div>
+    <label for="settings-model-select">Model</label>
+    <select id="settings-model-select"${disabled}>${modelOptions(state)}</select>
     <label class="sr-only" for="settings-model">Default model</label>
     <select id="settings-model" class="sr-only"${disabled}>${modelOptions(state)}</select>
     <label for="settings-model-search">Search models</label>

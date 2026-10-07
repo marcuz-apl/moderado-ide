@@ -81,11 +81,12 @@ The IDE-owned provider layer adapts CLI
 `v0.4.8` cost, AUTO, and routing fixtures/behavior without using CLI provider
 code at runtime; it does not claim simultaneous config-write safety beyond
 the coordinated-writer guarantees above.
-IDE deliberately requires a human decision for each mutation or
-command by default. Current CLI handlers can auto-approve actions despite
-the CLI repository's approval-first guideline. That discrepancy is known and
-must be covered in IDE compatibility documentation and tests; do not
-represent the stricter IDE default as current CLI parity.
+IDE's Auto-Approve defaults enable reads, file edits, web content, and MCP
+calls; command execution remains approval-gated. Users can disable any
+category to require a human decision. Plan mode still blocks mutations, and
+MCP server trust is required before launch regardless of the per-call setting.
+These IDE defaults may differ from the current CLI handler behavior and must
+not be represented as CLI parity.
 
 ## Verification fixtures
 

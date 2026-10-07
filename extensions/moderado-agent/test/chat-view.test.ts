@@ -276,6 +276,7 @@ describe('moderado settings pane', () => {
 
   it('renders a RECENT list with cost badges when sessions exist', () => {
     const html = chatHtml(state({
+      historyOpen: true,
       recents: [
         { id: 's1', title: 'Fix the login bug', updatedAt: 'Sep 25', costLabel: '$0.00' },
         { id: 's2', title: 'Second task', updatedAt: 'Sep 20', costLabel: null },
@@ -291,19 +292,23 @@ describe('moderado settings pane', () => {
 
   it('escapes untrusted recent-session titles', () => {
     const html = chatHtml(state({
+      historyOpen: true,
       recents: [{ id: 's1', title: '<img src=x onerror=alert(1)>', updatedAt: 'Sep 25', costLabel: null }],
     }), preview);
     expect(html).not.toContain('<img src=x');
     expect(html).toContain('&lt;img src=x');
   });
 
-  it('renders the auto-approve bar collapsed and denies everything by default', () => {
-    const html = chatHtml(state(), preview);
-    expect(html).toContain('Auto-approve: nothing');
-    expect(html).toContain('id="auto-approve"');
-    // No category may be pre-enabled.
-    expect(html).not.toContain(' checked>');
-    expect(html).not.toContain(' checked ');
+  it('pre-enables the requested auto-approve categories but not commands', () => {
+    const html = chatHtml(state({
+      autoApprove: { ...emptyAutoApprove(), expanded: true },
+    }), preview);
+    expect(html).toContain('Auto-approve: Read files, Edit files, Fetch web content, Use MCP servers');
+    expect(html).toContain('data-key="readFiles" checked');
+    expect(html).toContain('data-key="editFiles" checked');
+    expect(html).toContain('data-key="fetchWeb" checked');
+    expect(html).toContain('data-key="useMcp" checked');
+    expect(html).toMatch(/data-key="executeCommands"(?! checked)/);
     expect(html).toContain('id="aa-toggle"');
   });
 
@@ -321,8 +326,7 @@ describe('moderado settings pane', () => {
     expect(html).toContain('Fetch web content');
     expect(html).toContain('Use MCP servers');
     expect(html).toContain('data-key="readFiles" checked');
-    // The fail-closed policy is stated rather than implied.
-    expect(html).toContain('still denies');
+    expect(html).toContain('Turn a category off to require approval.');
   });
 
   it('reports an auto-approve change to the host rather than deciding locally', () => {
@@ -414,23 +418,40 @@ describe('moderado settings pane', () => {
     expect(pane).toContain('2 listed');
   });
 
-  it('shows only free models on the Free tab', () => {
-    const pane = settingsPaneHtml(settings({
+  it('shows only free models on the Free tab and paid on the Paid tab', () => {
+    const free = settingsPaneHtml(settings({
       preset: 'nvidia-nim', modelTab: 'free',
       providers: [{ value: 'nvidia-nim', label: 'NVIDIA NIM', description: 'd', requiresApiKey: true }],
       models: [
         { id: 'free-a', accessTier: 'free_trial', isFree: true },
         { id: 'paid-b', accessTier: 'paid', isFree: false },
       ],
+      allowPaid: true,
     }));
-    expect(pane).toContain('data-model="free-a"');
-    expect(pane).not.toContain('data-model="paid-b"');
+    expect(free).toContain('data-model="free-a"');
+    expect(free).not.toContain('data-model="paid-b"');
+    const paid = settingsPaneHtml(settings({
+      preset: 'nvidia-nim', modelTab: 'paid',
+      providers: [{ value: 'nvidia-nim', label: 'NVIDIA NIM', description: 'd', requiresApiKey: true }],
+      models: [
+        { id: 'free-a', accessTier: 'free_trial', isFree: true },
+        { id: 'paid-b', accessTier: 'paid', isFree: false },
+      ],
+      allowPaid: true,
+    }));
+    expect(paid).toContain('data-model="paid-b"');
+    expect(paid).not.toContain('data-model="free-a"');
   });
 
-  it('offers the Recommended and Free tabs', () => {
-    const pane = settingsPaneHtml(settings({ modelTab: 'free' }));
-    expect(pane).toContain('data-tab="all"');
+  it('offers the Free and Paid tabs with Free as the default', () => {
+    const pane = settingsPaneHtml(settings({}));
+    expect(pane).toContain('data-tab="paid"');
     expect(pane).toContain('data-tab="free"');
+    expect(pane).toContain('>Free</button>');
+    expect(pane).toContain('>Paid</button>');
+    expect(pane).not.toContain('>Recommended</button>');
+    // Free is on when no tab was ever chosen.
+    expect(pane).toMatch(/data-tab="free" class="on"/);
   });
 
   it('explains an empty model list', () => {
@@ -443,7 +464,7 @@ describe('moderado settings pane', () => {
 
   it('has a left settings nav with the reference sections', () => {
     const pane = settingsPaneHtml(settings({ page: 'api' }));
-    for (const label of ['API Configuration', 'Features', 'Terminal', 'General', 'About']) {
+    for (const label of ['API Config', 'Features', 'General', 'About']) {
       expect(pane).toContain(label);
     }
     expect(pane).toContain('class="set-nav"');
@@ -532,6 +553,7 @@ describe('moderado settings pane', () => {
           { id: 'model-a', accessTier: 'free_trial', isFree: true },
           { id: 'model-b', accessTier: 'paid', isFree: false },
         ],
+        modelTab: 'paid',
         defaultModel: 'model-b', allowPaid: true,
       }),
     );
@@ -542,7 +564,8 @@ describe('moderado settings pane', () => {
   it('labels each model with its engine access tier instead of hiding cost', () => {
     // The real AccessTier values are free_trial | paid | local | unknown. The
     // tier stays in the label so the free-first rule remains observable.
-    const pane = settingsPaneHtml(
+    // Free renders on the default tab; paid/unknown render on the Paid tab.
+    const free = settingsPaneHtml(
       settings({
         preset: 'nvidia-nim', allowPaid: true, allowUnknown: true,
         models: [
@@ -552,9 +575,20 @@ describe('moderado settings pane', () => {
         ],
       }),
     );
-    expect(pane).toContain('model-a — free_trial');
-    expect(pane).toContain('model-b — paid');
-    expect(pane).toContain('model-c — unknown');
+    expect(free).toContain('model-a — free_trial');
+    expect(free).not.toContain('model-b — paid');
+    const paid = settingsPaneHtml(
+      settings({
+        preset: 'nvidia-nim', modelTab: 'paid', allowPaid: true, allowUnknown: true,
+        models: [
+          { id: 'model-a', accessTier: 'free_trial', isFree: true },
+          { id: 'model-b', accessTier: 'paid', isFree: false },
+          { id: 'model-c', accessTier: 'unknown', isFree: false },
+        ],
+      }),
+    );
+    expect(paid).toContain('model-b — paid');
+    expect(paid).toContain('model-c — unknown');
   });
 
   it('escapes untrusted provider names, base URLs, and model ids', () => {

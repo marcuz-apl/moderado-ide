@@ -59,17 +59,18 @@ agent in a complete editor. The first complete flow is:
 | F2 | Bundle the pinned Moderado agent contracts, core, and tools with a IDE-owned provider layer and presets. | With no CLI executable installed, connect to a fake provider and complete a bounded agent turn. |
 | F3 | Preserve model inventory, free-first AUTO routing, model pinning, and paid/unknown-cost opt-in in the IDE-owned provider layer with offline parity to CLI `v0.4.8`. | Shared offline fixtures yield equivalent eligibility and routing outcomes in CLI and IDE for the IDE-owned provider revision. |
 | F4 | Render structured agent events, tool previews, usage, cancellation, and actionable errors. | A real editor-host test observes ordered events and can cancel a running turn. |
-| F5 | Require a human decision for every file mutation and command by default; deny on closed UI, approval timeout, cancellation, malformed or mismatched decision, or non-interactive execution. Plan mode blocks mutations. | Tests demonstrate no mutation or command runs without an affirmative matching decision; preview shows every affected path and complete proposed replacement/patch or command and working directory. A missing complete preview denies the action. |
+| F5 | Auto-Approve starts enabled for reads, file edits, web content, and MCP calls; command execution remains approval-gated. Users can turn categories off to require human approval. Plan mode blocks mutations, and requests needing a human decision fail closed on timeout, cancellation, malformed or mismatched decisions, or non-interactive execution. | Tests verify the startup defaults and that enabled categories are approved by the host. Gated writes show every affected path and a complete proposed replacement/patch; commands show the command and working directory. A missing complete preview denies the action. |
 | F6 | Reuse the same local Moderado configuration, skills, and session schema on the same OS. | IDE reads a CLI-created profile/session and the CLI reads a IDE-created session after restart. |
 | F7 | Resolve Windows provider credentials using the existing `moderado/provider/<id>` Credential Manager references. | A CLI-stored test credential works in IDE without copying the secret into `config.json` or the UI. |
-| F8 | Discover and run explicitly configured MCP tools only after the user trusts that server; require approval for every MCP tool call. | A fake MCP server cannot bypass approval, and provider credentials are removed from its inherited environment. The UI explains that an MCP server is an external process with its own filesystem privileges. |
+| F8 | Discover and run explicitly configured MCP tools only after the user trusts that server. MCP calls are auto-approved by default; users can turn off Use MCP servers to require per-call approval. | A fake MCP server cannot launch before explicit server trust; when per-call approval is enabled, it cannot bypass approval. Provider credentials are removed from its inherited environment. The UI explains that an MCP server is an external process with its own filesystem privileges. |
 | F9 | Add project-file context references with @ and explicitly selected text files/images with + in the composer, with removable attachment chips. | @ rejects paths outside the canonical project jail; + accepts human-selected external files within bounded format/size limits. Fake-provider tests verify image content parts and IDE-only snapshot restoration while shared sessions remain text-only. |
 
-The IDE approval default in F5 is a deliberate safety requirement. The
-current CLI's interactive approval handler can auto-approve non-MCP actions by
-default despite its repository guidelines. IDE must not inherit that
-behavior silently; the discrepancy is documented in [Profile and behavior
-compatibility](docs/PROFILE.md).
+Auto-Approve defaults to Read files, Edit files, Fetch web content, and Use MCP
+servers. Execute commands stays off by default. These host-side defaults are
+visible in the composer and can be changed there; Plan mode still blocks
+mutations. MCP server trust before launch remains separate from per-call
+approval. The current CLI's interactive handler may auto-approve actions
+differently; see [Profile and behavior compatibility](docs/PROFILE.md).
 
 F5 requires work beyond the current core: `write_file` has no complete diff
 preview, multi-file patch approval does not enumerate every target in the

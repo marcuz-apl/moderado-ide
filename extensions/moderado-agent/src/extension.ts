@@ -14,6 +14,7 @@ import {
   resolveCredential,
 } from './credentials.js';
 import { ChatViewState, TranscriptEntry, AutoApproveState, chatHtml, viewSnapshot } from './chat-view.js';
+import { autoApproveDecision, DEFAULT_AUTO_APPROVE } from './auto-approve.js';
 import {
   SettingsState,
   SettingsConnectionView,
@@ -84,16 +85,10 @@ export function activate(context: vscode.ExtensionContext): ModeradoApi {
   let discoveryRequest = 0;
   let settingsBusy = false;
   let loginAbort: AbortController | undefined;
-  /** Auto-approve categories. Every one starts denied (AGENTS.md section 4). */
-  const autoApprove: AutoApproveState & { requiresApprovalByDefault: boolean } = {
+  /** Auto-approve categories enabled by default; command execution stays opt-in. */
+  const autoApprove: AutoApproveState = {
     expanded: false,
-    readFiles: false,
-    editFiles: false,
-    executeCommands: false,
-    fetchWeb: false,
-    useMcp: false,
-    // Recorded so the panel can state the policy rather than implying it.
-    requiresApprovalByDefault: true,
+    ...DEFAULT_AUTO_APPROVE,
   };
   let chatView: vscode.WebviewView | undefined;
   // True once the webview document has been written; see render().
@@ -196,6 +191,12 @@ export function activate(context: vscode.ExtensionContext): ModeradoApi {
    * dismissal or a closed view denies.
    */
   async function askHuman(request: ApprovalRequest, signal: AbortSignal): Promise<RawDecision | undefined> {
+    if (signal.aborted) return undefined;
+    const automaticDecision = autoApproveDecision(request, autoApprove);
+    if (automaticDecision) {
+      output.appendLine(`auto-approved ${request.toolName}`);
+      return automaticDecision;
+    }
     if (chatView) {
       view.pendingApproval = request;
       pendingApprovalRequests.set(request.requestId, request);
@@ -677,7 +678,6 @@ async function openDiffTab(requestId: string): Promise<void> {
       const keys = ['readFiles', 'editFiles', 'executeCommands', 'fetchWeb', 'useMcp'] as const;
       if (!(keys as readonly string[]).includes(msg.key)) return;
       autoApprove[msg.key as (typeof keys)[number]] = msg.value;
-      autoApprove.requiresApprovalByDefault = true;
       output.appendLine(`auto-approve ${msg.key} = ${msg.value}`);
       render();
       return;
@@ -687,7 +687,7 @@ async function openDiffTab(requestId: string): Promise<void> {
       render();
       return;
     }
-    if (msg.type === 'setModelTab' && (msg.tab === 'free' || msg.tab === 'all')) {
+    if (msg.type === 'setModelTab' && (msg.tab === 'free' || msg.tab === 'paid')) {
       const parsed = parseSettingsForm(msg);
       if (parsed.ok) applySettingsForm(parsed.value);
       settings.modelTab = msg.tab;
@@ -707,6 +707,28 @@ async function openDiffTab(requestId: string): Promise<void> {
       render();
       return;
     }
+    if (msg.type === 'newSession') {
+      // New Session: cancel anything running, clear drafts/transcript, drop the
+      // resumed session so the next run starts fresh, then reopen history state.
+      host.cancel('Started a new session.');
+      attachmentEpoch++;
+      draftAttachments.clear();
+      view.transcript = [];
+      view.pendingApproval = null;
+      view.running = false;
+      host.startNewSession();
+      refreshRecents();
+      settings.status = undefined;
+      render();
+      return;
+    }
+    if (msg.type === 'toggleHistory') {
+      // Chat History: expand/collapse the RECENT panel; refresh on open.
+      view.historyOpen = !view.historyOpen;
+      if (view.historyOpen) refreshRecents();
+      render();
+      return;
+    }
     if (msg.type === 'newTask') {
       attachmentEpoch++;
       draftAttachments.clear();
@@ -716,7 +738,9 @@ async function openDiffTab(requestId: string): Promise<void> {
       return;
     }
     if (msg.type === 'openSession' && typeof msg.id === 'string') {
-      void vscode.commands.executeCommand('moderado.showSessions');
+      // Chat History resume: validate the id, load that session's transcript,
+      // and resume it for the next run. Invalid ids are reported, not opened.
+      resumeSession(msg.id);
       return;
     }
     if (msg.type === 'openSettings') {
@@ -967,6 +991,36 @@ async function openDiffTab(requestId: string): Promise<void> {
       updatedAt: formatWhen(session.updatedAt),
       costLabel: costLabelOf(session.usage),
     }));
+  }
+
+  /** Resumes a recorded session in the panel: transcript + next-run session. */
+  function resumeSession(id: string): void {
+    if (!/^[0-9a-fA-F-]{1,64}$/.test(id)) {
+      void vscode.window.showErrorMessage('That session id is not recognised.');
+      return;
+    }
+    const { sessions } = host.listSessions();
+    const found = sessions.find((session) => session.id === id);
+    if (!found) {
+      void vscode.window.showErrorMessage('That session could not be found for this workspace.');
+      return;
+    }
+    host.cancel('Resumed a recorded session.');
+    attachmentEpoch++;
+    draftAttachments.clear();
+    view.pendingApproval = null;
+    view.running = false;
+    host.resumeRecordedSession(found);
+    view.transcript = found.messages
+      .filter((m) => m.role === 'user' || m.role === 'assistant')
+      .map((m) => ({
+        kind: m.role === 'user' ? 'user' as const : 'assistant' as const,
+        label: m.role === 'user' ? 'You' : 'Moderado',
+        text: typeof m.content === 'string' ? m.content : '',
+      }))
+      .slice(-200);
+    render();
+    void vscode.window.showInformationMessage(`Resumed session ${found.id.slice(0, 8)}.`);
   }
 
   function firstLineOf(session: { messages: { role: string; content?: unknown }[] }): string {

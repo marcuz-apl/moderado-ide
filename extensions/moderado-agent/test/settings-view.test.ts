@@ -46,7 +46,7 @@ describe('Gateway and provider Settings boundary', () => {
     expect(html).toContain('id="settings-model-search"');
   });
 
-  it('keeps direct AUTO visible on the Free tab while paid/unknown models require opt-ins', () => {
+  it('keeps direct AUTO visible on the Free tab while paid models move to the Paid tab', () => {
     const state = { ...gateway(), preset: 'openrouter', modelTab: 'free', models: [
       { id: 'auto', accessTier: 'unknown', isFree: false },
       { id: 'paid', accessTier: 'paid', isFree: false },
@@ -58,9 +58,10 @@ describe('Gateway and provider Settings boundary', () => {
     expect(html).toContain('AUTO · Free-first');
     expect(html).not.toContain('value="paid"');
     expect(html).not.toContain('value="unknown"');
-    const allowed = settingsPaneHtml({ ...state, modelTab: 'all', allowPaid: true, allowUnknown: true });
-    expect(allowed).toContain('data-model="paid"');
-    expect(allowed).toContain('data-model="unknown"');
+    const paid = settingsPaneHtml({ ...state, modelTab: 'paid', allowPaid: true, allowUnknown: true });
+    expect(paid).toContain('data-model="paid"');
+    expect(paid).toContain('data-model="unknown"');
+    expect(paid).not.toContain('data-model="free"');
   });
 
   it.each(['apiKey', 'token', 'authorizationCode', 'credentialReference'])('rejects %s in webview forms, even when empty', (field) => {

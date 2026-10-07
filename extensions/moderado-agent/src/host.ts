@@ -255,6 +255,16 @@ export class AgentHost implements IApprovalHandler {
     this.approvals.denyAll('cancelled', reason);
   }
 
+  /** Starts a fresh session: the next run no longer resumes the previous one. */
+  startNewSession(): void {
+    this.current = null;
+  }
+
+  /** Resumes a recorded session for the next run; validated by the caller. */
+  resumeRecordedSession(session: StoredSession): void {
+    this.current = session;
+  }
+
   /** Denies pending approvals, e.g. when the chat view is disposed. */
   dispose(): void {
     this.cancel('The Moderado view was closed.');

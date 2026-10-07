@@ -7,6 +7,7 @@ const harness = vi.hoisted(() => ({
   profile: {} as Record<string, unknown>, invalid: false,
   messages: [] as Record<string, unknown>[], keys: new Map<string, string>(),
   provider: undefined as any, receive: undefined as any,
+  agentOptions: undefined as any,
   runs: [] as Record<string, unknown>[],
   workspaceRoot: '', fileDialog: vi.fn(), contextPicker: vi.fn(), findFiles: vi.fn(), errors: vi.fn(),
   prompt: vi.fn(), browser: vi.fn(), write: vi.fn(), openExternal: vi.fn(),
@@ -27,6 +28,7 @@ vi.mock('vscode', () => ({
 vi.mock('../src/profile.js', () => ({ configPath: () => 'isolated/config.json',
   readConfig: () => harness.invalid ? { kind: 'invalid', error: 'corrupt profile' } : { kind: 'ok', config: harness.profile } }));
 vi.mock('../src/host.js', () => ({ AgentHost: class {
+  constructor(options: unknown) { harness.agentOptions = options; }
   listSessions() { return { sessions: [], invalid: [] }; }
   async discoverModels() { return []; }
   async startRun(input: Record<string, unknown>) {
@@ -126,6 +128,38 @@ describe('host-only Settings credentials', () => {
     harness.invalid = true; send('setProviderKey', form);
     await vi.waitFor(() => expect(html()).toContain('corrupt profile'));
     expect(harness.prompt).not.toHaveBeenCalled(); expect(harness.write).not.toHaveBeenCalled();
+  });
+});
+
+describe('default auto-approval', () => {
+  it('auto-approves edit and MCP requests while keeping commands approval-gated', async () => {
+    const promptForApproval = harness.agentOptions.promptForApproval as (
+      request: Record<string, unknown>,
+      signal: AbortSignal,
+    ) => Promise<unknown>;
+    const signal = new AbortController().signal;
+    const request = (requestId: string, toolName: string) => ({
+      requestId, toolName, actionSummary: 'test action',
+      exactPayload: { targetFile: 'file.txt', diffPreview: 'change' }, timestamp: Date.now(),
+    });
+
+    await expect(promptForApproval(request('edit-1', 'edit_file'), signal))
+      .resolves.toEqual({ requestId: 'edit-1', status: 'approved' });
+    await expect(promptForApproval(request('mcp-1', 'mcp.server.tool'), signal))
+      .resolves.toEqual({ requestId: 'mcp-1', status: 'approved' });
+    expect(harness.prompt).not.toHaveBeenCalled();
+
+    const commandApproval = promptForApproval({
+      ...request('command-1', 'run_command'),
+      exactPayload: { command: ['npm', 'test'], cwd: harness.workspaceRoot },
+    }, signal);
+    await vi.waitFor(() => expect(harness.messages.at(-1)).toMatchObject({ pendingId: 'command-1' }));
+    send('approval', { requestId: 'command-1', status: 'denied' });
+    await expect(commandApproval).resolves.toMatchObject({ requestId: 'command-1', status: 'denied' });
+
+    const cancelled = new AbortController();
+    cancelled.abort();
+    await expect(promptForApproval(request('cancelled-1', 'edit_file'), cancelled.signal)).resolves.toBeUndefined();
   });
 });
 
