@@ -18,6 +18,31 @@ is pushed. Next priority: improve the existing Windows IDE GUI. Signing/publicat
   scaled geometry. `node --test scripts/test/build-linux.test.mjs`: 4/4 pass.
   `git diff --check`: pass. No application rebuild or live visual check was run.
 
+## Composer context and attachments (2026-10-07 UTC)
+
+- Bottom-row `@` now adds project-file references, followed by `+` for native
+  **Add files and Images** selection. The plus action no longer clears the
+  conversation. Removable chips show selected inputs; images/text files may
+  come from anywhere only through an explicit native selection.
+- Project references use the existing workspace jail and protected-metadata
+  checks. A native browse option reaches files outside the quick-pick listing.
+  Renderer messages accept intents/host-issued IDs, never file paths or bytes.
+- Text is bounded and delimited as untrusted context. PNG/JPEG/WebP/GIF images
+  use validated OpenAI content parts in the IDE-owned transport. Snapshots are
+  IDE-only state under `~/.moderado/desktop/attachments`, bound to workspace,
+  session and exact user message; shared contracts/session schemas stay unchanged.
+  Missing/corrupt snapshots fail with reattach guidance. File-count, per-file
+  and aggregate byte limits apply, including restored history.
+- Tests first demonstrated missing controls/pickers, then verified native
+  external-file selection, root-only references, removals, malicious renderer
+  path rejection, image-only inputs, genuine image delivery and restart restoration.
+  `npm --prefix extensions/moderado-agent test`: 320 passed/four Windows skips
+  before the final browse regression; final results recorded below after rerun.
+  `npm --prefix extensions/moderado-agent run typecheck`: exit 0.
+  `npm --prefix extensions/moderado-agent run compile`: exit 0, 528 KiB bundle.
+  No full editor build or live image inference ran. The installed app needs
+  rebuilding to display the new controls.
+
 ## Current checkpoint (2026-10-07 UTC)
 
 - Owner confirmed Linux, macOS, and Windows editions, then paused Linux

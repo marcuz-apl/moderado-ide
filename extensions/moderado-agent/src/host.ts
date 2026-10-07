@@ -1,3 +1,4 @@
+import { ImageAttachmentSchema, saveImageContext, loadImageContext, type ImageAttachment } from './attachments.js';
 import { AgentLoop, PolicyManager, Router } from '@moderado/core';
 import { FakeProviderAdapter } from '@moderado/providers';
 import { z } from 'zod';
@@ -120,9 +121,14 @@ export async function resolveProvider(
   store: CredentialStore = new MemoryCredentialStore(),
   env: NodeJS.ProcessEnv = process.env,
   fetchImpl?: typeof fetch,
+  imageContext?: ReadonlyMap<string, readonly ImageAttachment[]>,
 ): Promise<ProviderResolution> {
+  const unavailable = (reason: string): ProviderResolution => {
+    if (imageContext?.size) throw new Error('Image attachments require a configured image-capable provider. ' + reason);
+    return fakeResolution(reason);
+  };
   if (state.kind !== 'ok') {
-    return fakeResolution('The shared profile could not be read.');
+    return unavailable('The shared profile could not be read.');
   }
 
   const parsedConnections = z.record(z.unknown()).safeParse(state.config.connections ?? {});
@@ -132,7 +138,7 @@ export async function resolveProvider(
   if (activeId !== undefined && typeof activeId !== 'string') throw new Error('The active provider connection is malformed.');
   const connectionId = typeof activeId === 'string' ? activeId : Object.keys(connections)[0];
   if (connectionId === undefined) {
-    return fakeResolution('No provider connection is configured. Run "Moderado: Configure Provider Connection".');
+    return unavailable('No provider connection is configured. Run "Moderado: Configure Provider Connection".');
   }
   const parsed = ConnectionSchema.safeParse(connections[connectionId]);
   if (!parsed.success || parsed.data.id !== connectionId) throw new Error('The saved provider connection is malformed. Open Moderado Settings to review it.');
@@ -158,7 +164,7 @@ export async function resolveProvider(
   const requiresKey = connectionId === 'moderado-cloud' && connection.authMethod && connection.authMethod !== 'public'
     ? true : preset?.requiresApiKey ?? true;
   if (requiresKey && !apiKey) {
-    return fakeResolution(`No API key resolved for connection '${connection.id}'.`);
+    return unavailable(`No API key resolved for connection '${connection.id}'.`);
   }
 
   return {
@@ -168,6 +174,7 @@ export async function resolveProvider(
       id: connection.id,
       name: connection.displayName ?? preset?.label ?? connection.id,
       fetchImpl,
+      imageContext,
     }),
     connectionId,
     defaultModel: connection.defaultModel,
@@ -270,6 +277,7 @@ export class AgentHost implements IApprovalHandler {
    */
   async startRun(input: {
     task: string;
+    images?: ImageAttachment[];
     planMode?: boolean;
     conversationHistory?: ChatMessage[];
     session?: StoredSession;
@@ -290,6 +298,11 @@ export class AgentHost implements IApprovalHandler {
     this.current = session;
 
     try {
+      const history = input.conversationHistory ?? conversationOf(session.messages);
+      const scope = { workspaceRoot: this.options.workspaceRoot, sessionId: session.id, home: this.options.moderadoHome };
+      const images = input.images?.map(image => ImageAttachmentSchema.parse(image)) ?? [];
+      if (images.length) saveImageContext(input.task, images, scope);
+      const imageContext = loadImageContext([...history, { role: 'user', content: input.task }], scope);
       // The provider is resolved from the shared profile. When no usable
       // connection exists it falls back to the fake adapter and says so, rather
       // than silently pretending a real run happened.
@@ -299,6 +312,7 @@ export class AgentHost implements IApprovalHandler {
         this.credentials,
         process.env,
         this.options.fetchImpl,
+        imageContext,
       );
       const { adapter: provider, reason } = resolution;
       if (reason) {
@@ -333,8 +347,6 @@ export class AgentHost implements IApprovalHandler {
         readOnly: input.planMode ?? false,
         nonInteractive: this.options.nonInteractive ?? false,
       });
-      const history = input.conversationHistory ?? conversationOf(session.messages);
-
       const result = await new AgentLoop().run(input.task, {
         workspaceRoot: this.options.workspaceRoot,
         provider,

@@ -1,3 +1,5 @@
+import { z } from 'zod';
+import { createContextAttachment, createFileAttachment, preparePrompt, type DraftAttachment } from './attachments.js';
 import * as vscode from 'vscode';
 import { AgentEvent, ApprovalRequest } from '@moderado/contracts';
 import { AgentHost, RunOutcome } from './host.js';
@@ -101,6 +103,10 @@ export function activate(context: vscode.ExtensionContext): ModeradoApi {
   // CLI would derive for the same folder.
   const workspaceRoot =
     vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+
+  const draftAttachments = new Map<string, DraftAttachment>();
+  let pickingAttachments = false;
+  let attachmentEpoch = 0;
 
   const view: ChatViewState & { planMode: boolean } = {
     transcript: [],
@@ -588,6 +594,59 @@ async function openDiffTab(requestId: string): Promise<void> {
     }
   }
 
+  const attachmentMessageSchema = z.discriminatedUnion('type', [
+    z.object({ type: z.literal('addContext') }).strict(),
+    z.object({ type: z.literal('addFiles') }).strict(),
+    z.object({ type: z.literal('removeAttachment'), id: z.string().uuid() }).strict(),
+  ]);
+
+  async function pickAttachments(kind: 'addContext' | 'addFiles'): Promise<void> {
+    if (view.running || pickingAttachments) return;
+    pickingAttachments = true;
+    const epoch = attachmentEpoch;
+    try {
+      let chosen: DraftAttachment[] = [];
+      if (kind === 'addContext') {
+        const files = await vscode.workspace.findFiles(new vscode.RelativePattern(vscode.Uri.file(workspaceRoot), '**/*'), '**/.git/**', 5000);
+        const items: Array<{ label: string; attachment?: DraftAttachment; browse?: boolean }> = [{ label: 'Browse project files…', browse: true }];
+        for (const file of files) {
+          if (file.scheme !== 'file') continue;
+          try {
+            const attachment = createContextAttachment(workspaceRoot, file.fsPath);
+            items.push({ label: attachment.label, attachment });
+          } catch { /* External symlinks, protected metadata and directories are excluded. */ }
+        }
+        if (epoch !== attachmentEpoch || view.running || !chatView) return;
+        const selected = await vscode.window.showQuickPick(items, { canPickMany: true, placeHolder: 'Add context: choose files inside the project root', matchOnDescription: true });
+        chosen = (selected ?? []).flatMap(item => item.attachment ? [item.attachment] : []);
+        if (selected?.some(item => item.browse)) {
+          const browsed = await vscode.window.showOpenDialog({ defaultUri: vscode.Uri.file(workspaceRoot), canSelectFiles: true, canSelectFolders: false, canSelectMany: true, openLabel: 'Add context', title: 'Select files inside the project root' });
+          if (epoch !== attachmentEpoch || view.running || !chatView) return;
+          for (const file of browsed ?? []) {
+            if (file.scheme !== 'file') throw new Error('Select local project files.');
+            chosen.push(createContextAttachment(workspaceRoot, file.fsPath));
+          }
+        }
+      } else {
+        const selected = await vscode.window.showOpenDialog({ canSelectFiles: true, canSelectFolders: false, canSelectMany: true, openLabel: 'Add files and Images', title: 'Add files and Images' });
+        if (epoch !== attachmentEpoch || view.running || !chatView) return;
+        if ((selected?.length ?? 0) + draftAttachments.size > 10) throw new Error('Attach at most 10 files or images.');
+        chosen = (selected ?? []).map(file => {
+          if (file.scheme !== 'file') throw new Error('Select local files or images.');
+          return createFileAttachment(file.fsPath);
+        });
+      }
+      if (epoch !== attachmentEpoch || view.running || !chatView || !chosen.length) return;
+      const merged = [...draftAttachments.values(), ...chosen];
+      // Validate aggregate limits before adding any of the selection.
+      preparePrompt('Validate selected context.', merged);
+      for (const attachment of chosen) draftAttachments.set(attachment.id, attachment);
+      render();
+    } catch (error) {
+      void vscode.window.showErrorMessage((error as Error).message);
+    } finally { pickingAttachments = false; }
+  }
+
   /** Handles every message the chat webview can send. */
   function handleWebviewMessage(message: unknown): void {
     if (!message || typeof message !== 'object') return;
@@ -596,6 +655,15 @@ async function openDiffTab(requestId: string): Promise<void> {
       settings.open = true;
       settings.status = 'Provider credentials must be entered in the secure editor prompt.';
       render();
+      return;
+    }
+    if (['addContext', 'addFiles', 'removeAttachment'].includes(String(msg.type))) {
+      const parsed = attachmentMessageSchema.safeParse(message);
+      if (!parsed.success || view.running) return;
+      if (parsed.data.type === 'removeAttachment') {
+        draftAttachments.delete(parsed.data.id);
+        render();
+      } else { void pickAttachments(parsed.data.type); }
       return;
     }
     if (msg.type === 'toggleAutoApprovePanel') {
@@ -640,6 +708,8 @@ async function openDiffTab(requestId: string): Promise<void> {
       return;
     }
     if (msg.type === 'newTask') {
+      attachmentEpoch++;
+      draftAttachments.clear();
       view.transcript = [];
       view.pendingApproval = null;
       render();
@@ -735,6 +805,8 @@ async function openDiffTab(requestId: string): Promise<void> {
       documentRendered = true;
       webviewView.webview.onDidReceiveMessage(handleWebviewMessage);
       webviewView.onDidDispose(() => {
+        attachmentEpoch++;
+        draftAttachments.clear();
         loginAbort?.abort();
         discoveryRequest++;
         chatView = undefined;
@@ -912,6 +984,7 @@ async function openDiffTab(requestId: string): Promise<void> {
 
   /** Renders the current chat state into the open sidebar view, if there is one. */
   function render(): void {
+    view.attachments = [...draftAttachments.values()].map(({ id, kind, label }) => ({ id, kind, label }));
     if (!chatView) return;
     // The footer follows the connection and model, so it is recomputed from
     // the current host-side settings state on every render.
@@ -937,13 +1010,19 @@ async function openDiffTab(requestId: string): Promise<void> {
   }
 
   async function runPrompt(text: string): Promise<void> {
-    append({ kind: 'user', label: 'You', text });
+    if (view.running || (!text.trim() && !draftAttachments.size)) return;
+    let prepared: ReturnType<typeof preparePrompt>;
+    try { prepared = preparePrompt(text, [...draftAttachments.values()]); }
+    catch (error) { void vscode.window.showErrorMessage((error as Error).message); return; }
+    append({ kind: 'user', label: 'You', text: text.trim() || 'Review the attached context.' });
+    attachmentEpoch++;
     view.running = true;
     render();
     try {
       // The model identity is host-side state (profile or validated Settings
       // selection). The webview contributes only the prompt text.
-      const result = await host.startRun({ task: text, planMode: view.planMode, modelId: view.activeModelId });
+      const result = await host.startRun({ task: prepared.task, images: prepared.images, planMode: view.planMode, modelId: view.activeModelId });
+      if (result.status === 'completed') draftAttachments.clear();
       if (result.finalMessage) append({ kind: 'assistant', label: 'Moderado', text: result.finalMessage });
       append({ kind: 'tool', label: 'Session', text: `${result.status} · ${result.model} · ${result.totalSteps} step(s) · session ${result.sessionId}` });
     } catch (error) {

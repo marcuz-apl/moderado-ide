@@ -1,3 +1,4 @@
+import type { AttachmentDescriptor } from './attachments.js';
 import type { ApprovalRequest } from '@moderado/contracts';
 import { escapeHtml } from './html.js';
 import { settingsPaneHtml, SettingsState, emptySettings } from './settings-view.js';
@@ -46,6 +47,7 @@ export function emptyAutoApprove(): AutoApproveState {
 }
 
 export interface ChatViewState {
+  attachments?: AttachmentDescriptor[];
   transcript: TranscriptEntry[];
   running: boolean;
   pendingApproval: ApprovalRequest | null;
@@ -63,6 +65,7 @@ export interface ChatViewState {
 
 /** The parts of the view the webview updates in place. */
 export interface ViewSnapshot {
+  attachments: string;
   rows: string;
   approval: string;
   running: boolean;
@@ -273,6 +276,11 @@ body { font-family: var(--vscode-font-family); font-size: 13px; color: var(--vsc
   .settings .problem { color: var(--vscode-errorForeground); font-size: 0.8rem; }
   .settings .row { display: flex; gap: 0.4rem; margin-top: 0.8rem; }
   .settings .status { font-size: 0.8rem; min-height: 1.2em; margin: 0.4rem 0 0; }
+  #attachments-host { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.4rem; }
+  #attachments-host:empty { display: none; }
+  .attachment-chip { display: inline-flex; align-items: center; gap: 0.2rem; max-width: 100%; padding: 0.15rem 0.35rem; border: 1px solid var(--vscode-panel-border); border-radius: 4px; font-size: 0.75rem; }
+  .attachment-chip > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .attachment-chip button { flex: 0 0 auto; padding: 0 0.2rem; }
   /* Settings shell: left nav plus content, matching the reference layout. */
   #settings-host { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
   /* An empty host still grows, reserving half the sidebar for nothing. */
@@ -323,8 +331,9 @@ ${toolbarHtml()}
 <div id="auto-approve-host">${snapshot.autoApprove}</div>
 <form id="composer">
   <label class="sr-only" for="prompt">Ask Moderado</label>
+  <div id="attachments-host" role="list" aria-label="Attached context">${snapshot.attachments}</div>
   <textarea id="prompt" placeholder="Type your task here..." autocomplete="off" ${snapshot.running ? 'disabled' : ''}></textarea>
-  <p class="composer-hint">Type @ for context, or / for skills.</p>
+  <p class="composer-hint">Use @ for project context or + to attach files and images.</p>
   <div class="composer-foot">
     <button type="button" id="cancel" ${snapshot.running ? '' : 'disabled'}>Cancel</button>
     <button type="submit" id="send" ${snapshot.running ? 'disabled' : ''}>Send</button>
@@ -332,7 +341,8 @@ ${toolbarHtml()}
 </form>
 <div id="panel-foot">
   <span class="foot-left">
-    <button type="button" id="foot-new" title="New task" aria-label="New task">&#43;</button>
+    <button type="button" id="foot-context" title="Add context" aria-label="Add context" ${snapshot.running ? 'disabled' : ''}>@</button>
+    <button type="button" id="foot-add" title="Add files and Images" aria-label="Add files and Images" ${snapshot.running ? 'disabled' : ''}>&#43;</button>
     <button type="button" id="foot-history" title="Sessions" aria-label="Sessions">&#128340;</button>
     <span class="ws-label">${escapeHtml(state.workspaceLabel ?? '')}</span>
     <span class="ctx-label" id="active-ctx" title="Active provider and model">${snapshot.activeContext}</span>
@@ -454,7 +464,8 @@ ${toolbarHtml()}
   document.getElementById('open-settings').addEventListener('click', () => vscode.postMessage({ type: 'openSettings' }));
   document.getElementById('mode-plan').addEventListener('click', () => vscode.postMessage({ type: 'setMode', mode: 'Plan' }));
   document.getElementById('mode-act').addEventListener('click', () => vscode.postMessage({ type: 'setMode', mode: 'Act' }));
-  document.getElementById('foot-new').addEventListener('click', () => vscode.postMessage({ type: 'newTask' }));
+  document.getElementById('foot-context').addEventListener('click', () => vscode.postMessage({ type: 'addContext' }));
+  document.getElementById('foot-add').addEventListener('click', () => vscode.postMessage({ type: 'addFiles' }));
   document.getElementById('foot-history').addEventListener('click', () => vscode.postMessage({ type: 'showSessions' }));
 
   // Enter sends; Shift+Enter inserts a newline, as in the reference composer.
@@ -468,11 +479,18 @@ ${toolbarHtml()}
   document.getElementById('composer').addEventListener('submit', (event) => {
     event.preventDefault();
     const text = input.value.trim();
-    if (!text) return;
+    if (!text && !document.querySelector('[data-attachment-id]')) return;
     vscode.postMessage({ type: 'prompt', text });
     input.value = '';
   });
   cancel.addEventListener('click', () => vscode.postMessage({ type: 'cancel' }));
+  function bindAttachments() {
+    for (const button of document.querySelectorAll('[data-attachment-id]')) {
+      button.addEventListener('click', () => vscode.postMessage({ type: 'removeAttachment', id: button.getAttribute('data-attachment-id') }));
+    }
+  }
+  bindAttachments();
+  let renderedAttachments = ${JSON.stringify(snapshot.attachments)};
   bindApproval(${JSON.stringify(snapshot.pendingId)});
 
   // Snapshots of the last rendered markup, so an update that did not change a
@@ -502,6 +520,13 @@ ${toolbarHtml()}
     transcript.innerHTML = update.rows;
     approvalHost.innerHTML = update.approval;
     input.disabled = update.running;
+    document.getElementById('foot-context').disabled = update.running;
+    document.getElementById('foot-add').disabled = update.running;
+    if (update.attachments !== undefined && update.attachments !== renderedAttachments) {
+      renderedAttachments = update.attachments;
+      document.getElementById('attachments-host').innerHTML = update.attachments;
+      bindAttachments();
+    }
     send.disabled = update.running;
     cancel.disabled = !update.running;
     if (update.pendingId) bindApproval(update.pendingId);
@@ -574,6 +599,7 @@ export function viewSnapshot(
     [state.activeProviderName, state.activeModelId].filter((part) => part && part.trim()).join(' · '),
   );
   return {
+    attachments: (state.attachments ?? []).map(attachment => `<span class="attachment-chip" role="listitem" title="${escapeHtml(attachment.kind)}"><span>${attachment.kind === 'context' ? '@ ' : ''}${escapeHtml(attachment.label)}</span><button type="button" data-attachment-id="${escapeHtml(attachment.id)}" aria-label="Remove ${escapeHtml(attachment.label)}" ${state.running ? 'disabled' : ''}>&times;</button></span>`).join(''),
     rows,
     approval: approvalHtml(state.pendingApproval, preview),
     running: state.running,

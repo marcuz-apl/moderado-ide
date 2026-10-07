@@ -15,7 +15,7 @@
 | Agent packages | Moderado CLI `v0.4.8` (`d5e263ed…`, `v0.4.8+261006d`) |
 | Architectures | x64 only; arm64 is not built or tested |
 
-For Linux development, follow the [Linux build instructions](../README.md#build-the-linux-editor). A completed Linux or macOS build is not claimed here. Existing Windows evidence predates the IDE rename and CLI `v0.4.8` source update; it does not verify these new artifacts. Windows/Linux cross-home profile sharing is outside this milestone: the two environments have different home directories and do not automatically share a `~/.moderado` profile.
+For Linux development, follow the [Linux build instructions](../README.md#build-the-linux-editor-locally). A completed Linux or macOS build is not claimed here. Existing Windows evidence predates the IDE rename and CLI `v0.4.8` source update; it does not verify these new artifacts. Windows/Linux cross-home profile sharing is outside this milestone: the two environments have different home directories and do not automatically share a `~/.moderado` profile.
 
 ## Building Windows locally
 

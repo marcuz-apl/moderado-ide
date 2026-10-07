@@ -16,6 +16,27 @@ function state(over: Partial<ChatViewState> = {}): ChatViewState {
 }
 
 describe('chat view', () => {
+  it('places project context before file/image attachment controls instead of a new-task plus', () => {
+    const html = chatHtml(state(), preview);
+    expect(html).toContain('id="foot-context"');
+    expect(html).toContain('aria-label="Add context"');
+    expect(html).toContain('id="foot-add"');
+    expect(html).toContain('aria-label="Add files and Images"');
+    expect(html.indexOf('id="foot-context"')).toBeLessThan(html.indexOf('id="foot-add"'));
+    expect(html).toContain("postMessage({ type: 'addContext' })");
+    expect(html).toContain("postMessage({ type: 'addFiles' })");
+    expect(html).not.toContain('id="foot-new"');
+  });
+
+  it('escapes removable attachment labels and exposes only their opaque ids', () => {
+    const html = chatHtml(state({ attachments: [{ id: '11111111-1111-4111-8111-111111111111', kind: 'image', label: '<img src=x onerror=bad>' }] }), preview);
+    expect(html).toContain('&lt;img src=x onerror=bad&gt;');
+    expect(html).not.toContain('<img src=x onerror=bad>');
+    expect(html).toContain('data-attachment-id="11111111-1111-4111-8111-111111111111"');
+    expect(html).toContain("type: 'removeAttachment'");
+    expect(viewSnapshot(state(), preview).attachments).toBe('');
+  });
+
   it('wraps every stylesheet in a style element', () => {
     // The regression: the stylesheet was emitted as bare text in <head>, so the
     // browser rendered the whole CSS block as visible body text and none of it

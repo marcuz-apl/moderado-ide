@@ -1,3 +1,6 @@
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const harness = vi.hoisted(() => ({
@@ -5,18 +8,21 @@ const harness = vi.hoisted(() => ({
   messages: [] as Record<string, unknown>[], keys: new Map<string, string>(),
   provider: undefined as any, receive: undefined as any,
   runs: [] as Record<string, unknown>[],
+  workspaceRoot: '', fileDialog: vi.fn(), contextPicker: vi.fn(), findFiles: vi.fn(), errors: vi.fn(),
   prompt: vi.fn(), browser: vi.fn(), write: vi.fn(), openExternal: vi.fn(),
 }));
 vi.mock('vscode', () => ({
   window: {
     createOutputChannel: () => ({ appendLine: vi.fn(), dispose: vi.fn() }),
     registerWebviewViewProvider: (_id: string, provider: unknown) => { harness.provider = provider; return { dispose: vi.fn() }; },
-    showInputBox: harness.prompt,
+    showInputBox: harness.prompt, showOpenDialog: harness.fileDialog, showQuickPick: harness.contextPicker,
+    showErrorMessage: harness.errors,
   },
-  workspace: { workspaceFolders: [{ uri: { fsPath: 'D:/isolated-workspace' } }],
+  workspace: { get workspaceFolders() { return [{ uri: { fsPath: harness.workspaceRoot } }]; }, findFiles: harness.findFiles,
     getConfiguration: () => ({ get: (_key: string, fallback: unknown) => fallback }) },
   commands: { registerCommand: () => ({ dispose: vi.fn() }) },
-  env: { openExternal: harness.openExternal }, Uri: { parse: (url: string) => url },
+  env: { openExternal: harness.openExternal }, Uri: { parse: (url: string) => url, file: (fsPath: string) => ({ fsPath, scheme: 'file' }) },
+  RelativePattern: class { constructor(public base: unknown, public pattern: string) {} },
 }));
 vi.mock('../src/profile.js', () => ({ configPath: () => 'isolated/config.json',
   readConfig: () => harness.invalid ? { kind: 'invalid', error: 'corrupt profile' } : { kind: 'ok', config: harness.profile } }));
@@ -49,6 +55,8 @@ function send(type: string, values: Record<string, unknown> = {}) { harness.rece
 const html = () => String(harness.messages.at(-1)?.settings ?? '');
 
 beforeEach(() => {
+  harness.workspaceRoot = mkdtempSync(join(tmpdir(), 'moderado-composer-workspace-'));
+  harness.fileDialog.mockResolvedValue(undefined); harness.contextPicker.mockResolvedValue(undefined); harness.findFiles.mockResolvedValue([]);
   vi.clearAllMocks(); harness.messages = []; harness.keys.clear(); harness.profile = {}; harness.invalid = false; harness.runs = [];
   harness.prompt.mockResolvedValue('mrd_native-secret');
   harness.browser.mockResolvedValue({ accessToken: 'mrd_browser-secret', expiresAt: Date.now() + 60_000 });
@@ -142,5 +150,89 @@ describe('composer run wiring', () => {
     await vi.waitFor(() => expect(harness.runs).toHaveLength(1));
     expect(harness.runs[0]).toMatchObject({ task: 'Say hi.' });
     expect(harness.runs[0].modelId).toBeUndefined();
+  });
+});
+
+
+afterEach(() => { rmSync(harness.workspaceRoot, { recursive: true, force: true }); });
+
+describe('host-owned composer attachments', () => {
+  it('can browse project context outside the bounded quick-pick listing', async () => {
+    const file = join(harness.workspaceRoot, 'ignored-file.txt'); writeFileSync(file, 'reference only');
+    harness.findFiles.mockResolvedValue([]);
+    harness.contextPicker.mockImplementation(async items => [items.find((item: { browse?: boolean }) => item.browse)]);
+    harness.fileDialog.mockResolvedValue([{ fsPath: file, scheme: 'file' }]);
+    send('addContext');
+    await vi.waitFor(() => expect(String(harness.messages.at(-1)?.attachments)).toContain('ignored-file.txt'));
+    expect(harness.fileDialog).toHaveBeenCalledWith(expect.objectContaining({ defaultUri: expect.objectContaining({ fsPath: harness.workspaceRoot }) }));
+  });
+
+  it('sends an image-only draft as genuine image input while the webview sees descriptors only', async () => {
+    const data = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aPf8AAAAASUVORK5CYII=';
+    const path = join(harness.workspaceRoot, 'picture.png'); writeFileSync(path, Buffer.from(data, 'base64'));
+    harness.fileDialog.mockResolvedValue([{ fsPath: path, scheme: 'file' }]);
+    send('addFiles');
+    await vi.waitFor(() => expect(String(harness.messages.at(-1)?.attachments)).toContain('picture.png'));
+    expect(JSON.stringify(harness.messages)).not.toContain(data);
+    send('prompt', { text: '' });
+    await vi.waitFor(() => expect(harness.runs).toHaveLength(1));
+    expect(harness.runs[0].task).toContain('Review the attached context.');
+    expect(harness.runs[0].images).toEqual([expect.objectContaining({ mimeType: 'image/png', data })]);
+  });
+
+  it('rejects oversized native selections before reading their files', async () => {
+    harness.fileDialog.mockResolvedValue(Array.from({ length: 11 }, () => ({ fsPath: '/nonexistent/unapproved.txt', scheme: 'file' })));
+    send('addFiles');
+    await vi.waitFor(() => expect(harness.errors).toHaveBeenCalledWith('Attach at most 10 files or images.'));
+    expect(String(harness.messages.at(-1)?.attachments)).toBe('');
+  });
+
+  it('adds an explicitly selected external file without clearing the conversation and sends its contents', async () => {
+    const outside = mkdtempSync(join(tmpdir(), 'moderado-explicit-file-'));
+    try {
+      const path = join(outside, 'example.txt'); writeFileSync(path, 'explicitly selected external content');
+      send('prompt', { text: 'Existing conversation.' });
+      await vi.waitFor(() => expect(harness.runs).toHaveLength(1));
+      harness.fileDialog.mockResolvedValue([{ fsPath: path, scheme: 'file' }]);
+      send('addFiles');
+      await vi.waitFor(() => expect(String(harness.messages.at(-1)?.attachments)).toContain('example.txt'));
+      expect(String(harness.messages.at(-1)?.rows)).toContain('Existing conversation.');
+      expect(JSON.stringify(harness.messages)).not.toContain('explicitly selected external content');
+      send('prompt', { text: 'Review this file.' });
+      await vi.waitFor(() => expect(harness.runs).toHaveLength(2));
+      expect(harness.runs[1].task).toContain('explicitly selected external content');
+      expect(String(harness.messages.at(-1)?.attachments)).toBe('');
+    } finally { rmSync(outside, { recursive: true, force: true }); }
+  });
+
+  it('filters project context to jailed files and adds references without automatically reading contents', async () => {
+    mkdirSync(join(harness.workspaceRoot, 'src'));
+    const file = join(harness.workspaceRoot, 'src/example.ts'); writeFileSync(file, 'context content should not be read');
+    harness.findFiles.mockResolvedValue([{ fsPath: file, scheme: 'file' }, { fsPath: join(harness.workspaceRoot, '../external.txt'), scheme: 'file' }]);
+    harness.contextPicker.mockImplementation(async (items) => items);
+    send('addContext');
+    await vi.waitFor(() => expect(String(harness.messages.at(-1)?.attachments)).toContain('src/example.ts'));
+    expect(harness.contextPicker.mock.calls[0][0].filter((item: { attachment?: unknown }) => item.attachment)).toHaveLength(1);
+    send('prompt', { text: 'Inspect this context.' });
+    await vi.waitFor(() => expect(harness.runs).toHaveLength(1));
+    expect(harness.runs[0].task).toContain('src/example.ts');
+    expect(harness.runs[0].task).not.toContain('context content should not be read');
+  });
+
+  it('ignores renderer-supplied paths and removes only host-issued attachment ids', async () => {
+    send('addFiles', { paths: ['/unapproved/path'] });
+    send('addContext', { path: '../unapproved' });
+    expect(harness.fileDialog).not.toHaveBeenCalled();
+    expect(harness.findFiles).not.toHaveBeenCalled();
+    const path = join(harness.workspaceRoot, 'example.txt'); writeFileSync(path, 'a file');
+    harness.fileDialog.mockResolvedValue([{ fsPath: path, scheme: 'file' }]);
+    send('addFiles');
+    await vi.waitFor(() => expect(String(harness.messages.at(-1)?.attachments)).toContain('example.txt'));
+    const chips = String(harness.messages.at(-1)?.attachments);
+    const id = /data-attachment-id="([^"]+)"/.exec(chips)![1];
+    send('removeAttachment', { id: 'malformed' });
+    expect(String(harness.messages.at(-1)?.attachments)).toBe(chips);
+    send('removeAttachment', { id });
+    expect(String(harness.messages.at(-1)?.attachments)).toBe('');
   });
 });

@@ -63,6 +63,7 @@ agent in a complete editor. The first complete flow is:
 | F6 | Reuse the same local Moderado configuration, skills, and session schema on the same OS. | IDE reads a CLI-created profile/session and the CLI reads a IDE-created session after restart. |
 | F7 | Resolve Windows provider credentials using the existing `moderado/provider/<id>` Credential Manager references. | A CLI-stored test credential works in IDE without copying the secret into `config.json` or the UI. |
 | F8 | Discover and run explicitly configured MCP tools only after the user trusts that server; require approval for every MCP tool call. | A fake MCP server cannot bypass approval, and provider credentials are removed from its inherited environment. The UI explains that an MCP server is an external process with its own filesystem privileges. |
+| F9 | Add project-file context references with @ and explicitly selected text files/images with + in the composer, with removable attachment chips. | @ rejects paths outside the canonical project jail; + accepts human-selected external files within bounded format/size limits. Fake-provider tests verify image content parts and IDE-only snapshot restoration while shared sessions remain text-only. |
 
 The IDE approval default in F5 is a deliberate safety requirement. The
 current CLI's interactive approval handler can auto-approve non-MCP actions by

@@ -60,7 +60,7 @@ records the current state.
 The project will preserve upstream license notices and use its own name, icons,
 application identifiers, and update endpoints before any distribution.
 
-## Build the Linux editor
+## Build the Linux editor locally
 
 Linux, macOS, and Windows are the target editions. Source development uses Linux; Linux packaging is paused while repository
 naming and the existing Windows GUI are addressed. Keep the checkout and build cache in the Linux filesystem,

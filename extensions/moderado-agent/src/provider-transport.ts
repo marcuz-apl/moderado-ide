@@ -4,6 +4,7 @@ import {
   type ChatCompletionChunk, type IProviderAdapter, type ModelInventoryEntry, type ProviderChatOptions,
 } from '@moderado/contracts';
 import { z } from 'zod';
+import { ImageAttachmentSchema, type ImageAttachment } from './attachments.js';
 import { fetchDirectModels } from './provider-discovery.js';
 
 export interface DesktopOpenAIAdapterOptions {
@@ -14,6 +15,7 @@ export interface DesktopOpenAIAdapterOptions {
   fetchImpl?: typeof fetch;
   /** Overall chat request deadline, capped at five minutes. */
   timeoutMs?: number;
+  imageContext?: ReadonlyMap<string, readonly ImageAttachment[]>;
 }
 
 const MAX_FRAME_CHARS = 1_048_576;
@@ -122,6 +124,11 @@ export class DesktopOpenAIAdapter implements IProviderAdapter {
           ...(message.toolCalls?.length ? { tool_calls: message.toolCalls.map(call => ({ id: call.id, type: 'function', function: { name: call.name, arguments: JSON.stringify(call.arguments) } })) } : {}),
         };
         if (message.role === 'tool') return { role: message.role, tool_call_id: message.toolCallId, name: message.name, content: message.content };
+        const images = message.role === 'user' ? this.config.imageContext?.get(message.content) : undefined;
+        if (images?.length) return { role: 'user', content: [
+          { type: 'text', text: message.content },
+          ...images.map(image => { const validated = ImageAttachmentSchema.parse(image); return { type: 'image_url', image_url: { url: `data:${validated.mimeType};base64,${validated.data}` } }; }),
+        ] };
         return { role: message.role, content: message.content };
       });
       const response = await bounded(() => (this.config.fetchImpl ?? fetch)(`${this.baseUrl}/chat/completions`, {

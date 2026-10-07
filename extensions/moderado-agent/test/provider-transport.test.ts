@@ -11,6 +11,21 @@ const adapterFor = (text: string) => new DesktopOpenAIAdapter({ id: 'moderado-cl
 const frame = (value: unknown) => `data: ${JSON.stringify(value)}\n\n`;
 
 describe('Desktop provider transport', () => {
+  it('sends genuine image parts for mapped users and keeps ordinary text unchanged', async () => {
+    const data = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a1i0AAAAASUVORK5CYII=';
+    let body: any;
+    const adapter = new DesktopOpenAIAdapter({ id: 'x', name: 'X', baseUrl: 'https://example.test/v1', imageContext: new Map([['hi', [{ id: '11111111-1111-4111-8111-111111111111', label: 'pixel.png', mimeType: 'image/png', data }]]]), fetchImpl: async (_url, init) => { body = JSON.parse(String(init?.body)); return new Response('data: [DONE]\n\n'); } });
+    for await (const _chunk of adapter.streamChat({ modelId: 'vision', messages: [{ role: 'system', content: 'hi' }, { role: 'user', content: 'hi' }, { role: 'user', content: 'ordinary' }] })) {}
+    expect(body.messages).toEqual([{ role: 'system', content: 'hi' }, { role: 'user', content: [{ type: 'text', text: 'hi' }, { type: 'image_url', image_url: { url: `data:image/png;base64,${data}` } }] }, { role: 'user', content: 'ordinary' }]);
+  });
+
+  it('refuses malformed image data before contacting the provider', async () => {
+    let called = false;
+    const adapter = new DesktopOpenAIAdapter({ id: 'x', name: 'X', baseUrl: 'https://example.test/v1', imageContext: new Map([['hi', [{ id: '11111111-1111-4111-8111-111111111111', label: 'bad.png', mimeType: 'image/png', data: 'not-base64!' }]]]), fetchImpl: async () => { called = true; return new Response('data: [DONE]\n\n'); } });
+    await expect(collect(adapter)).rejects.toThrow();
+    expect(called).toBe(false);
+  });
+
   it('serializes the exact route, messages, tools and token configuration', async () => {
     const adapter = new DesktopOpenAIAdapter({ id: 'moderado-cloud', name: 'Gateway', baseUrl: 'https://example.test/v1/', apiKey: 'test-key', fetchImpl: async (url, init) => {
       expect(url).toBe('https://example.test/v1/chat/completions');

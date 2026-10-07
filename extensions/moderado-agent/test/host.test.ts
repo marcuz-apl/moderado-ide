@@ -8,6 +8,7 @@ import { AgentHost, previewFor, resolveProvider } from '../src/host.js';
 import { MemoryCredentialStore } from '../src/credentials.js';
 import { readConfig } from '../src/profile.js';
 import { DesktopOpenAIAdapter } from '../src/provider-transport.js';
+import { preparePrompt } from '../src/attachments.js';
 import { SessionStore } from '../src/sessions.js';
 
 function workspace(): string {
@@ -37,6 +38,30 @@ function fakeHTTP(data: unknown[]) {
 describe('Desktop provider host integration', () => {
   const route = { id: 'moonshotai/kimi-k3', provider: 'nvidia-nim', owned_by: 'moonshotai', capabilities: ['chat', 'tools'], data_note: 'Gateway route' };
   const gateway = { baseUrl: 'http://127.0.0.1:4788/v1' };
+
+  it('restores image context across host restart while keeping shared session text-only', async () => {
+    const settings = { workspaceRoot: workspace(), moderadoHome: configuredHome('moderado-cloud', gateway), fetchImpl: fakeHTTP([route]), onEvent: () => {}, promptForApproval: async () => undefined };
+    const image = { id: '11111111-1111-4111-8111-111111111111', label: 'pixel.png', mimeType: 'image/png' as const, data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a1i0AAAAASUVORK5CYII=' };
+    const prompt = preparePrompt('Describe.', [{ kind: 'image', id: image.id, label: image.label, image }]);
+    await new AgentHost(settings).startRun({ ...prompt, modelId: 'auto' });
+    const restarted = new AgentHost(settings);
+    await restarted.startRun({ task: 'What color?', modelId: 'auto' });
+    const posts = settings.fetchImpl.mock.calls.filter(([, init]) => init?.method === 'POST');
+    const original = JSON.parse(String(posts[0][1]?.body)).messages.find((message: any) => message.role === 'user');
+    const history = JSON.parse(String(posts[1][1]?.body)).messages.find((message: any) => message.role === 'user');
+    expect(original.content[1]).toEqual({ type: 'image_url', image_url: { url: `data:image/png;base64,${image.data}` } });
+    expect(history).toEqual(original);
+    expect(restarted.session?.messages.every(message => typeof message.content === 'string' || message.content === null)).toBe(true);
+    expect(JSON.stringify(restarted.session)).not.toContain(image.data);
+  });
+
+  it('rejects image input instead of dropping it with a fake provider', async () => {
+    const host = new AgentHost({ workspaceRoot: workspace(), moderadoHome: configuredHome('unused', { baseUrl: 'http://127.0.0.1:4788/v1' }), onEvent: () => {}, promptForApproval: async () => undefined });
+    const image = { id: '11111111-1111-4111-8111-111111111111', label: 'pixel.png', mimeType: 'image/png' as const, data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a1i0AAAAASUVORK5CYII=' };
+    const prompt = preparePrompt('Describe.', [{ kind: 'image', id: image.id, label: image.label, image }]);
+    await expect(host.startRun(prompt)).rejects.toThrow(/image.*provider|provider.*image/i);
+  });
+
 
   it('resolves public keyless Gateway using the Desktop transport', async () => {
     const home = configuredHome('moderado-cloud', gateway);
