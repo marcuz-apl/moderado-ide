@@ -4,8 +4,8 @@ Updated: 2026-10-07 UTC
 Branch: master
 Status: Source renamed **Moderado IDE** (`moderado-ide`) and baseline advanced
 and verified against CLI **v0.4.8**. Linux build stopped at the owner's request.
-Remote repository is renamed and authenticated. Next priority: push this
-checkpoint, then improve the existing Windows IDE GUI. Signing/publication remain unauthorized.
+Local and remote repositories are renamed, and source checkpoint `7ec0923`
+is pushed. Next priority: improve the existing Windows IDE GUI. Signing/publication remain unauthorized.
 
 ## Current checkpoint (2026-10-07 UTC)
 
@@ -17,8 +17,8 @@ checkpoint, then improve the existing Windows IDE GUI. Signing/publication remai
   `/home/marcu/projects/moderado-desktop` symlink preserves the currently open
   workspace. Reopen the IDE at the new path; the old-path alias can then be
   removed. Remote is now `https://github.com/marcuz-apl/moderado-ide`; `origin` points
-  there and authenticated push preflight passes. The source commit/push follow
-  this checkpoint update.
+  there. Source checkpoint `7ec0923` is committed and pushed to `master`;
+  GitHub API confirmed its exact SHA matches local HEAD.
 - Product/build/documentation names use **Moderado IDE** / `moderado-ide`,
   including the executable, protocol, editor data-folder and OS identifiers.
   Existing installer GUIDs are preserved. Shared agent data remains
@@ -86,11 +86,18 @@ checkpoint, then improve the existing Windows IDE GUI. Signing/publication remai
   improvement has not started. No signing, publishing or live inference occurred.
 - Initial Git push preflight lacked authentication, and the first browser
   authorization returned HTTP 500. The owner then authenticated GitHub in WSL.
-  Admin access was verified, `gh api --method PATCH ... -f name=moderado-ide`
+  Admin access was verified, `gh api --method PATCH repos/marcuz-apl/moderado-desktop -f name=moderado-ide`
   successfully renamed the remote, `git remote set-url origin` updated this
   checkout, and `gh auth setup-git --hostname github.com` enabled the Git helper.
   `git fetch origin` confirmed no history divergence; authenticated
-  `git push --dry-run origin HEAD:master` passed. Source commit/push are authorized.
+  `git push --dry-run origin HEAD:master` passed.
+- `git commit -m 'feat: rename Moderado IDE and align CLI v0.4.8 baseline'`
+  succeeded as `7ec09237b4ffb46daffb9137ba491fa89fd28abd`; version hooks produced
+  `v0.1.0+2610074`. `git push -u origin master` succeeded. GitHub API
+  `gh api repos/marcuz-apl/moderado-ide/commits/master --jq .sha` matched local
+  `git rev-parse HEAD`, and `git status --short` was empty. This follow-up
+  records that verified source push; generated caches and app artifacts were
+  excluded from Git.
 
 Historical records below retain original names, artifact paths and outcomes.
 
