@@ -36,7 +36,9 @@ describe('canonicalWorkspaceRoot', () => {
   it('agrees on drive-letter case', () => {
     if (process.platform !== 'win32') return;
     const root = tempDir('moderado-ws-');
-    expect(canonicalWorkspaceRoot(root.toLowerCase())).toBe(root);
+    const canonical = canonicalWorkspaceRoot(root);
+    expect(canonicalWorkspaceRoot(root.toLowerCase())).toBe(canonical);
+    expect(canonical.startsWith(canonical[0].toUpperCase() + ':')).toBe(true);
   });
 
   it('resolves a symlink to the same target', () => {

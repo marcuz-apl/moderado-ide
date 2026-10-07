@@ -54,6 +54,55 @@ $env:Path = 'C:\Program Files\7-Zip;' + $env:Path
 Remove-Item Env:ELECTRON_SKIP_BINARY_DOWNLOAD -ErrorAction SilentlyContinue
 Remove-Item Env:PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD -ErrorAction SilentlyContinue
 
+function Find-Python311 {
+  $candidates = @()
+  $cmd = Get-Command python3.11 -ErrorAction SilentlyContinue
+  if ($cmd) { $candidates += $cmd.Source }
+  $cmd = Get-Command python -ErrorAction SilentlyContinue
+  if ($cmd) { $candidates += $cmd.Source }
+  $candidates += 'C:\Python311\python.exe'
+  $candidates += 'C:\Program Files\Python311\python.exe'
+  $candidates += (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python311\python.exe')
+  $candidates += (Join-Path $env:USERPROFILE '.local\bin\python3.11.exe')
+  $candidates += (Join-Path $env:LOCALAPPDATA 'uv\python\cpython-3.11-windows-x86_64-none\python.exe')
+  foreach ($candidate in $candidates) {
+    if ($candidate -and (Test-Path -LiteralPath $candidate)) {
+      try {
+        $version = & $candidate -c 'import sys; print(sys.version)' 2>$null
+        if ($LASTEXITCODE -eq 0 -and $version -match '^3\.11\.') {
+          return $candidate
+        }
+      } catch {
+        # continue to next candidate
+      }
+    }
+  }
+  return $null
+}
+
+$python = $null
+try {
+  $pyResult = & py -3.11 -c 'import sys; print(sys.executable)' 2>&1
+  if ($LASTEXITCODE -eq 0 -and $pyResult) {
+    $python = ($pyResult | Select-Object -First 1).Trim()
+  }
+} catch {
+  # py launcher failed; fall back to direct executable search
+}
+if (!$python) {
+  $python = Find-Python311
+}
+if ($python) {
+  $env:PYTHON = $python
+  $env:npm_config_python = $python
+}
+$vswhere = 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe'
+$vs = (& $vswhere -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath | Select-Object -First 1).Trim()
+if ($vs) {
+  Write-Output "Detected Visual Studio installation: $vs"
+  $env:vs2022_install = $vs
+}
+
 $bash = 'C:\Program Files\Git\bin\bash.exe'
 $posixCheckout = (& 'C:\Program Files\Git\usr\bin\cygpath.exe' -u $checkout).Trim()
 if ($LASTEXITCODE -ne 0) { throw 'Git Bash path conversion failed.' }
