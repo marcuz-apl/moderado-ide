@@ -11,7 +11,7 @@ is pushed. Next priority: improve the existing Windows IDE GUI. Signing/publicat
 
 - Owner confirmed Linux, macOS, and Windows editions, then paused Linux
   packaging to prioritize repository naming and GUI work using the existing
-  Windows build. Source work remains in WSL; no Windows `D:` or sibling CLI
+  Windows build. Source work remains on Linux; no Windows `D:` or sibling CLI
   files were modified during this work.
 - Local repository is now `/home/marcu/projects/moderado-ide`. A temporary
   `/home/marcu/projects/moderado-desktop` symlink preserves the currently open
@@ -43,7 +43,7 @@ is pushed. Next priority: improve the existing Windows IDE GUI. Signing/publicat
   AUTO metadata. Additional fake-provider regressions cover Gateway history
   preservation, omission of a client output-token default, and server-owned
   retry/fallback. Default approvals/request-ID/deadline protections remain.
-- Verification from this WSL source tree:
+- Verification from this Linux source tree:
   - `npm --prefix vendor/moderado run build`: exit 0.
   - Extension `npm test -- test/model-router.test.ts test/host.test.ts`:
     50/50 pass after demonstrating the original failures.
@@ -65,7 +65,7 @@ is pushed. Next priority: improve the existing Windows IDE GUI. Signing/publicat
   restored. Shell syntax checks and an isolated fixture commit verified the
   automatic VERSION counter and Conventional Commit prefix. No CLI Git
   configuration was reused.
-- Added reusable WSL build/vendoring tooling. User installed Linux system
+- Added reusable Linux build/vendoring tooling. User installed Linux system
   prerequisites; pinned Node 24.18.0 archive and local header archive were
   SHA-256 verified. Initial preparation recovered from network timeouts by
   installing verified headers through node-gyp's `--tarball` option. Native
@@ -85,7 +85,7 @@ is pushed. Next priority: improve the existing Windows IDE GUI. Signing/publicat
   checksum manifest or newly built Windows/macOS package is claimed. GUI
   improvement has not started. No signing, publishing or live inference occurred.
 - Initial Git push preflight lacked authentication, and the first browser
-  authorization returned HTTP 500. The owner then authenticated GitHub in WSL.
+  authorization returned HTTP 500. The owner then authenticated GitHub on Linux.
   Admin access was verified, `gh api --method PATCH repos/marcuz-apl/moderado-desktop -f name=moderado-ide`
   successfully renamed the remote, `git remote set-url origin` updated this
   checkout, and `gh auth setup-git --hostname github.com` enabled the Git helper.
@@ -142,7 +142,7 @@ is published or signed, and no Moderado agent integration exists yet.
 - The same user's `~/.moderado` is shared for agent data; editor state is
   isolated. Current CLI config writes have a cross-process lost-update risk.
 - Windows provider credentials live in Credential Manager, outside the shared
-  folder. Windows/WSL cross-home sharing is outside the initial release.
+  folder. Windows/Linux cross-home sharing is outside the initial release.
 - Desktop requires human approval by default for mutations and commands. The
   current CLI handler can auto-approve, so this is a deliberate safety
   difference rather than an existing parity claim.
@@ -172,7 +172,7 @@ is published or signed, and no Moderado agent integration exists yet.
 - VSCodium's Windows build guide requires Git Bash, Node 24.18.0, jq,
   Python 3.11, Rustup, and 7-Zip. Node 24.18.0 and Rust are present; jq and
   7-Zip are absent, Python 3.14.6 is installed, and the available `bash.exe`
-  resolves to WSL whose distribution access is denied. No `product.json`
+  resolves to a Linux distribution that could not be accessed. No `product.json`
   Desktop overlay exists.
 - No editor source build or tests were run. Temporary source clones were kept
   under `.cache` and removed after inspection.
@@ -853,14 +853,14 @@ published or signed.
   `.githooks`; the design commit ran them and produced connected version
   `v0.1.0+2610061`.
 
-## Windows build resumed from WSL (2026-10-07 UTC)
+## Windows build resumed from Linux (2026-10-07 UTC)
 
 - Built Windows x64 `v0.1.0+2610073` from commit `4360f1df178670cfc42ddf83940976c951ea7082`
-  using Windows PowerShell invoked from WSL. The prepared editor checkout is
-  `D:\projects\moderado-desktop\.cache\vscodium`; this WSL checkout has no
+  using Windows PowerShell invoked from Linux. The prepared editor checkout is
+  `D:\projects\moderado-desktop\.cache\vscodium`; this Linux checkout has no
   prepared editor sources. Tracked contents matched after CRLF normalization
-  before the WSL-only test correction below. No sibling CLI files were modified.
-- WSL commands: `npm ci` in `vendor/moderado` and
+  before the Linux-specific test correction below. No sibling CLI files were modified.
+- Linux commands: `npm ci` in `vendor/moderado` and
   `extensions/moderado-agent`, then vendor `npm run build`, extension
   `npm test`, `npm run typecheck`, and `npm run compile`. Builds/typecheck exit 0;
   bundle 507 KiB. Initial tests failed twice because Windows backslashes are
@@ -885,7 +885,7 @@ published or signed.
   `.\scripts\build-m1.ps1 -PackingOnly` to repackage the restored dependency;
   exit 0. Log: `.cache/build-native-repack.log`. The first attempt to redirect
   output inside Windows PowerShell aborted on an npm stderr notice; the
-  successful rerun redirected output from the WSL shell instead.
+  successful rerun redirected output from the Linux shell instead.
 - Offline real-editor check:
   `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
   D:\projects\moderado-desktop\.cache\build-hostcheck\run.ps1`.
@@ -910,4 +910,4 @@ Final artifacts under `D:\projects\moderado-desktop\.cache\vscodium\assets`:
 Unsigned and unpublished. No fresh clean-account install/uninstall, visual
 Gateway/settings inspection, or live inference is claimed for these artifacts.
 The portable traversal test correction and this handoff remain uncommitted
-in the WSL checkout; the verified Windows build uses the recorded clean commit.
+in the Linux checkout; the verified Windows build uses the recorded clean commit.

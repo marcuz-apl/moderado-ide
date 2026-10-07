@@ -4,10 +4,10 @@
 
 IDE and CLI use the same current user's `~/.moderado/` for Moderado agent
 data. The supported sharing case is one account running IDE and CLI on
-the same OS. Linux development starts in WSL; Windows credential sharing has
+the same OS. Windows credential sharing has
 its own platform-specific requirements below. On Windows, `~` is the account's
 home directory, normally `%USERPROFILE%`; it is not the literal `$USER` path.
-Windows and WSL normally have different home directories and path identities,
+Windows and Linux normally have different home directories and path identities,
 so cross-OS sharing is outside the first release.
 
 | Location | Current CLI meaning | IDE rule |

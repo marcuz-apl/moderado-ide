@@ -5,7 +5,7 @@ the open Code OSS editor through VSCodium's downstream build approach. It will
 bundle Moderado's provider-independent agent, model routing, workspace tools,
 and approval UI. End users will not need to install Moderado CLI.
 
-**Status:** Linux x64 development in WSL is the current priority. Existing Windows evidence predates the IDE rename and CLI `v0.4.8` source update; current builds need fresh verification. A local Windows x64 editor package and installers build
+**Status:** Linux packaging is paused while work focuses on the existing Windows IDE GUI. Existing Windows evidence predates the IDE rename and CLI `v0.4.8` source update; current builds need fresh verification. A local Windows x64 editor package and installers build
 successfully and have passed editor-host, install/uninstall, and clean-account
 checks. The pinned Moderado agent is vendored and bundled into a IDE
 extension that activates in a real extension host, with a fail-closed approval
@@ -40,7 +40,7 @@ cache, and other IDE-specific state stay separate. See
 - The same provider presets, model discovery, free-first routing, and paid/unknown
   cost opt-in rules as the pinned Moderado engine.
 - Explicit human approval by default for file mutations and command execution.
-- Linux, macOS, and Windows editions, starting with Linux x64 development in WSL.
+- Linux, macOS, and Windows editions, starting with Linux x64 development.
 - Small downstream patches so upstream editor security and compatibility updates
   remain feasible.
 
@@ -60,9 +60,9 @@ records the current state.
 The project will preserve upstream license notices and use its own name, icons,
 application identifiers, and update endpoints before any distribution.
 
-## Build the Linux editor in WSL
+## Build the Linux editor
 
-Linux, macOS, and Windows are the target editions. Source development uses WSL; Linux packaging is paused while repository
+Linux, macOS, and Windows are the target editions. Source development uses Linux; Linux packaging is paused while repository
 naming and the existing Windows GUI are addressed. Keep the checkout and build cache in the Linux filesystem,
 for example `/home/marcu/projects/moderado-ide`.
 

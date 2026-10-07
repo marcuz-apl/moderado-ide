@@ -1,7 +1,7 @@
 # Upstream source and distribution policy
 
 IDE targets Linux, macOS, and Windows. Current development prioritizes
-Linux x64 in WSL using the existing immutable source revisions. Builds remain
+Linux x64 using the existing immutable source revisions. Builds remain
 local and unpublished until the target platform's release gates pass.
 
 ## Source chain

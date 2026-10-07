@@ -9,13 +9,13 @@
 
 | | |
 | --- | --- |
-| Targets | Linux, macOS, and Windows; Linux x64 in WSL is the current priority |
+| Targets | Linux, macOS, and Windows; Linux packaging is currently paused |
 | Existing artifact evidence | Windows x64; Linux and macOS require separate build and host verification |
 | Editor base | Code OSS `1.135.0`, built through VSCodium `1.135.06055` |
 | Agent packages | Moderado CLI `v0.4.8` (`d5e263ed…`, `v0.4.8+261006d`) |
 | Architectures | x64 only; arm64 is not built or tested |
 
-Linux development starts in WSL; follow the [Linux build instructions](../README.md#build-the-linux-editor-in-wsl). A completed Linux or macOS build is not claimed here. Existing Windows evidence predates the IDE rename and CLI `v0.4.8` source update; it does not verify these new artifacts. Windows/WSL cross-home profile sharing is outside this milestone: the two environments have different home directories and do not automatically share a `~/.moderado` profile.
+For Linux development, follow the [Linux build instructions](../README.md#build-the-linux-editor). A completed Linux or macOS build is not claimed here. Existing Windows evidence predates the IDE rename and CLI `v0.4.8` source update; it does not verify these new artifacts. Windows/Linux cross-home profile sharing is outside this milestone: the two environments have different home directories and do not automatically share a `~/.moderado` profile.
 
 ## Building Windows locally
 

@@ -3,7 +3,7 @@
 This is an ordered delivery sequence, not a claim that a build exists. Each
 milestone needs a reviewable artifact and its checks before the next begins.
 
-Moderado IDE targets Linux, macOS, and Windows. Current work prioritizes Linux x64 in WSL, keeping the checkout and build cache in the Linux filesystem. The Windows milestone evidence below predates the rename; each renamed edition needs its own build and host verification. The owner authorized advancing contracts/core/tools to CLI `v0.4.8` on October 7, 2026; earlier milestone evidence does not verify this updated source baseline.
+Moderado IDE targets Linux, macOS, and Windows. Current work focuses on the existing Windows IDE GUI; Linux packaging is paused. The Windows milestone evidence below predates the rename; each renamed edition needs its own build and host verification. The owner authorized advancing contracts/core/tools to CLI `v0.4.8` on October 7, 2026; earlier milestone evidence does not verify this updated source baseline.
 
 ## M0 — Independent project foundation (documentation scaffold)
 
@@ -97,7 +97,7 @@ which this project must not make.
 - Document installation and supported platform/profile combinations.
 - Publish only after explicit owner authorization.
 
-Linux x64 in WSL is the current build priority. macOS and Windows releases require separate evidence-backed platform gates; Windows/WSL cross-home sharing remains a separate compatibility decision.
+Linux packaging is paused while the existing Windows IDE GUI is improved. macOS and Windows releases require separate evidence-backed platform gates; Windows/Linux cross-home sharing remains a separate compatibility decision.
 
 ## M4 status (evidence complete; release not authorized)
 

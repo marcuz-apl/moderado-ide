@@ -1,7 +1,7 @@
 # Moderado IDE Product Requirements
 
 **Project version:** see [VERSION](VERSION) (planning scaffold, unpublished)  
-**Target platforms:** Linux, macOS, and Windows. Source development uses WSL. Linux packaging is currently paused while
+**Target platforms:** Linux, macOS, and Windows. Source development uses Linux. Linux packaging is currently paused while
 repository naming and the existing Windows GUI are addressed; each edition requires native build and verification
 evidence before release. Existing Windows x64 evidence remains platform-specific.
 **Reference agent baseline:** Moderado CLI `v0.4.8` pinned contracts, core, and
@@ -55,7 +55,7 @@ agent in a complete editor. The first complete flow is:
 
 | ID | Requirement | Acceptance evidence |
 | --- | --- | --- |
-| F1 | Produce Moderado-branded Linux, macOS, and Windows IDE packages from pinned Code OSS/VSCodium inputs, starting with Linux x64 development in WSL. | Build, install, and launch each edition on its target OS; product name, icon, data directory, URL scheme, and installer IDs do not collide with VSCodium or VS Code. WSL evidence establishes local Linux development only. |
+| F1 | Produce Moderado-branded Linux, macOS, and Windows IDE packages from pinned Code OSS/VSCodium inputs, starting with Linux x64 development. | Build, install, and launch each edition on its target OS; product name, icon, data directory, URL scheme, and installer IDs do not collide with VSCodium or VS Code. |
 | F2 | Bundle the pinned Moderado agent contracts, core, and tools with a IDE-owned provider layer and presets. | With no CLI executable installed, connect to a fake provider and complete a bounded agent turn. |
 | F3 | Preserve model inventory, free-first AUTO routing, model pinning, and paid/unknown-cost opt-in in the IDE-owned provider layer with offline parity to CLI `v0.4.8`. | Shared offline fixtures yield equivalent eligibility and routing outcomes in CLI and IDE for the IDE-owned provider revision. |
 | F4 | Render structured agent events, tool previews, usage, cancellation, and actionable errors. | A real editor-host test observes ordered events and can cancel a running turn. |
@@ -94,7 +94,7 @@ CLI writer performs a direct read/merge/write and can lose updates. Two live
 processes must not edit the same session ID without a conflict policy. The
 supported sharing case is IDE and CLI within one account on the same OS;
 credential persistence must be verified separately for each platform. Sharing between
-Windows and a separate WSL home is a later, explicit compatibility decision.
+Windows and a separate Linux home is a later, explicit compatibility decision.
 See [the detailed profile contract](docs/PROFILE.md).
 
 ## 6. Non-functional requirements
@@ -119,7 +119,7 @@ See [the detailed profile contract](docs/PROFILE.md).
 ## 7. Delivery gates
 
 1. **Foundation:** Independent repository, source/license inventory, pinned
-   upstream inputs, and repeatable local builds, starting with Linux in WSL.
+   upstream inputs, and repeatable local builds, starting with Linux.
 2. **Agent integration:** Self-contained editor package, structured event UI,
    provider/model parity, and fail-closed approvals against fake providers.
 3. **Shared profile:** Configuration, credentials, sessions, and skills round
@@ -137,4 +137,4 @@ No reimplementation of the Moderado agent loop, no dependency on an installed
 CLI, no Microsoft Visual Studio Marketplace endpoint in the derived editor,
 no silent installation of proprietary extensions, and no cross-OS profile sharing.
 Linux, macOS, and Windows releases each require their own verified workflow;
-a local WSL build is not evidence of macOS or Windows readiness.
+a local Linux build is not evidence of macOS or Windows readiness.
