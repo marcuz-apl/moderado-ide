@@ -1,6 +1,8 @@
 import {
   AuthenticationError,
   ChatCompletionChunk,
+  GATEWAY_ERROR_CODES,
+  GatewayError,
   IProviderAdapter,
   ModelInventoryEntry,
   ModelInventoryEntrySchema,
@@ -28,11 +30,13 @@ export class NvidiaAdapter implements IProviderAdapter {
   private cachedInventory: ModelInventoryEntry[] | null = null;
   private cacheTimestamp = 0;
   private readonly cacheTtlMs = 15 * 60 * 1000;
+  private readonly isModeradoCloud: boolean;
 
   constructor(config: NvidiaAdapterConfig = {}) {
     this.id = config.providerId || 'nvidia';
     this.name = config.providerName || 'NVIDIA NIM';
-    this.apiKey = config.apiKey || process.env.NVIDIA_API_KEY || '';
+    this.isModeradoCloud = this.id === 'moderado-cloud';
+    this.apiKey = config.apiKey || (this.id === 'nvidia' ? process.env.NVIDIA_API_KEY : undefined) || '';
     this.baseUrl = (config.baseUrl || 'https://integrate.api.nvidia.com/v1').replace(/\/+$/, '');
   }
 
@@ -100,7 +104,6 @@ export class NvidiaAdapter implements IProviderAdapter {
 
   async *streamChat(options: ProviderChatOptions): AsyncIterable<ChatCompletionChunk> {
     const url = `${this.baseUrl}/chat/completions`;
-
     // Map contracts ChatMessage to OpenAI/NIM wire payload
     const wireMessages = options.messages.map((msg) => {
       if (msg.role === 'assistant') {
@@ -161,6 +164,8 @@ export class NvidiaAdapter implements IProviderAdapter {
       payload.max_tokens = options.maxTokens;
     }
 
+    const body = JSON.stringify(payload);
+
     let response: Response;
     try {
       response = await fetch(url, {
@@ -169,7 +174,7 @@ export class NvidiaAdapter implements IProviderAdapter {
           ...this.getHeaders(),
           Accept: 'text/event-stream',
         },
-        body: JSON.stringify(payload),
+        body,
         signal: options.signal,
       });
     } catch (err: any) {
@@ -188,15 +193,34 @@ export class NvidiaAdapter implements IProviderAdapter {
     }
 
     // Node.js Response.body is a ReadableStream<Uint8Array> which is an AsyncIterable in modern Node
-    yield* parseSseStream(response.body as any);
+    yield* parseSseStream(response.body as any, { moderadoCloud: this.isModeradoCloud });
   }
 
   private async handleHttpError(response: Response, action: string): Promise<never> {
     let errorText = '';
-    try {
-      errorText = await response.text();
-    } catch {
-      // ignore
+    if (this.isModeradoCloud) {
+      try {
+        errorText = await response.text();
+      } catch {
+        // Fall through to a status-based provider error when the response body is unavailable.
+      }
+      try {
+        const body: unknown = JSON.parse(errorText);
+        const code = body && typeof body === 'object' && 'error' in body && body.error && typeof body.error === 'object'
+          && 'code' in body.error && typeof body.error.code === 'string' ? body.error.code : undefined;
+        if (code && GATEWAY_ERROR_CODES.includes(code)) {
+          throw new GatewayError(code, response.status, parseRetryAfter(response.headers.get('Retry-After')));
+        }
+      } catch (error) {
+        if (error instanceof GatewayError) throw error;
+        // Unrecognized or malformed bodies use the provider's ordinary error mapping below.
+      }
+    } else {
+      try {
+        errorText = await response.text();
+      } catch {
+        // ignore
+      }
     }
 
     if (response.status === 401 || response.status === 403) {
@@ -249,4 +273,11 @@ export class NvidiaAdapter implements IProviderAdapter {
       response.status
     );
   }
+}
+
+function parseRetryAfter(value: string | null): number | undefined {
+  if (!value) return undefined;
+  if (/^\d+$/.test(value)) return Number(value);
+  const retryAt = Date.parse(value);
+  return Number.isNaN(retryAt) ? undefined : Math.max(0, Math.ceil((retryAt - Date.now()) / 1000));
 }

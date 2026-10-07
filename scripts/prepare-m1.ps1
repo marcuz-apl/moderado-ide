@@ -9,8 +9,8 @@ if ($LASTEXITCODE -ne 0) { throw 'VSCodium clone failed.' }
 if ((& git -C $checkout rev-parse HEAD).Trim() -ne $lock.sources.vscodium.commit) { throw 'VSCodium revision mismatch.' }
 
 Copy-Item -LiteralPath (Join-Path $root 'branding\product.json') -Destination (Join-Path $checkout 'product.json') -Force
-$env:APP_NAME = 'Moderado Desktop'
-$env:BINARY_NAME = 'moderado-desktop'
+$env:APP_NAME = 'Moderado IDE'
+$env:BINARY_NAME = 'moderado-ide'
 $env:CI_BUILD = 'no'
 $env:DISABLE_UPDATE = 'yes'
 $env:MS_COMMIT = $lock.sources.codeOss.commit

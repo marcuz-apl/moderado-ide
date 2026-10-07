@@ -8,7 +8,7 @@ $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $checkout = (Resolve-Path -LiteralPath $Checkout).Path
 if (!$checkout.StartsWith($root + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase)) {
-  throw 'Checkout must be inside the Desktop workspace.'
+  throw 'Checkout must be inside the IDE workspace.'
 }
 $lock = Get-Content -Raw -LiteralPath (Join-Path $root 'sources.lock.json') | ConvertFrom-Json
 $outerRevision = (& git -C $checkout rev-parse HEAD).Trim()
@@ -23,13 +23,13 @@ if ($LASTEXITCODE -ne 0) { throw 'Icon generation failed.' }
 if ($LASTEXITCODE -ne 0) { throw 'Branding failed.' }
 
 # Build the bundled agent extension and install it into the editor checkout so
-# the packaged Desktop ships with it. A failure must not silently produce an
+# the packaged IDE ships with it. A failure must not silently produce an
 # editor without the agent.
 & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'build-agent-extension.ps1') -Checkout $checkout
 if ($LASTEXITCODE -ne 0) { throw 'Agent extension build or install failed.' }
 
-$env:APP_NAME = 'Moderado Desktop'
-$env:BINARY_NAME = 'moderado-desktop'
+$env:APP_NAME = 'Moderado IDE'
+$env:BINARY_NAME = 'moderado-ide'
 $env:CI_BUILD = 'no'
 $env:DISABLE_UPDATE = 'yes'
 $env:MS_COMMIT = $lock.sources.codeOss.commit
@@ -114,9 +114,9 @@ if (!$AssetsOnly) {
 $assetDir = Join-Path $checkout 'assets'
 [System.IO.Directory]::CreateDirectory($assetDir) | Out-Null
 $expected = @(
-  "Moderado Desktop-win32-x64-$($lock.sources.vscodium.version).zip",
-  "Moderado DesktopSetup-x64-$($lock.sources.vscodium.version).exe",
-  "Moderado DesktopUserSetup-x64-$($lock.sources.vscodium.version).exe"
+  "Moderado IDE-win32-x64-$($lock.sources.vscodium.version).zip",
+  "Moderado IDESetup-x64-$($lock.sources.vscodium.version).exe",
+  "Moderado IDEUserSetup-x64-$($lock.sources.vscodium.version).exe"
 )
 $zip = Join-Path $assetDir $expected[0]
 if (Test-Path -LiteralPath $zip) {
@@ -127,14 +127,14 @@ if (Test-Path -LiteralPath $zip) {
 # Ship the MIT license texts in the portable editor.
 #
 # The upstream packaging copies Electron's `LICENSES.chromium.html` but not the
-# Code OSS `LICENSE.txt`, so a Desktop package built straight from it
+# Code OSS `LICENSE.txt`, so an IDE package built straight from it
 # redistributes MIT-licensed code with no copy of that license. Add it, plus
-# Desktop's own license, before the archive is created. This runs before
+# IDE's own license, before the archive is created. This runs before
 # `prepare_assets.sh` so the files land in the zip and both installers.
 $portable = Join-Path $checkout 'VSCode-win32-x64'
 if (Test-Path -LiteralPath $portable) {
   Copy-Item -LiteralPath (Join-Path $checkout 'vscode\LICENSE.txt') -Destination (Join-Path $portable 'LICENSE.txt') -Force
-  Copy-Item -LiteralPath (Join-Path $root 'LICENSE') -Destination (Join-Path $portable 'Moderado Desktop LICENSE') -Force
+  Copy-Item -LiteralPath (Join-Path $root 'LICENSE') -Destination (Join-Path $portable 'Moderado IDE LICENSE') -Force
 }
 $assetStart = [System.DateTime]::UtcNow
 & $bash -c "cd '$posixCheckout' && . ./prepare_assets.sh"

@@ -1,8 +1,12 @@
 # Upstream source and distribution policy
 
+IDE targets Linux, macOS, and Windows. Current development prioritizes
+Linux x64 in WSL using the existing immutable source revisions. Builds remain
+local and unpublished until the target platform's release gates pass.
+
 ## Source chain
 
-Moderado Desktop plans to use three independent source inputs:
+Moderado IDE plans to use three independent source inputs:
 
 1. [VSCodium](https://github.com/VSCodium/vscodium), an MIT-licensed repository
    of scripts and patches that builds Code OSS into redistributable binaries.
@@ -11,11 +15,11 @@ Moderado Desktop plans to use three independent source inputs:
 3. [Moderado CLI](https://github.com/marcuz-apl/moderado), the source of the
    agent contracts, provider-neutral core, and workspace tools.
    Gateway/provider adapters, presets, discovery, model policy, transport,
-   and routing are Desktop-owned code that adapts CLI `v0.4.8` behavior
+   and routing are IDE-owned code that adapts CLI `v0.4.8` behavior
    without using CLI provider code at runtime.
 
 VSCodium is not a vendored editor library and its released executable is not
-the Desktop application. The Desktop project will build its own product from
+the IDE application. The IDE project will build its own product from
 pinned source inputs. It must preserve the required upstream copyright and
 license notices and review third-party assets included by the build. The
 Microsoft-branded VS Code distribution and its product assets are separate
@@ -24,14 +28,18 @@ from the MIT-licensed Code OSS source.
 ## Pinning and updates
 
 Before implementation, record exact immutable revisions for VSCodium,
-Code OSS, and Moderado in a Desktop-owned source lock/manifest. The first
-Moderado contracts/core/tools reference is CLI release `v0.3.10`; do not
+Code OSS, and Moderado in an IDE-owned source lock/manifest. The current
+Moderado contracts/core/tools reference is CLI release `v0.4.8`, commit
+`d5e263ed0c9ba6715d0ce69aa640b9b9111931c8` (package version
+`v0.4.8+261006d`, tag object `8d9b75df038a3cd6764dcf11a218ca6d47fcb27c`).
+The owner authorized advancing this baseline on October 7, 2026. Do not
 assume its npm package exposes the internal workspaces as separate
-installable packages. Desktop-owned Gateway/provider behavior instead
-adapts CLI `v0.4.8` fixtures and behavior without vendoring CLI `v0.4.8`
-provider code.
+installable packages. IDE-owned Gateway/provider behavior instead
+adapts CLI `v0.4.8` fixtures and behavior without using CLI provider code
+at runtime. Updating the agent snapshot does not transfer provider ownership
+to the CLI. Previous build evidence does not verify the updated source pin.
 Build Moderado's internal packages from the pinned source revision and bundle
-them with Desktop. A build must record source revisions and Desktop `VERSION`.
+them with IDE. A build must record source revisions and IDE `VERSION`.
 
 Update each upstream deliberately: read its release notes, rebase the small
 downstream patch set, run offline Moderado tests, build the editor, exercise
@@ -43,7 +51,7 @@ upstream fetch must never silently change a release build's source.
 The distributed editor uses Moderado names, icons, application and data-folder
 identifiers, protocol handlers, installer IDs, and update endpoints. These
 must be distinct from VS Code and VSCodium. The current VSCodium preparation
-script changes these fields through `product.json`; Desktop needs its own
+script changes these fields through `product.json`; IDE needs its own
 reviewed product overlay. Use Open VSX or another compatible, permitted
 extension source rather than assuming Microsoft Visual Studio Marketplace
 access in a derivative distribution. Do not bundle a third-party extension
@@ -51,7 +59,7 @@ without checking its license and redistribution rights.
 
 ## Release ownership
 
-Desktop owns its own signing, checksums, artifact manifest, installer and
-update channel. A successful CLI or VSCodium release does not certify a
-Desktop release. Public publishing requires explicit owner approval after
+IDE owns its own signing, checksums, artifact manifest, installer and
+update channel. A successful CLI or VSCodium release does not certify an
+IDE release. Public publishing requires explicit owner approval after
 the PRD release gate passes.

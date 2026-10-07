@@ -77,6 +77,30 @@ describe('Desktop provider host integration', () => {
     expect(post[1]?.headers).not.toHaveProperty('Authorization');
   });
 
+  it('preserves Gateway tool history and leaves output limits to v0.4.8 Gateway AUTO', async () => {
+    const fetchImpl = fakeHTTP([route]);
+    const { events, onEvent } = collector();
+    const host = new AgentHost({ workspaceRoot: workspace(), moderadoHome: configuredHome('moderado-cloud', gateway), fetchImpl, onEvent, promptForApproval: async () => undefined });
+    const content = 'x'.repeat(2500);
+    await host.startRun({ task: 'Continue.', modelId: 'auto', conversationHistory: [
+      { role: 'tool', toolCallId: 'previous-tool', name: 'read_file', content, status: 'success' },
+      { role: 'assistant', content: 'Read the file.' },
+    ] });
+    const post = fetchImpl.mock.calls.find(([, init]) => init?.method === 'POST')!;
+    const body = JSON.parse(String(post[1]?.body));
+    expect(body).not.toHaveProperty('max_tokens');
+    expect(body.messages.find((message: { role: string }) => message.role === 'tool').content).toBe(content);
+    expect(events.find(event => event.type === 'model_change')).toMatchObject({ newModelId: 'auto', accessClass: 'free_trial' });
+  });
+
+  it('leaves Gateway AUTO retry and fallback to the server', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async (_url, init) => init?.method === 'POST'
+      ? new Response('rate limited', { status: 429 }) : Response.json({ object: 'list', data: [route] }));
+    const host = new AgentHost({ workspaceRoot: workspace(), moderadoHome: configuredHome('moderado-cloud', gateway), fetchImpl, onEvent: () => {}, promptForApproval: async () => undefined });
+    expect((await host.startRun({ task: 'Hello.', modelId: 'auto' })).status).toBe('failed');
+    expect(fetchImpl.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
+  });
+
   it('exposes Free Gateway models with validated metadata and an AUTO row', async () => {
     const host = new AgentHost({ workspaceRoot: workspace(), moderadoHome: configuredHome('moderado-cloud', gateway), fetchImpl: fakeHTTP([route]), onEvent: () => {}, promptForApproval: async () => undefined });
     const models = await host.discoverModels();
@@ -157,7 +181,7 @@ describe('previewFor', () => {
 
   it('rejects a path that escapes the workspace', () => {
     const root = workspace();
-    expect(() => previewFor('write_file', { path: '..\\..\\evil.txt', content: 'x' }, root)).toThrow();
+    expect(() => previewFor('write_file', { path: '../../evil.txt', content: 'x' }, root)).toThrow();
   });
 
   it('includes the command array and cwd for run_command', () => {
@@ -171,7 +195,7 @@ describe('previewFor', () => {
 describe('workspace jail', () => {
   it('refuses a traversal out of the workspace', () => {
     const root = workspace();
-    expect(() => resolveInJail(root, '..\\..\\Windows\\System32\\drivers\\etc\\hosts')).toThrow();
+    expect(() => resolveInJail(root, '../../outside-workspace/hosts')).toThrow();
   });
 
   it('still allows reading a file inside the workspace', () => {

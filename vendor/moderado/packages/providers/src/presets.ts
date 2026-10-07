@@ -1,8 +1,32 @@
 import type { ModelClassification, ModelInventoryEntry } from '@moderado/contracts';
 import { isFreeModelEntry } from './model_discovery.js';
 
+export const MODERADO_CLOUD_PRODUCTION_BASE_URL = 'https://mod.alfazen.org/v1';
+export const MODERADO_CLOUD_DEVELOPMENT_BASE_URL = 'http://127.0.0.1:4788/v1';
+
+export function resolveModeradoCloudBaseUrl(mode?: string, gatewayUrl?: string): string {
+  if (mode === 'development') return MODERADO_CLOUD_DEVELOPMENT_BASE_URL;
+  if (mode === 'production') return MODERADO_CLOUD_PRODUCTION_BASE_URL;
+  if (!gatewayUrl) return MODERADO_CLOUD_PRODUCTION_BASE_URL;
+
+  try {
+    const url = new URL(gatewayUrl);
+    const loopback = url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]';
+    if (url.username || url.password || (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback))) {
+      return MODERADO_CLOUD_PRODUCTION_BASE_URL;
+    }
+    if (url.hostname === 'api.mod.alfazen.org') return MODERADO_CLOUD_PRODUCTION_BASE_URL;
+    if (loopback && url.port === '8787') url.port = '4788';
+    return url.toString().replace(/\/+$/, '');
+  } catch {
+    return MODERADO_CLOUD_PRODUCTION_BASE_URL;
+  }
+}
+
+export const MODERADO_CLOUD_BASE_URL = MODERADO_CLOUD_PRODUCTION_BASE_URL;
+
 export const CONNECT_PROVIDER_PRESET_IDS = [
-  'nvidia-nim', 'openrouter', 'agnes-ai', 'orcarouter', 'ollama', 'lm-studio', 'openai-compatible',
+  'nvidia-nim', 'moderado-cloud', 'openrouter', 'agnes-ai', 'orcarouter', 'ollama', 'lm-studio', 'openai-compatible',
 ] as const;
 
 export type ConnectProviderPresetId = typeof CONNECT_PROVIDER_PRESET_IDS[number];
@@ -65,6 +89,8 @@ export interface ProviderPresetMeta {
    * metered catalog.
    */
   freeCatalog?: boolean;
+  /** Whether that provider-level guarantee overrides generic curated model tiers. */
+  freeCatalogOverridesClassification?: boolean;
 }
 
 /** How much of a provider's catalog is declared cost-free, for the free-model predicate. */
@@ -72,6 +98,7 @@ export interface ProviderFreePolicy {
   freeModelAliases?: readonly string[];
   freeIdSuffixes?: readonly string[];
   freeCatalog?: boolean;
+  freeCatalogOverridesClassification?: boolean;
 }
 
 /**
@@ -85,6 +112,7 @@ export function freeModelPolicyFor(connectionId: string | undefined): ProviderFr
     freeModelAliases: preset.freeModelAliases,
     freeIdSuffixes: preset.freeIdSuffixes,
     freeCatalog: preset.freeCatalog,
+    freeCatalogOverridesClassification: preset.freeCatalogOverridesClassification,
   };
 }
 
@@ -100,6 +128,19 @@ export const CONNECT_PROVIDER_PRESET_META: ProviderPresetMeta[] = [
     // for the default provider.
     freeCatalog: true,
     requiresApiKey: true,
+  },
+  {
+    id: 'moderado-cloud',
+    label: 'Moderado Cloud',
+    description: 'Use the public Moderado Gateway without an account, or sign in for account routes.',
+    kind: 'openai-compatible',
+    baseUrl: MODERADO_CLOUD_BASE_URL,
+    defaultModel: 'auto',
+    // Moderado Cloud only exposes free routes; the Gateway model catalog does
+    // not include per-route pricing metadata to identify them individually.
+    freeCatalog: true,
+    freeCatalogOverridesClassification: true,
+    requiresApiKey: false,
   },
   {
     id: 'openrouter',
@@ -213,6 +254,9 @@ export function isFreeModelOption(
   if (entry.pricing && Object.values(entry.pricing).some(price => price.trim() === '' || !Number.isFinite(Number(price)) || Number(price) !== 0)) return false;
   if (isFreeModelEntry(entry)) return true;
   const curated = classification.source !== 'heuristic';
+  // Most catalogs still honor curated model tiers. A provider can explicitly
+  // declare that its whole-catalog guarantee overrides generic classifications.
+  if (policy?.freeCatalog && (!curated || policy.freeCatalogOverridesClassification)) return true;
   if (curated && classification.accessTier !== 'free_trial' && classification.accessTier !== 'local') return false;
   if (policy?.freeCatalog) return true;
   if (isDeclaredFreeModelId(entry.id, policy)) return true;

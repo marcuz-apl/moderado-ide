@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "status": "pinned",
-  "recordedAt": "2026-09-30",
+  "recordedAt": "2026-10-07",
   "target": "windows-x64",
   "sources": {
     "vscodium": {
@@ -22,12 +22,12 @@
     },
     "moderado": {
       "repository": "https://github.com/marcuz-apl/moderado.git",
-      "tag": "v0.3.10",
-      "tagObject": "638008f99eb59209d0d2830b95d9b0cd2a09b225",
-      "commit": "a293c1d84d28d1b126fc7054a0f57011edc9d62c",
-      "version": "v0.3.10+260930e",
-      "role": "contracts-core-tools; Desktop owns Gateway/provider adapters, discovery, model policy, transport, and routing, adapting CLI v0.4.8 behavior without CLI provider code at runtime",
-      "verification": "Annotated tag object and peeled commit verified with git ls-remote and full Desktop-local clone. This is not the earlier 44251dce bootstrap snapshot."
+      "tag": "v0.4.8",
+      "tagObject": "8d9b75df038a3cd6764dcf11a218ca6d47fcb27c",
+      "commit": "d5e263ed0c9ba6715d0ce69aa640b9b9111931c8",
+      "version": "v0.4.8+261006d",
+      "role": "contracts-core-tools; IDE owns Gateway/provider adapters, discovery, model policy, transport, and routing, adapting CLI v0.4.8 behavior without CLI provider code at runtime",
+      "verification": "Annotated tag object and peeled commit verified with git ls-remote and an IDE-local clone. Contracts/core/tools diffs and MIT license reviewed; no new runtime dependencies or approval/jail policy changes. Owner requested v0.4.8 baseline on 2026-10-07."
     }
   },
   "buildUse": "Source identities are verified. Use these revisions for the Windows x64 build with branding/product.json as the Desktop product overlay."

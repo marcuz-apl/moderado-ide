@@ -5,7 +5,7 @@ param(
 
 # Verifies the release evidence for the current build:
 #   - every artifact named in build-manifest.json exists and matches its SHA-256
-#   - the manifest records the expected pinned revisions and Desktop VERSION
+#   - the manifest records the expected pinned revisions and IDE VERSION
 #   - the packaged editor carries Moderado identity, not VS Code or VSCodium
 #   - the agent extension is bundled and exports an activation contract
 #   - required third-party license notices are present
@@ -68,10 +68,10 @@ $editor = Join-Path $assetsPath '..\VSCode-win32-x64'
 $productPath = Join-Path $editor 'resources\app\product.json'
 if (Test-Path -LiteralPath $productPath) {
   $product = Get-Content -Raw -LiteralPath $productPath | ConvertFrom-Json
-  Add-Result 'identity:name' ($product.nameShort -eq 'Moderado Desktop') $product.nameShort
-  Add-Result 'identity:dataFolder' ($product.dataFolderName -eq '.moderado-desktop') $product.dataFolderName
-  Add-Result 'identity:urlProtocol' ($product.urlProtocol -eq 'moderado-desktop') $product.urlProtocol
-  Add-Result 'identity:mutex' ($product.win32MutexName -eq 'moderadodesktop') $product.win32MutexName
+  Add-Result 'identity:name' ($product.nameShort -eq 'Moderado IDE') $product.nameShort
+  Add-Result 'identity:dataFolder' ($product.dataFolderName -eq '.moderado-ide') $product.dataFolderName
+  Add-Result 'identity:urlProtocol' ($product.urlProtocol -eq 'moderado-ide') $product.urlProtocol
+  Add-Result 'identity:mutex' ($product.win32MutexName -eq 'moderadoide') $product.win32MutexName
   Add-Result 'identity:noUpdateChannel' ([string]::IsNullOrEmpty($product.updateUrl)) "updateUrl='$($product.updateUrl)'"
 
   # Distinct from upstream VS Code / VSCodium identifiers.
@@ -103,7 +103,7 @@ if (!$SkipExtension) {
   # The staged checkout is not evidence. Confirm the shipped archive actually
   # contains the agent, because a packaging-only rebuild can silently ship an
   # editor without it (the non-native extension task is skipped).
-  $zipPath = Join-Path $assetsPath "Moderado Desktop-win32-x64-$($lock.sources.vscodium.version).zip"
+  $zipPath = Join-Path $assetsPath "Moderado IDE-win32-x64-$($lock.sources.vscodium.version).zip"
   if (Test-Path -LiteralPath $zipPath) {
     Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
     $archive = [System.IO.Compression.ZipFile]::OpenRead($zipPath)

@@ -193,12 +193,12 @@ export async function authorizeGatewayInBrowser(options: GatewayBrowserOptions):
         if (incoming.method !== 'GET' || incoming.headers.host !== new URL(request.redirectUri).host) throw new Error('Gateway browser login callback did not match.');
         code = validateGatewayOAuthCallback(incoming.url ?? '', request);
       } catch (error) {
-        outgoing.writeHead(400).end('Login callback was rejected. Return to Moderado Desktop.');
+        outgoing.writeHead(400).end('Login callback was rejected. Return to Moderado IDE.');
         finish(error instanceof Error ? error : new Error('Gateway callback was rejected.'));
         return;
       }
       received = true; // Consume the callback before the asynchronous exchange.
-      outgoing.writeHead(200).end('Login callback received. Return to Moderado Desktop.');
+      outgoing.writeHead(200).end('Login callback received. Return to Moderado IDE.');
       void exchangeGatewayOAuthCode(code, request, options.fetchImpl, exchangeAbort.signal).then(
         (credential) => finish(undefined, credential), (error: unknown) => finish(error instanceof Error ? error : new Error('Gateway token exchange failed.')),
       );

@@ -25,7 +25,7 @@ $graphics.FillEllipse($accent, 181, 39, 33, 33)
 $png = [System.IO.MemoryStream]::new()
 $bitmap.Save($png, [System.Drawing.Imaging.ImageFormat]::Png)
 $bytes = $png.ToArray()
-$path = Join-Path $PSScriptRoot 'moderado-desktop.ico'
+$path = Join-Path $PSScriptRoot 'moderado-ide.ico'
 $file = [System.IO.File]::Create($path)
 $writer = [System.IO.BinaryWriter]::new($file)
 $writer.Write([uint16]0)

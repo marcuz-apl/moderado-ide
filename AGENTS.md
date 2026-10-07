@@ -1,14 +1,14 @@
-# Moderado Desktop Agent Guidelines
+# Moderado IDE Agent Guidelines
 
-These rules apply to this Desktop repository and its contributors. Read
+These rules apply to this IDE repository and its contributors. Read
 `PRD.md`, `docs/UPSTREAM.md`, and `docs/PROFILE.md` before implementation.
 
 ## 1. Scope and ownership
 
-- This is an independent Desktop project. Do not edit, reset, commit, tag, or
+- This is an independent IDE project. Do not edit, reset, commit, tag, or
   publish the sibling Moderado CLI repository while working here. Submit any
   necessary shared-engine or profile-format change as a separate, reviewed CLI
-  change, then advance Desktop's pinned source revision.
+  change, then advance IDE's pinned source revision.
 - Treat VSCodium and Code OSS as pinned upstream inputs. Keep downstream
   patches minimal and review each upstream refresh for license, security,
   behavior, and build changes.
@@ -36,14 +36,15 @@ meet the need.
   is an external process with the user's OS privileges. Do not describe it as
   jailed. Do not bypass built-in tool policy by giving model-directed actions
   raw editor filesystem or process APIs.
-- Desktop-owned provider code (`extensions/moderado-agent/src/provider-*.ts`,
+- IDE-owned provider code (`extensions/moderado-agent/src/provider-*.ts`,
   `model-router.ts`, `gateway-login.ts`) owns Gateway/provider adapters,
   presets, discovery, model policy, transport, and routing. It adapts CLI
   `v0.4.8` behavior without using CLI provider code at runtime. Contracts,
-  core, and tools stay at the existing pinned CLI source revision. Do not
+  core, and tools use the reviewed CLI `v0.4.8` source revision pinned in
+  `sources.lock.json`. Do not
   reintroduce a rule requiring provider transport, presets, or policy to come
   from the CLI source.
-- Desktop-owned code composes those packages and renders UI. A renderer or
+- IDE-owned code composes those packages and renders UI. A renderer or
   webview never holds provider secrets or grants its own tool permissions.
 
 All external input, stored profile data, webview messages, provider responses,
@@ -63,7 +64,7 @@ model statement as approval. Do not assume the current core validates a
 returned approval decision or enforces the timeout automatically.
 
 The CLI's current interactive handler can auto-approve non-MCP actions by
-default; this conflicts with its repository policy. Desktop's stricter default
+default; this conflicts with its repository policy. IDE's stricter default
 is intentional. Do not describe it as existing CLI parity or copy the handler
 without review.
 
@@ -79,7 +80,7 @@ approval, and explain the server's OS-level access in the UI.
 ## 5. Shared `~/.moderado` profile
 
 - Preserve known and unknown `config.json` fields. Never overwrite the file
-  with only Desktop fields, store new plaintext secrets there, or silently
+  with only IDE fields, store new plaintext secrets there, or silently
   migrate/delete existing data.
 - Use the same canonical workspace root and session schema as the pinned CLI
   when deriving session paths. Resolve Windows credentials through the same
@@ -109,9 +110,9 @@ approval, and explain the server's OS-level access in the UI.
 
 ## 7. Versioning
 
-The independent Desktop `VERSION` uses Alfazen's connected identifier
+The independent IDE `VERSION` uses Alfazen's connected identifier
 `v<m.n.p>+<yymmddc>` with a UTC date and daily counter. Commit subjects begin
 with that identifier and a Conventional Commit type. Before the first source
-commit, install and verify Desktop-local version hooks; do not reuse the CLI's
+commit, install and verify IDE-local version hooks; do not reuse the CLI's
 Git configuration. Major increments require the owner's explicit written
 approval. A `VERSION` value alone is not evidence of a published release.

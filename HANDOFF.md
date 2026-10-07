@@ -1,9 +1,98 @@
 # Project Handoff
 
-Updated: 2026-10-03 UTC
-Branch: master  
-Commit: `dec95db` plus the panel-rendering commit recorded below  
-Status: M1â€“M4 implemented and verified; sidebar/settings rendering fixed; M4 signing/publication not authorized
+Updated: 2026-10-07 UTC
+Branch: master
+Status: Source renamed **Moderado IDE** (`moderado-ide`) and baseline advanced
+and verified against CLI **v0.4.8**. Linux build stopped at the owner's request.
+Remote repository is renamed and authenticated. Next priority: push this
+checkpoint, then improve the existing Windows IDE GUI. Signing/publication remain unauthorized.
+
+## Current checkpoint (2026-10-07 UTC)
+
+- Owner confirmed Linux, macOS, and Windows editions, then paused Linux
+  packaging to prioritize repository naming and GUI work using the existing
+  Windows build. Source work remains in WSL; no Windows `D:` or sibling CLI
+  files were modified during this work.
+- Local repository is now `/home/marcu/projects/moderado-ide`. A temporary
+  `/home/marcu/projects/moderado-desktop` symlink preserves the currently open
+  workspace. Reopen the IDE at the new path; the old-path alias can then be
+  removed. Remote is now `https://github.com/marcuz-apl/moderado-ide`; `origin` points
+  there and authenticated push preflight passes. The source commit/push follow
+  this checkpoint update.
+- Product/build/documentation names use **Moderado IDE** / `moderado-ide`,
+  including the executable, protocol, editor data-folder and OS identifiers.
+  Existing installer GUIDs are preserved. Shared agent data remains
+  `~/.moderado`, including its reserved `desktop/` state directory; Windows
+  credential targets remain unchanged. No profile migration was performed.
+- Actual pinned CLI source is now **v0.4.8**, commit
+  `d5e263ed0c9ba6715d0ce69aa640b9b9111931c8`, annotated tag object
+  `8d9b75df038a3cd6764dcf11a218ca6d47fcb27c`, package version
+  `v0.4.8+261006d`. Pins were independently checked with `git ls-remote`
+  and an IDE-local cached clone. Contracts/core/tools and MIT license were
+  reviewed: no new runtime dependencies or approval/jail boundary changes.
+  Gateway/provider transport and routing remain IDE-owned. Historical plans
+  now carry superseded-baseline notices rather than rewritten old evidence.
+- `node scripts/vendor-moderado.mjs` exports the reviewed snapshot without
+  editing the CLI checkout and records 56 files in `vendor/moderado/VENDORED.json`.
+  Vendored MIT license is preserved. Windows vendoring also exports that license.
+  Provider package source remains vendored for the fake adapter; production
+  transport/catalog/routing continue to use the IDE-owned implementation.
+- New core Gateway AUTO routing asks `classifyModel('auto')` directly, bypassing
+  the IDE router's old special selection path. A failing offline test caught
+  lost tool-support metadata; the small router fix preserves confirmed Free
+  AUTO metadata. Additional fake-provider regressions cover Gateway history
+  preservation, omission of a client output-token default, and server-owned
+  retry/fallback. Default approvals/request-ID/deadline protections remain.
+- Verification from this WSL source tree:
+  - `npm --prefix vendor/moderado run build`: exit 0.
+  - Extension `npm test -- test/model-router.test.ts test/host.test.ts`:
+    50/50 pass after demonstrating the original failures.
+  - Extension full `npm test`: **295 pass / four Windows-only skips** across
+    14 files. `npm run typecheck` and `npm run compile`: exit 0, 510 KiB bundle.
+  - Upstream v0.4.8 contracts/core/tools tests run offline from isolated cached
+    copies against the actual vendored source: **169/169 across 19 files**.
+    Command: `node extensions/moderado-agent/node_modules/vitest/vitest.mjs run
+    --root .cache/upstream-check --config .cache/upstream-check/vitest.config.mjs`.
+    Log: `.cache/upstream-v048-tests.log`. No model calls or real-profile writes.
+  - `node --test scripts/test/build-linux.test.mjs`: **4/4 pass**. Tests cover
+    renamed branding, missing agent/native files, stale preparation and stale
+    agent rejection. Bundle freshness compares manifest JSON semantically
+    because upstream packaging changes whitespace, while bundle bytes remain exact.
+  - `node --check` on Linux build/smoke/vendor scripts and `git diff --check`:
+    pass. A focused independent read-only final source review found no blocker.
+- Desktop-local Git hooks are configured with
+  `git config --local core.hooksPath .githooks`; Linux executable bits were
+  restored. Shell syntax checks and an isolated fixture commit verified the
+  automatic VERSION counter and Conventional Commit prefix. No CLI Git
+  configuration was reused.
+- Added reusable WSL build/vendoring tooling. User installed Linux system
+  prerequisites; pinned Node 24.18.0 archive and local header archive were
+  SHA-256 verified. Initial preparation recovered from network timeouts by
+  installing verified headers through node-gyp's `--tarball` option. Native
+  dependencies use the pinned upstream Chromium/Electron toolchain.
+- **Historical local Linux evidence, before the v0.4.8 refresh:** prepack,
+  policy generation and Linux packing succeeded under the new product name.
+  Five native modules loaded through packaged Electron. The initial probe
+  needed `NODE_PATH` set to the packaged `node_modules.asar`; it was a probe
+  resolution issue. An isolated real editor-host test activated the packaged
+  agent, registered all seven commands, completed one fake-provider turn and
+  saved one fixture session. Result: `.cache/linux-hostcheck-0rVl1a/result.json`.
+  This artifact still contains the previous engine snapshot and is not evidence
+  of a finished v0.4.8 Linux build.
+- **Current Linux build is stopped**, not complete. The v0.4.8 build reached
+  source compilation and was terminated at the owner's explicit request.
+  Log: `.cache/build-linux-ide-v048.log`. No final v0.4.8 Linux archive,
+  checksum manifest or newly built Windows/macOS package is claimed. GUI
+  improvement has not started. No signing, publishing or live inference occurred.
+- Initial Git push preflight lacked authentication, and the first browser
+  authorization returned HTTP 500. The owner then authenticated GitHub in WSL.
+  Admin access was verified, `gh api --method PATCH ... -f name=moderado-ide`
+  successfully renamed the remote, `git remote set-url origin` updated this
+  checkout, and `gh auth setup-git --hostname github.com` enabled the Git helper.
+  `git fetch origin` confirmed no history divergence; authenticated
+  `git push --dry-run origin HEAD:master` passed. Source commit/push are authorized.
+
+Historical records below retain original names, artifact paths and outcomes.
 
 ## Summary
 
@@ -756,3 +845,62 @@ published or signed.
   removing trailing whitespace. Desktop-local `.githooks` were active at
   `.githooks`; the design commit ran them and produced connected version
   `v0.1.0+2610061`.
+
+## Windows build resumed from WSL (2026-10-07 UTC)
+
+- Built Windows x64 `v0.1.0+2610073` from commit `4360f1df178670cfc42ddf83940976c951ea7082`
+  using Windows PowerShell invoked from WSL. The prepared editor checkout is
+  `D:\projects\moderado-desktop\.cache\vscodium`; this WSL checkout has no
+  prepared editor sources. Tracked contents matched after CRLF normalization
+  before the WSL-only test correction below. No sibling CLI files were modified.
+- WSL commands: `npm ci` in `vendor/moderado` and
+  `extensions/moderado-agent`, then vendor `npm run build`, extension
+  `npm test`, `npm run typecheck`, and `npm run compile`. Builds/typecheck exit 0;
+  bundle 507 KiB. Initial tests failed twice because Windows backslashes are
+  literal filename characters on Linux. Changed only those traversal test
+  inputs to portable forward slashes. `npm test -- test/host.test.ts` then
+  passed 29/29; full suite passed 292 with four Windows-only cases skipped.
+- Windows commands, from `D:\projects\moderado-desktop`:
+  `$env:MODERADO_TSGO_CONCURRENCY = '2'; .\scripts\build-m1.ps1` exited 0;
+  extension tests passed 296/296. Extension `npm run typecheck` also exited 0.
+- The first packaged-host launch exposed missing
+  `@vscodium/native-keymap/build/Release/keymapping.node` in the prepared
+  dependency tree. Running `node install.js` in that installed package failed
+  because its checksum parser does not strip the `*` binary-file marker on
+  Windows checksum entries. In the ignored build cache only, backed up
+  `checksum.txt` as `checksum.txt.original` and replaced
+  ` *native-keymap-` with `  native-keymap-`, preserving the expected hashes.
+  With `$env:npm_config_build_from_source_native_keymap = 'false'`,
+  `node install.js` then downloaded and verified the pinned binary successfully.
+  This is a local preparation workaround, not a committed upstream fix.
+- After verifying the completed prepack still contained
+  `.build/extensions/moderado-agent/dist/agent-core.js`, ran
+  `.\scripts\build-m1.ps1 -PackingOnly` to repackage the restored dependency;
+  exit 0. Log: `.cache/build-native-repack.log`. The first attempt to redirect
+  output inside Windows PowerShell aborted on an npm stderr notice; the
+  successful rerun redirected output from the WSL shell instead.
+- Offline real-editor check:
+  `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+  D:\projects\moderado-desktop\.cache\build-hostcheck\run.ps1`.
+  Uses isolated profile/user-data/workspace directories and the packaged agent
+  as the development-extension path. Result `.cache/build-hostcheck/result.json`:
+  agent active, seven commands registered, session listing valid. The initial
+  probe incorrectly expected `listSessions()` to return an array; corrected
+  it to inspect `{ sessions, invalid }` and reran successfully. No model call.
+- `.\scripts\gen-provenance.ps1` and `.\scripts\verify-release.ps1` exited 0;
+  all 28 checks passed in the Windows checkout. Additional ZIP inspection
+  confirmed the agent and native keyboard binary match the packaged files,
+  with `DesktopOpenAIAdapter`, `DesktopModelRouter`, and Gateway login present.
+
+Final artifacts under `D:\projects\moderado-desktop\.cache\vscodium\assets`:
+
+| Artifact | Bytes | SHA-256 |
+| --- | --- | --- |
+| `Moderado Desktop-win32-x64-1.135.06055.zip` | 312902751 | `A4A5DB5C220096E0773833590EDF572A3EB2DE50088F70E42ED30C28C0803286` |
+| `Moderado DesktopSetup-x64-1.135.06055.exe` | 213157106 | `8BD09EEA6D42C37E552A10F8D63559D8A21ECFC1F9CAA5ECFBFF3224252CAE47` |
+| `Moderado DesktopUserSetup-x64-1.135.06055.exe` | 213157476 | `A7B49F452F110D66E0ADA8709F9F7C893869DEE8F9A80EB12F74A6BC875DA3DC` |
+
+Unsigned and unpublished. No fresh clean-account install/uninstall, visual
+Gateway/settings inspection, or live inference is claimed for these artifacts.
+The portable traversal test correction and this handoff remain uncommitted
+in the WSL checkout; the verified Windows build uses the recorded clean commit.

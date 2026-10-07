@@ -9,6 +9,11 @@ const makeRouter = (inventory: ModelInventoryEntry[], providerId = 'openrouter',
   new DesktopModelRouter({ providerId, inventory, allowPaid, allowUnknown, requireTools: true });
 
 describe('Desktop model routing', () => {
+  it('classifies Gateway AUTO with free tool support when the v0.4.8 core asks directly', () => {
+    expect(makeRouter([], 'moderado-cloud').classifyModel('auto')).toMatchObject({ accessTier: 'free_trial', toolSupport: 'supported' });
+    expect(makeRouter([], 'openrouter').classifyModel('auto')).toMatchObject({ accessTier: 'unknown', toolSupport: 'unknown' });
+  });
+
   it('extends the injected engine router contract', () => {
     expect(makeRouter([])).toBeInstanceOf(Router);
   });

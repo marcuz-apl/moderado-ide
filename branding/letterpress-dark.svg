@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
 <!--
-  Moderado Desktop watermark, dark theme.
+  Moderado IDE watermark, dark theme.
 
   Overlays src/vs/workbench/browser/parts/editor/media/letterpress-dark.svg, the
   mark shown in the centre of an empty editor area on a dark theme. See

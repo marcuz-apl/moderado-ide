@@ -1,5 +1,13 @@
 # Moderado Desktop Gateway and Provider Design
 
+> **Historical baseline, superseded October 7, 2026:** The owner authorized
+> Moderado IDE to advance contracts/core/tools and the vendored source snapshot
+> to CLI `v0.4.8` (`d5e263ed0c9ba6715d0ce69aa640b9b9111931c8`).
+> Instructions below to retain `v0.3.10` or forbid vendoring `v0.4.8` are
+> superseded. IDE-owned provider transport, presets, and policy remain
+> IDE-owned; CLI provider code is not used at runtime. Current guidance is in
+> `PRD.md`, `AGENTS.md`, and `docs/UPSTREAM.md`.
+
 **Date:** 2026-10-06
 **Status:** Approved by owner on 2026-10-06
 **Reference behavior:** Moderado CLI `v0.4.8`

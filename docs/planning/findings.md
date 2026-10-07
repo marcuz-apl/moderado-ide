@@ -1,5 +1,9 @@
 # Bootstrap findings
 
+> Historical findings from the initial project baseline. The CLI `v0.3.10`
+> reference below is superseded by the owner-approved October 7, 2026 update
+> to CLI `v0.4.8`; see `sources.lock.json` and `docs/UPSTREAM.md`.
+
 - CLI baseline: `v0.3.10+260930f` at commit `44251dce6cca0a3385196284c7b993e8ee964e0f` when inspected; this is a reference baseline, not a Desktop dependency lock.
 - Core is provider-agnostic and receives providers, tools, approval handlers, policy, history, and host event listeners through `AgentRunOptions` in `packages/core/src/agent.ts`.
 - Provider presets and free-model policy live in `packages/providers/src/presets.ts`.

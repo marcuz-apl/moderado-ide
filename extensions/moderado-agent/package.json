@@ -1,7 +1,7 @@
 {
   "name": "moderado-agent",
   "displayName": "Moderado Agent",
-  "description": "Moderado's provider-independent agent, hosted inside Moderado Desktop.",
+  "description": "Moderado's provider-independent agent, hosted inside Moderado IDE.",
   "version": "0.1.0",
   "publisher": "moderado",
   "license": "MIT",

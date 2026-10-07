@@ -1,5 +1,13 @@
 # Desktop Gateway and Provider Integration Implementation Plan
 
+> **Historical baseline, superseded October 7, 2026:** The owner authorized
+> Moderado IDE to advance contracts/core/tools and the vendored source snapshot
+> to CLI `v0.4.8` (`d5e263ed0c9ba6715d0ce69aa640b9b9111931c8`).
+> Instructions below to retain `v0.3.10` or forbid vendoring `v0.4.8` are
+> superseded. IDE-owned provider transport, presets, and policy remain
+> IDE-owned; CLI provider code is not used at runtime. Current guidance is in
+> `PRD.md`, `AGENTS.md`, and `docs/UPSTREAM.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a Cline-inspired GUI for Moderado Gateway and direct provider model selection, with Desktop-owned transport and routing that follows CLI `v0.4.8` behavior.

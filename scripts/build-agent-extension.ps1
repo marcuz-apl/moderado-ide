@@ -34,7 +34,7 @@ try {
 
 $checkoutPath = (Resolve-Path -LiteralPath $Checkout).Path
 if (!$checkoutPath.StartsWith($root + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase)) {
-  throw 'Checkout must be inside the Desktop workspace.'
+  throw 'Checkout must be inside the IDE workspace.'
 }
 $target = Join-Path $checkoutPath 'vscode\extensions\moderado-agent'
 if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Recurse -Force }

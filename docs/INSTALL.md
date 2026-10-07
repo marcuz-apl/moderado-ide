@@ -1,24 +1,23 @@
-# Installing Moderado Desktop
+# Installing Moderado IDE
 
 > **Status: no release exists.** Everything below describes a local, unsigned
 > build produced from pinned source. There is no download, no signature, and no
 > update channel. See [HANDOFF.md](HANDOFF.md) for what has actually been
 > verified.
 
-## Supported platform
+## Target platforms and verified evidence
 
 | | |
 | --- | --- |
-| Platform | Windows x64 only |
+| Targets | Linux, macOS, and Windows; Linux x64 in WSL is the current priority |
+| Existing artifact evidence | Windows x64; Linux and macOS require separate build and host verification |
 | Editor base | Code OSS `1.135.0`, built through VSCodium `1.135.06055` |
-| Agent packages | Moderado CLI `v0.3.10` (`a293c1d8…`) |
+| Agent packages | Moderado CLI `v0.4.8` (`d5e263ed…`, `v0.4.8+261006d`) |
 | Architectures | x64 only; arm64 is not built or tested |
 
-macOS, Linux, and Windows/WSL cross-home profile sharing are explicitly **not**
-supported in this milestone. Windows and WSL have different home directories, so
-they do not share a `~/.moderado` profile.
+Linux development starts in WSL; follow the [Linux build instructions](../README.md#build-the-linux-editor-in-wsl). A completed Linux or macOS build is not claimed here. Existing Windows evidence predates the IDE rename and CLI `v0.4.8` source update; it does not verify these new artifacts. Windows/WSL cross-home profile sharing is outside this milestone: the two environments have different home directories and do not automatically share a `~/.moderado` profile.
 
-## Building locally
+## Building Windows locally
 
 Prerequisites: Git Bash, Node 24.18.0, Python 3.11, jq, 7-Zip, Rust, and Visual
 Studio Build Tools with the x64 Spectre libraries.
@@ -34,15 +33,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-m1.ps1
 fetches the pinned Code OSS revision, and installs its dependencies. Re-running it
 fails on purpose rather than re-cloning over a prepared checkout.
 
-## What you get
+## Windows artifact names
 
-`build-m1.ps1` writes to `.cache/vscodium/assets/`:
+The renamed Windows build is configured to write the following files to `.cache/vscodium/assets/`; these names do not imply that renamed artifacts have been built:
 
 | File | What it is |
 | --- | --- |
-| `Moderado Desktop-win32-x64-<version>.zip` | Portable editor, no installer |
-| `Moderado DesktopSetup-x64-<version>.exe` | Per-machine installer (needs elevation) |
-| `Moderado DesktopUserSetup-x64-<version>.exe` | Per-user installer, no elevation |
+| `Moderado IDE-win32-x64-<version>.zip` | Portable editor, no installer |
+| `Moderado IDESetup-x64-<version>.exe` | Per-machine installer (needs elevation) |
+| `Moderado IDEUserSetup-x64-<version>.exe` | Per-user installer, no elevation |
 | `build-manifest.json` | `VERSION`, both upstream revisions, SHA-256 and size per artifact |
 
 The build script verifies both editor revisions against `sources.lock.json`
@@ -59,8 +58,6 @@ To re-check an existing build without rebuilding:
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-release.ps1
 ```
-
-## Signing
 
 ## Signing
 
@@ -85,7 +82,7 @@ plausible-looking file.
 what was produced; it does not prove it to a third party. There is still no
 Authenticode signature.
 
-The build now also copies `LICENSE.txt` (Code OSS, MIT) and the Desktop license
+The build now also copies `LICENSE.txt` (Code OSS, MIT) and the IDE license
 into the portable editor. Upstream packaging ships Electron's
 `LICENSES.chromium.html` but not the MIT text, so the package previously
 redistributed MIT-licensed code with no copy of that license.
@@ -127,7 +124,7 @@ Not working yet:
 - **No signing or update channel.** Provenance and third-party notices are
   generated and verified (M5), but nothing is signed or published.
 - **Chat view only.** There is no diff renderer; previews appear as text.
-- **Profile coordination is one-sided.** Desktop writes `config.json` under a
+- **Profile coordination is one-sided.** IDE writes `config.json` under a
   lock and detects conflicting CLI changes, but the CLI does not take that lock,
   so a simultaneous CLI write can still be lost.
 
@@ -136,8 +133,8 @@ Not working yet:
 | What | Where |
 | --- | --- |
 | Moderado agent config, sessions, skills | `%USERPROFILE%\.moderado\` (shared with the CLI) |
-| Editor layout, extensions, caches | `%USERPROFILE%\.moderado-desktop\` |
-| Editor shared storage | `%USERPROFILE%\.moderado-desktop-shared\` |
+| Editor layout, extensions, caches | `%USERPROFILE%\.moderado-ide\` |
+| Editor shared storage | `%USERPROFILE%\.moderado-ide-shared\` |
 
 Editor state is deliberately separate from the agent profile, and neither
 collides with VS Code or VSCodium.

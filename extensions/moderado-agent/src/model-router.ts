@@ -20,6 +20,9 @@ export class DesktopModelRouter extends Router {
   }
 
   override classifyModel(modelId: string, isLocalProfile = false, supportedParameters?: string[]): ModelClassification {
+    if (this.defaults.providerId === 'moderado-cloud' && modelId === 'auto') {
+      return { modelId, accessTier: 'free_trial', toolSupport: 'supported', source: 'official_metadata', notes: 'Gateway selects and falls back between routes.' };
+    }
     const entry = this.inventory.find((candidate) => candidate.id === modelId) ?? { id: modelId };
     const parameters = supportedParameters ?? ('supported_parameters' in entry ? entry.supported_parameters : undefined);
     // Only exact official entries supply tool evidence from the engine table.
@@ -52,7 +55,7 @@ export class DesktopModelRouter extends Router {
       return {
         selectedModel: {
           id: 'auto', ownedBy: 'moderado-cloud',
-          classification: { modelId: 'auto', accessTier: 'free_trial', toolSupport: 'supported', source: 'official_metadata', notes: 'Gateway selects and falls back between routes.' },
+          classification: this.classifyModel('auto'),
         },
         rankedCandidates: [],
       };

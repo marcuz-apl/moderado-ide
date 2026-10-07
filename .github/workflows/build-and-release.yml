@@ -160,7 +160,7 @@ jobs:
       - name: Upload build evidence
         uses: actions/upload-artifact@v4
         with:
-          name: moderado-desktop-evidence
+          name: moderado-ide-evidence
           if-no-files-found: error
           retention-days: 30
           path: |

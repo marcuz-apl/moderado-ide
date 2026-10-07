@@ -6,7 +6,7 @@ param(
 # Vendors the pinned Moderado packages from the sibling CLI repository into this
 # repository. The CLI working tree is never modified: content is exported with
 # `git archive` at the immutable revision recorded in sources.lock.json, so a
-# moved CLI HEAD cannot silently change what Desktop bundles.
+# moved CLI HEAD cannot silently change what IDE bundles.
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $lock = Get-Content -Raw -LiteralPath (Join-Path $root 'sources.lock.json') | ConvertFrom-Json
@@ -32,7 +32,7 @@ if ($LASTEXITCODE -ne 0 -or $expected -ne 'commit') {
 
 $target = Join-Path $root $Output
 if (Test-Path -LiteralPath $target) {
-  # Selective clean: remove only upstream-exported content. The Desktop-owned
+  # Selective clean: remove only upstream-exported content. The IDE-owned
   # npm wrapper (package.json/package-lock.json) must survive vendoring —
   # wiping the whole directory deletes the manifest and the next `npm ci`
   # fails with ENOENT (this exact CI failure). node_modules/dist are ignored
@@ -59,16 +59,18 @@ if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging -Recurs
 # because piping `git archive` straight into `tar` is unreliable on Windows.
 $archive = Join-Path $root '.cache\moderado-pinned.tar'
 if (Test-Path -LiteralPath $archive) { Remove-Item -LiteralPath $archive -Force }
-& git -C $repo archive --format=tar --output=$archive $revision packages package.json tsconfig.base.json
+& git -C $repo archive --format=tar --output=$archive $revision packages package.json tsconfig.base.json LICENSE
 if ($LASTEXITCODE -ne 0) { throw 'Moderado source export failed.' }
 & tar -xf $archive -C $staging
 if ($LASTEXITCODE -ne 0) { throw 'Moderado source extraction failed.' }
 Remove-Item -LiteralPath $archive -Force
 
+Copy-Item -LiteralPath (Join-Path $staging 'LICENSE') -Destination (Join-Path $target 'LICENSE') -Force
+
 $stagedPackages = Join-Path $staging 'packages'
 if (!(Test-Path -LiteralPath $stagedPackages)) { throw 'Pinned export did not contain a packages directory.' }
 
-# Test files are excluded: Desktop re-tests the vendored behaviour from its own
+# Test files are excluded: IDE re-tests the vendored behaviour from its own
 # suite and does not ship CLI tests.
 Get-ChildItem -LiteralPath $stagedPackages -Recurse -Directory |
   Where-Object { $_.Name -in @('test', 'tests', '__tests__') } |

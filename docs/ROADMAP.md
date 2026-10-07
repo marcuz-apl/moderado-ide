@@ -1,7 +1,9 @@
-# Moderado Desktop roadmap
+# Moderado IDE roadmap
 
 This is an ordered delivery sequence, not a claim that a build exists. Each
 milestone needs a reviewable artifact and its checks before the next begins.
+
+Moderado IDE targets Linux, macOS, and Windows. Current work prioritizes Linux x64 in WSL, keeping the checkout and build cache in the Linux filesystem. The Windows milestone evidence below predates the rename; each renamed edition needs its own build and host verification. The owner authorized advancing contracts/core/tools to CLI `v0.4.8` on October 7, 2026; earlier milestone evidence does not verify this updated source baseline.
 
 ## M0 — Independent project foundation (documentation scaffold)
 
@@ -14,7 +16,7 @@ repository is independent, and no application is represented as shipped.
 
 ## M1 — Reproducible Windows editor build
 
-- Pin VSCodium, Code OSS, and Moderado source revisions in a Desktop-owned
+- Pin VSCodium, Code OSS, and Moderado source revisions in a IDE-owned
   manifest; preserve license notices.
 - Produce a Windows x64 editor with distinct Moderado identity and isolated
   editor application data.
@@ -34,11 +36,12 @@ repository is independent, and no application is represented as shipped.
 ## M2 status (integrated; agent wiring verified)
 
 `vendor/moderado/` holds the pinned CLI agent packages exported at the
-immutable revision in `sources.lock.json` (commit `a293c1d…`, 53 files, tree hash
-recorded in `vendor/moderado/VENDORED.json`). The export uses `git archive`, so
+immutable CLI `v0.4.8` revision in `sources.lock.json` (commit
+`d5e263ed0c9ba6715d0ce69aa640b9b9111931c8`, package version
+`v0.4.8+261006d`; export details are recorded in `vendor/moderado/VENDORED.json`). The export uses `git archive`, so
 the sibling CLI working tree is never modified.
 
-`extensions/moderado-agent/` bundles those packages with Desktop's host into a
+`extensions/moderado-agent/` bundles those packages with IDE's host into a
 single CommonJS bundle for the editor host. It provides the chat view, the
 fail-closed approval boundary, model selection, and session persistence against
 the shared `~/.moderado` profile. Verification is recorded in
@@ -57,10 +60,12 @@ release, Credential Manager references, and a coordinated `config.json` writer.
 - Protect malformed and older profile data with validated, recoverable
   migrations.
 
-## M3 status (implemented; verified against the pinned CLI)
+## M3 status (implemented; prior baseline verified)
 
-Desktop now reads and writes the shared `~/.moderado` profile through a
-canonical, coordinated path. Round-trip tests run against the *actual* CLI
+IDE now reads and writes the shared `~/.moderado` profile through a
+canonical, coordinated path. The CLI `v0.4.8` source update requires rerunning
+the compatibility suite before claiming verification of the current baseline.
+Round-trip tests run against the *actual* CLI
 `dist` from the pinned revision rather than a hand-written copy of its schema,
 so they would fail if the two editions diverged.
 
@@ -78,9 +83,9 @@ Delivered here:
   corrupt-record reporting, and a checked save that refuses to overwrite a
   session another process changed.
 
-**Still open:** the CLI does not take Desktop's lock, so the coordination
-protects Desktop's own writes and detects the CLI's, but it cannot prevent a
-CLI write that lands between Desktop's read and its write. Making both editions
+**Still open:** the CLI does not take IDE's lock, so the coordination
+protects IDE's own writes and detects the CLI's, but it cannot prevent a
+CLI write that lands between IDE's read and its write. Making both editions
 follow one protocol needs a separate, reviewed change in the CLI repository,
 which this project must not make.
 
@@ -92,8 +97,7 @@ which this project must not make.
 - Document installation and supported platform/profile combinations.
 - Publish only after explicit owner authorization.
 
-MacOS, Linux, and Windows/WSL cross-home sharing follow separate evidence-backed
-milestones after the Windows release gate.
+Linux x64 in WSL is the current build priority. macOS and Windows releases require separate evidence-backed platform gates; Windows/WSL cross-home sharing remains a separate compatibility decision.
 
 ## M4 status (evidence complete; release not authorized)
 
@@ -116,7 +120,7 @@ has not been requested or performed.
 
 ## M5 — Provenance and license compliance
 
-Everything here is Desktop-owned and verifiable without publishing anything.
+Everything here is IDE-owned and verifiable without publishing anything.
 Signing and the update channel are explicitly out of scope for M5 because both
 require owner authorization to distribute anything.
 
