@@ -32,9 +32,9 @@ if ($LASTEXITCODE -ne 0) { throw 'Python 3.11 is required.' }
 $env:PYTHON = $python
 $env:npm_config_python = $python
 $vswhere = 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe'
-$vs = (& $vswhere -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath | Select-Object -First 1)
+$vs = (& $vswhere -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath | Select-Object -First 1).Trim()
 if (!$vs) { throw 'Visual Studio C++ Build Tools are required.' }
-$env:npm_config_vs2022_install = $vs
+$env:vs2022_install = $vs
 & $bash -c "cd '$posixCheckout/vscode' && npm ci"
 if ($LASTEXITCODE -ne 0) { throw 'Pinned Code OSS dependency installation failed.' }
 Write-Output 'Prepared pinned source. Run scripts/build-m1.ps1 next.'
