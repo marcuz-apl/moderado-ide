@@ -143,7 +143,7 @@ function modelOptions(state: SettingsState): string {
   return tabModels(state)
     .map(
       (model) =>
-        `<option value="${escapeHtml(model.id)}"${model.id === state.defaultModel ? ' selected' : ''}>${escapeHtml(`${model.isFree ? '★ ' : ''}${model.id} — ${model.accessTier}`)}</option>`,
+        `<option value="${escapeHtml(model.id)}"${model.id === state.defaultModel ? ' selected' : ''}>${escapeHtml(`${model.isFree ? '★ ' : ''}${model.id === 'auto' ? state.preset === 'moderado-cloud' ? 'AUTO · Gateway routing' : 'AUTO · Free-first' : model.id} — ${model.accessTier}`)}</option>`,
     )
     .join('');
 }
@@ -179,27 +179,21 @@ function settingsNav(page: string): string {
   ).join('');
 }
 
-/** The model cards, as a name/description/free-badge list rather than a dropdown. */
-function modelCards(state: SettingsState): string {
+/** A short empty state or metadata for the selected model, never the whole catalog. */
+function selectedModelDetails(state: SettingsState): string {
   const shown = tabModels(state);
   if (!shown.length) {
     return `<p class="note">${state.models.length ? (paidTab(state) ? 'No paid models listed. Enable paid models or load models first.' : 'No free models on this provider.') : 'No models loaded yet.'}</p>`;
   }
-  return shown
-    .map(
-      (model) => `<button type="button" class="model-card${model.id === state.defaultModel ? ' on' : ''}" data-model="${escapeHtml(model.id)}" aria-pressed="${model.id === state.defaultModel}"${state.profileError ? ' disabled' : ''}>
-        <span class="model-top">
-          <span class="model-name">${escapeHtml(model.id === 'auto' ? state.preset === 'moderado-cloud' ? 'AUTO · Gateway routing' : 'AUTO · Free-first' : model.id)}</span>
-          ${model.isFree ? '<span class="model-badge">FREE</span>' : `<span class="model-badge paid">${escapeHtml(model.accessTier)}</span>`}
-        </span>
-        <span class="model-desc">${model.id === 'auto' ? state.preset === 'moderado-cloud' ? 'Gateway selects a free route.' : 'Ranks eligible models and permits fallback.' : escapeHtml(model.accessTier) + (model.isFree ? ' · no cost' : ' · may cost')}</span>
-        ${model.provider ? `<span class="model-desc">Provider: ${escapeHtml(model.provider)}</span>` : ''}
-        ${model.ownedBy ? `<span class="model-desc">Owner: ${escapeHtml(model.ownedBy)}</span>` : ''}
-        ${model.capabilities?.length ? `<span class="model-desc">Capabilities: ${escapeHtml(model.capabilities.join(', '))}</span>` : ''}
-        ${model.dataNote ? `<span class="model-desc">${escapeHtml(model.dataNote)}</span>` : ''}
-      </button>`,
-    )
-    .join('');
+  const model = shown.find(entry => entry.id === state.defaultModel);
+  if (!model) return '';
+  return `<div class="selected-model-details">
+    ${model.id === 'auto' ? `<p class="note">${state.preset === 'moderado-cloud' ? 'Gateway selects a free route.' : 'Ranks eligible models and permits fallback.'}</p>` : ''}
+    ${model.provider ? `<p class="note">Provider: ${escapeHtml(model.provider)}</p>` : ''}
+    ${model.ownedBy ? `<p class="note">Owner: ${escapeHtml(model.ownedBy)}</p>` : ''}
+    ${model.capabilities?.length ? `<p class="note">Capabilities: ${escapeHtml(model.capabilities.join(', '))}</p>` : ''}
+    ${model.dataNote ? `<p class="note">${escapeHtml(model.dataNote)}</p>` : ''}
+  </div>`;
 }
 
 /**
@@ -277,10 +271,8 @@ export function settingsPaneHtml(state: SettingsState): string {
     <select id="settings-model-select"${disabled}>${modelOptions(state)}</select>
     <label class="sr-only" for="settings-model">Default model</label>
     <select id="settings-model" class="sr-only"${disabled}>${modelOptions(state)}</select>
-    <label for="settings-model-search">Search models</label>
-    <input id="settings-model-search" type="search" placeholder="Model, provider, or capability"${disabled} />
     <p class="note">Selected model: <strong>${escapeHtml(state.defaultModel || 'No model selected')}</strong></p>
-    ${modelCards(state)}
+    ${selectedModelDetails(state)}
     <p class="summary">
       <span>${state.models.filter((m) => m.isFree).length} free</span>
       <span>${eligibleModels(state).length} listed</span>

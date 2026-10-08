@@ -1,44 +1,40 @@
 name: build-and-release
 
-# Publishing is OFF by default and cannot run without an explicit dispatch and,
-# on a public repository, a real code signature. See the `publish` job guard.
+# Installer builds are owner-triggered. Artifacts stay in Actions; release
+# publishing is hard-disabled and carries no write permission or signing secrets.
 on:
-  push:
-    branches: [master]
-    tags: ['v*']
-  pull_request:
-    branches: [master]
   workflow_dispatch:
     inputs:
-      publish:
-        description: 'Create a GitHub Release from these artifacts'
-        type: boolean
-        default: false
-      allow_unsigned_publication:
-        description: >-
-          DANGER. Publish even though the artifacts are unsigned. On a public
-          repository this means SmartScreen warnings for every user and a real
-          risk of malware-flagging. Only use for a private, trusted audience.
-        type: boolean
-        default: false
+      platform:
+        description: 'Installer platforms'
+        type: choice
+        options: [both, windows, macos]
+        default: both
+      macos_arch:
+        description: 'macOS architectures (Windows is x64)'
+        type: choice
+        options: [both, arm64, x64]
+        default: both
 
 permissions:
   contents: read
 
 env:
+  # Exact Code OSS sources.lock.json revision .nvmrc: 24.18.0.
   NODE_VERSION: '24.18.0'
   PYTHON_VERSION: '3.11'
 
 jobs:
-  build:
+  windows:
     name: Build and verify (Windows x64)
+    if: ${{ inputs.platform == 'both' || inputs.platform == 'windows' }}
     runs-on: windows-2022
-    timeout-minutes: 90
+    timeout-minutes: 180
     permissions:
       contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0 # build-m1.ps1 records the commit; tags come from here
 
@@ -52,13 +48,13 @@ jobs:
           }
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Set up Python 3.11
         # prepare-m1.ps1 hard-requires `py -3.11`; hosted images default to 3.13+.
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -71,22 +67,26 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'choco install failed.' }
           if (-not (Test-Path 'C:\Program Files\7-Zip\7z.exe')) { throw '7-Zip not found after install.' }
 
-      - name: Report Visual Studio and Spectre availability
-        # Native modules build against Spectre. If it is missing the build dies
-        # deep in native compilation with a misleading error, so report it early.
+      - name: Ensure Visual Studio C++ and Spectre prerequisites
         shell: pwsh
         run: |
           $vswhere = 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe'
-          $vs = & $vswhere -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath | Select-Object -First 1
-          if (-not $vs) { throw 'Visual Studio C++ Build Tools are missing on this runner.' }
-          Write-Host "VS: $vs"
-          $spectre = Get-ChildItem -Path (Join-Path $vs 'VC\Tools\MSVC') -Recurse -Directory -Filter spectre -ErrorAction SilentlyContinue
-          if (-not $spectre) {
-            Write-Warning 'Spectre libraries are absent; native extensions may fail to compile.'
-            Write-Host 'spectre: MISSING'
-          } else {
-            Write-Host "spectre: $($spectre[0].FullName)"
+          $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath | Select-Object -First 1
+          if (-not $vs) { throw 'Visual Studio C++ Build Tools are missing.' }
+          $component = 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64.Spectre'
+          $ready = & $vswhere -latest -products '*' -requires $component -property installationPath | Select-Object -First 1
+          if (-not $ready) {
+            $installer = 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe'
+            $process = Start-Process -FilePath $installer -ArgumentList @('modify', '--installPath', ('"' + $vs + '"'), '--add', $component, '--quiet', '--wait', '--norestart') -Wait -PassThru
+            if ($process.ExitCode -notin @(0, 3010)) { throw "Spectre installation failed: $($process.ExitCode)" }
           }
+          $ready = & $vswhere -latest -products '*' -requires $component -property installationPath | Select-Object -First 1
+          if (-not $ready) { throw 'Spectre component is still missing after installation.' }
+          Write-Host "Visual Studio with Spectre: $ready"
+          $ram = (Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1MB
+          $heap = [Math]::Min(12288, [Math]::Floor($ram - 4096))
+          if ($heap -lt 4096) { throw 'Runner needs at least 8 GiB RAM.' }
+          "MODERADO_BUILD_HEAP_MB=$heap" >> $env:GITHUB_ENV
 
       - name: Vendor the pinned Moderado agent
         shell: pwsh
@@ -125,6 +125,12 @@ jobs:
         shell: pwsh
         run: ./scripts/prepare-m1.ps1
 
+      - name: Verify Node matches the pinned editor
+        shell: pwsh
+        run: |
+          $expected = (Get-Content -Raw build/vscodium/vscode/.nvmrc).Trim().TrimStart('v')
+          if ($expected -ne '${{ env.NODE_VERSION }}') { throw "Pinned editor requires Node $expected; workflow must be reviewed." }
+
       - name: Build the editor and installers
         shell: pwsh
         env:
@@ -158,9 +164,9 @@ jobs:
           } finally { $a.Dispose() }
 
       - name: Upload build evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: moderado-ide-evidence
+          name: moderado-ide-windows-x64
           if-no-files-found: error
           retention-days: 30
           path: |
@@ -171,29 +177,73 @@ jobs:
             build/vscodium/assets/THIRD-PARTY-NOTICES.md
             build/vscodium/assets/release-verification.json
 
-  publish:
-    name: Publish GitHub Release (manual; requires a signature)
-    needs: build
-    runs-on: ubuntu-latest
-    # Intentionally disabled. Publishing is a separate, reviewed change made only
-    # after a code-signing certificate exists, so that this workflow cannot put
-    # unsigned binaries in front of the public. See HANDOFF.md.
-    if: >-
-      github.event_name == 'workflow_dispatch' &&
-      inputs.publish == true &&
-      false
-    permissions:
-      contents: write
-
+  macos-arm64:
+    name: Build and verify (macOS arm64)
+    if: ${{ (inputs.platform == 'both' || inputs.platform == 'macos') && (inputs.macos_arch == 'both' || inputs.macos_arch == 'arm64') }}
+    runs-on: macos-14
+    timeout-minutes: 180
+    env:
+      MODERADO_BUILD_HEAP_MB: '4096'
+      MODERADO_TSGO_CONCURRENCY: '2'
     steps:
-      - name: Explain why publishing is disabled
-        run: |
-          echo 'This job is intentionally disabled in the committed workflow.'
-          echo 'Publishing requires a code signature and the artifacts are unsigned.'
-          echo 'See HANDOFF.md, "Milestone 5 evidence".'
-          exit 1
-            Write-Warning 'Spectre libraries are absent; native extensions may fail to compile.'
-            Write-Host 'spectre: MISSING'
-          } else {
-            Write-Host "spectre: $($spectre[0].FullName)"
-          }
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Build the pinned editor and macOS installers
+        run: node scripts/build-macos.mjs --arch arm64
+      - name: Upload installers and build evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: moderado-ide-macos-arm64
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            build/installers/*.dmg
+            build/installers/*.zip
+            build/installers/*.json
+            build/installers/SHA256SUMS*
+
+  macos-x64:
+    name: Build and verify (macOS x64)
+    if: ${{ (inputs.platform == 'both' || inputs.platform == 'macos') && (inputs.macos_arch == 'both' || inputs.macos_arch == 'x64') }}
+    runs-on: macos-15-intel
+    timeout-minutes: 180
+    env:
+      MODERADO_BUILD_HEAP_MB: '10240'
+      MODERADO_TSGO_CONCURRENCY: '2'
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Build the pinned editor and macOS installers
+        run: node scripts/build-macos.mjs --arch x64
+      - name: Upload installers and build evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: moderado-ide-macos-x64
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            build/installers/*.dmg
+            build/installers/*.zip
+            build/installers/*.json
+            build/installers/SHA256SUMS*
+
+  publish:
+    name: Publishing disabled
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'Publishing requires a separate owner-authorized release.'

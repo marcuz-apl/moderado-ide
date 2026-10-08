@@ -6,6 +6,21 @@ const gateway = () => ({ ...emptySettings(), open: true, preset: 'moderado-cloud
   providers: buildProviderChoices(), baseUrl: 'http://127.0.0.1:4788/v1' });
 
 describe('Gateway and provider Settings boundary', () => {
+  it('keeps a large model inventory inside selects with only selected metadata outside', () => {
+    const models = Array.from({ length: 200 }, (_, index) => ({
+      id: `model-${index}`, accessTier: 'free_trial', isFree: true,
+      dataNote: `Unique detail ${index}`,
+    }));
+    const html = settingsPaneHtml({ ...gateway(), models, defaultModel: 'model-17' });
+    expect(html).toContain('id="settings-model-select"');
+    expect(html).toContain('id="settings-model" class="sr-only"');
+    expect(html.match(/<option value="model-/g)).toHaveLength(400);
+    expect(html).toContain('Unique detail 17');
+    expect(html).not.toContain('Unique detail 18');
+    expect(html).not.toContain('data-model=');
+    expect(html).not.toContain('settings-model-search');
+  });
+
   it('offers the Gateway login choices and an editable loopback/HTTPS endpoint', () => {
     const html = settingsPaneHtml(gateway());
     expect(html).toContain('id="settings-login-method"');
@@ -37,13 +52,14 @@ describe('Gateway and provider Settings boundary', () => {
       { id: 'owner/Exact:Route', accessTier: 'free_trial', isFree: true, provider: '<provider>',
         ownedBy: '<owner>', capabilities: ['<tools>'], dataNote: '<script>bad</script>' },
     ] });
-    expect(html).toContain('data-model="owner/Exact:Route"');
-    expect(html).toContain('data-model="auto"');
-    expect(html).toContain('FREE');
+    expect(html).toContain('<option value="owner/Exact:Route" selected>');
+    expect(html).toContain('<option value="auto"');
+    expect(html).toContain('★ owner/Exact:Route — free_trial');
     for (const value of ['&lt;provider&gt;', '&lt;owner&gt;', '&lt;tools&gt;', '&lt;script&gt;bad&lt;/script&gt;']) expect(html).toContain(value);
     expect(html).not.toContain('<script>bad</script>');
-    expect(html).toContain('aria-pressed="true"');
-    expect(html).toContain('id="settings-model-search"');
+    expect(html).toContain('id="settings-model-select"');
+    expect(html).not.toContain('settings-model-search');
+    expect(html).not.toContain('class="model-card');
   });
 
   it('keeps direct AUTO visible on the Free tab while paid models move to the Paid tab', () => {
@@ -54,14 +70,14 @@ describe('Gateway and provider Settings boundary', () => {
       { id: 'free', accessTier: 'free_trial', isFree: true },
     ] };
     const html = settingsPaneHtml(state);
-    expect(html).toContain('data-model="auto"');
+    expect(html).toContain('<option value="auto"');
     expect(html).toContain('AUTO · Free-first');
     expect(html).not.toContain('value="paid"');
     expect(html).not.toContain('value="unknown"');
     const paid = settingsPaneHtml({ ...state, modelTab: 'paid', allowPaid: true, allowUnknown: true });
-    expect(paid).toContain('data-model="paid"');
-    expect(paid).toContain('data-model="unknown"');
-    expect(paid).not.toContain('data-model="free"');
+    expect(paid).toContain('<option value="paid"');
+    expect(paid).toContain('<option value="unknown"');
+    expect(paid).not.toContain('<option value="free"');
   });
 
   it.each(['apiKey', 'token', 'authorizationCode', 'credentialReference'])('rejects %s in webview forms, even when empty', (field) => {

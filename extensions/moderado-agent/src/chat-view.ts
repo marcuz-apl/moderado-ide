@@ -450,7 +450,6 @@ ${toolbarHtml(snapshot.historyOpen)}
     const setKey = document.getElementById('settings-set-key');
     const browserLogin = document.getElementById('settings-browser-login');
     const loginMethod = document.getElementById('settings-login-method');
-    const search = document.getElementById('settings-model-search');
     const modelSelect = document.getElementById('settings-model-select');
     const apiKey = document.getElementById('settings-api-key');
     const baseUrl = document.getElementById('settings-base-url');
@@ -481,20 +480,13 @@ ${toolbarHtml(snapshot.historyOpen)}
     if (setKey) setKey.addEventListener('click', () => vscode.postMessage({ type: 'setProviderKey', ...readSettings() }));
     if (browserLogin) browserLogin.addEventListener('click', () => vscode.postMessage({ type: 'gatewayBrowserLogin', ...readSettings() }));
     if (loginMethod) loginMethod.addEventListener('change', () => vscode.postMessage({ type: 'setGatewayLoginMethod', ...readSettings() }));
-    if (search) search.addEventListener('input', () => {
-      const query = search.value.trim().toLowerCase();
-      for (const card of document.querySelectorAll('.model-card')) card.hidden = !card.textContent.toLowerCase().includes(query);
-    });
     for (const field of document.querySelectorAll('[data-preference]')) {
       field.addEventListener('change', () => {
         const value = field.type === 'checkbox' ? field.checked : field.type === 'number' ? Number(field.value) : field.value;
         vscode.postMessage({ type: 'setPreference', key: field.getAttribute('data-preference'), value });
       });
     }
-    // Model cards, the free/recommended tabs, and the settings nav.
-    for (const card of document.querySelectorAll('.model-card')) {
-      card.addEventListener('click', () => vscode.postMessage({ type: 'chooseModel', ...readSettings(), id: card.getAttribute('data-model') }));
-    }
+    // Model dropdown, cost tabs, and Settings navigation.
     for (const tab of document.querySelectorAll('.tab-row button')) {
       tab.addEventListener('click', () => vscode.postMessage({ type: 'setModelTab', ...readSettings(), tab: tab.getAttribute('data-tab') }));
     }
@@ -627,7 +619,7 @@ ${toolbarHtml(snapshot.historyOpen)}
     if (update.settingsOpen !== undefined
       && (update.settingsOpen !== settingsOpen || update.settings !== renderedSettings)) {
       const drafts = [];
-      for (const id of ['settings-display-name', 'settings-base-url', 'settings-model-search', 'settings-api-key']) {
+      for (const id of ['settings-display-name', 'settings-base-url', 'settings-api-key']) {
         const field = document.getElementById(id);
         if (field && field.value !== field.defaultValue) drafts.push([id, field.value]);
       }
@@ -658,8 +650,7 @@ ${toolbarHtml(snapshot.historyOpen)}
       applySettingsVisibility();
       if (settingsOpen) {
         bindSettings();
-        const search = document.getElementById('settings-model-search');
-        if (search && search.value) search.dispatchEvent(new Event('input'));
+    
       }
     }
     if (update.settingsStatus !== undefined) say(update.settingsStatus);

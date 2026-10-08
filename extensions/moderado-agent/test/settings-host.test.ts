@@ -435,3 +435,23 @@ describe('Gateway credential reference reuse', () => {
     expect(harness.browser).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('legacy credential preservation', () => {
+  it('saving a model choice preserves an existing CLI plaintext field without migrating it', async () => {
+    harness.profile = { activeConnectionId: 'nvidia-nim', connections: { 'nvidia-nim': { id: 'nvidia-nim', kind: 'nvidia-nim', baseUrl: 'https://integrate.api.nvidia.com/v1', apiKey: 'legacy-fixture-key', defaultModel: 'auto', future: 'keep' } } };
+    send('saveSettings', { preset: 'nvidia-nim', baseUrl: 'https://integrate.api.nvidia.com/v1', modelId: 'auto' });
+    await vi.waitFor(() => expect(harness.write).toHaveBeenCalled());
+    expect((harness.profile.connections as Record<string, Record<string, unknown>>)['nvidia-nim']).toMatchObject({ apiKey: 'legacy-fixture-key', future: 'keep' });
+    expect(harness.keys.size).toBe(0);
+    expect(JSON.stringify(harness.messages)).not.toContain('legacy-fixture-key');
+  });
+  it('saving an existing manual Gateway login keeps its exact credential reference', async () => {
+    send('setProviderKey', form);
+    await vi.waitFor(() => expect(html()).toContain('model(s) available'));
+    const reference = (harness.profile.connections as Record<string, Record<string, string>>)['moderado-cloud'].credentialReference;
+    send('saveSettings', form);
+    await vi.waitFor(() => expect(harness.write).toHaveBeenCalledTimes(2));
+    expect((harness.profile.connections as Record<string, Record<string, string>>)['moderado-cloud'].credentialReference).toBe(reference);
+    expect(harness.keys.size).toBe(1);
+  });
+});

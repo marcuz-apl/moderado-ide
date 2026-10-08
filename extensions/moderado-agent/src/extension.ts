@@ -611,12 +611,17 @@ async function openDiffTab(requestId: string): Promise<void> {
               if (typeof stored?.credentialReference === 'string') connection.credentialReference = stored.credentialReference;
             }
           } else {
-            if (!pastedKey && (action === 'key' || !apiKey || stored?.authMethod === 'browser')) {
+            const replaceManualKey = Boolean(pastedKey) || action === 'key' || !apiKey || stored?.authMethod === 'browser';
+            if (!pastedKey && replaceManualKey) {
               apiKey = await vscode.window.showInputBox({ prompt: 'Gateway key beginning with mrd_ (stored in secure credential storage)', password: true, ignoreFocusOut: true });
               if (apiKey === undefined || signal.aborted) throw new Error('Gateway key entry cancelled.');
             }
             if (!apiKey) throw new Error('Paste a Gateway key before saving.');
-            connection = await persistGatewayLogin('manual', { baseUrl: discovery.baseUrl, key: apiKey.trim() }, stagedStore);
+            if (replaceManualKey) connection = await persistGatewayLogin('manual', { baseUrl: discovery.baseUrl, key: apiKey.trim() }, stagedStore);
+            else {
+              connection = buildGatewayConnection('manual', { baseUrl: discovery.baseUrl, key: apiKey.trim() });
+              connection.credentialReference = typeof stored?.credentialReference === 'string' ? stored.credentialReference : undefined;
+            }
           }
         }
         connection.defaultModel = form.modelId || 'auto';
@@ -630,14 +635,16 @@ async function openDiffTab(requestId: string): Promise<void> {
           displayName: form.displayName, defaultModel: form.modelId || 'auto' }, connectConfig);
         // NVIDIA's fixed endpoint still needs to persist the chosen model.
         connection.defaultModel = form.modelId || 'auto';
-        if (apiKey && (pastedKey || action === 'key' || !stored?.credentialReference)) {
+        if (apiKey && (pastedKey || action === 'key')) {
           await stagedStore.set(credentialReference(connection.id), apiKey.trim());
           connection.credentialReference = stagedReference;
         } else connection.credentialReference = !endpointChanged && typeof stored?.credentialReference === 'string' ? stored.credentialReference : undefined;
       }
       if (stagedReference) connection.credentialReference = stagedReference;
       if (signal.aborted) throw new Error('Provider connection cancelled.');
-      const saved = { ...stored, ...connection, apiKey: undefined,
+      const saved = { ...stored, ...connection,
+        apiKey: stagedReference || endpointChanged || (discovery.id === 'moderado-cloud' && form.loginMethod === 'public')
+          ? undefined : typeof stored?.apiKey === 'string' ? stored.apiKey : undefined,
         ...(discovery.id === 'moderado-cloud' ? {
           credentialReference: connection.credentialReference,
           credentialExpiresAt: 'credentialExpiresAt' in connection ? connection.credentialExpiresAt : undefined,

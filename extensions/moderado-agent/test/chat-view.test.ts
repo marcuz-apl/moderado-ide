@@ -402,7 +402,7 @@ describe('moderado settings pane', () => {
     expect(pane).toContain('type="password"');
   });
 
-  it('badges free models and summarises the counts', () => {
+  it('lists free models in a compact dropdown and summarises the counts', () => {
     const pane = settingsPaneHtml(settings({
       preset: 'nvidia-nim',
       providers: [{ value: 'nvidia-nim', label: 'NVIDIA NIM', description: 'd', requiresApiKey: true }],
@@ -412,9 +412,11 @@ describe('moderado settings pane', () => {
       ],
       defaultModel: 'free-a', allowPaid: true,
     }));
-    // Free models are cards with a FREE badge, as in the reference layout.
-    expect(pane).toContain('class="model-card on" data-model="free-a"');
-    expect(pane).toContain('>FREE<');
+    // Keep the chosen model in the dropdown without expanding the catalog into cards.
+    expect(pane).toContain('<option value="free-a" selected>');
+    expect(pane).not.toContain('class="model-card');
+    expect(pane).not.toContain('settings-model-search');
+    expect(pane).toContain('★ free-a — free_trial');
     expect(pane).toContain('1 free');
     expect(pane).toContain('2 listed');
   });
@@ -429,8 +431,8 @@ describe('moderado settings pane', () => {
       ],
       allowPaid: true,
     }));
-    expect(free).toContain('data-model="free-a"');
-    expect(free).not.toContain('data-model="paid-b"');
+    expect(free).toContain('<option value="free-a"');
+    expect(free).not.toContain('<option value="paid-b"');
     const paid = settingsPaneHtml(settings({
       preset: 'nvidia-nim', modelTab: 'paid',
       providers: [{ value: 'nvidia-nim', label: 'NVIDIA NIM', description: 'd', requiresApiKey: true }],
@@ -440,8 +442,8 @@ describe('moderado settings pane', () => {
       ],
       allowPaid: true,
     }));
-    expect(paid).toContain('data-model="paid-b"');
-    expect(paid).not.toContain('data-model="free-a"');
+    expect(paid).toContain('<option value="paid-b"');
+    expect(paid).not.toContain('<option value="free-a"');
   });
 
   it('offers the Free and Paid tabs with Free as the default', () => {

@@ -13,7 +13,7 @@ import {
   ModelInventoryEntry,
 } from '@moderado/contracts';
 import { ApprovalCoordinator, RawDecision } from './approval.js';
-import { ConfigState, canonicalWorkspaceRoot, readConfig } from './profile.js';
+import { ConfigState, canonicalWorkspaceRoot, configPath, readConfig } from './profile.js';
 import { CredentialStore, MemoryCredentialStore, resolveCredential } from './credentials.js';
 import { SessionStore, StoredSession, conversationOf, createSession, saveSessionChecked } from './sessions.js';
 import { DESKTOP_PROVIDER_PRESETS } from './provider-catalog.js';
@@ -124,13 +124,23 @@ export async function resolveProvider(
   env: NodeJS.ProcessEnv = process.env,
   fetchImpl?: typeof fetch,
   imageContext?: ReadonlyMap<string, readonly ImageAttachment[]>,
+  profilePath: string = configPath(),
 ): Promise<ProviderResolution> {
   const unavailable = (reason: string): ProviderResolution => {
     if (imageContext?.size) throw new Error('Image attachments require a configured image-capable provider. ' + reason);
     return fakeResolution(reason);
   };
-  if (state.kind !== 'ok') {
-    return unavailable('The shared profile could not be read.');
+  if (state.kind === 'missing') {
+    return unavailable(`No provider settings found at ${profilePath}. Open Settings → API Config, enter URL/key, load models and Save settings.`);
+  }
+  if (state.kind === 'invalid') {
+    // JSON parser diagnostics can quote plaintext config contents. Expose only
+    // the failure category and an OS error code, never the raw diagnostic.
+    const errorCode = state.error.match(/^Unreadable config\.json: (E[A-Z0-9]+):/)?.[1];
+    const cause = state.error.startsWith('config.json is not valid JSON:') ? 'config.json is not valid JSON.'
+      : state.error === 'config.json is empty.' || state.error === 'config.json is not a JSON object.' ? state.error
+      : `config.json could not be read${errorCode ? ` (${errorCode})` : ''}.`;
+    return unavailable(`Provider settings at ${profilePath} are invalid or unreadable: ${cause} Fix the file or its permissions before saving; existing data has not been replaced.`);
   }
 
   const parsedConnections = z.record(z.unknown()).safeParse(state.config.connections ?? {});
@@ -344,6 +354,7 @@ export class AgentHost implements IApprovalHandler {
         process.env,
         this.options.fetchImpl,
         imageContext,
+        configPath(this.options.moderadoHome),
       );
       const { adapter: provider, reason } = resolution;
       if (reason) {
@@ -489,6 +500,8 @@ export class AgentHost implements IApprovalHandler {
       this.credentials,
       process.env,
       this.options.fetchImpl,
+      undefined,
+      configPath(this.options.moderadoHome),
     );
     const { inventory, routes } = await this.discoverInventory(resolution);
     this.catalogConnectionId = resolution.connectionId ?? resolution.adapter.id;

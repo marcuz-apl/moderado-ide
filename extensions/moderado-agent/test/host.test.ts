@@ -35,6 +35,28 @@ function fakeHTTP(data: unknown[]) {
     : Response.json({ object: 'list', data }));
 }
 
+describe('provider profile recovery', () => {
+  it('identifies missing settings with the actual profile path and setup steps', async () => {
+    const path = join(workspace(), '.moderado', 'config.json');
+    const result = await resolveProvider({ kind: 'missing' }, new MemoryCredentialStore(), {}, undefined, undefined, path);
+    expect(result.reason).toBe(`No provider settings found at ${path}. Open Settings → API Config, enter URL/key, load models and Save settings.`);
+  });
+
+  it.each([
+    ['config.json is not valid JSON: private-api-key excerpt', 'config.json is not valid JSON.'],
+    ['config.json is empty.', 'config.json is empty.'],
+    ['config.json is not a JSON object.', 'config.json is not a JSON object.'],
+    ['Unreadable config.json: EACCES: permission denied private-api-key', 'config.json could not be read (EACCES).'],
+  ])('distinguishes invalid profile safely: %s', async (error, cause) => {
+    const path = join(workspace(), '.moderado', 'config.json');
+    const result = await resolveProvider({ kind: 'invalid', error }, new MemoryCredentialStore(), {}, undefined, undefined, path);
+    expect(result.reason).toContain(path);
+    expect(result.reason).toContain(cause);
+    expect(result.reason).not.toContain('private-api-key');
+    expect(result.reason).not.toContain('No provider settings found');
+  });
+});
+
 describe('Settings runtime preferences', () => {
   const defaults = { allowPaidModels: false, allowUnknownModels: false, webSearchEnabled: true, showHistoryOnStartup: false, preferredLanguage: 'English' as const, approvalTimeoutSeconds: 120 };
   it.each(['paid', 'unknown'])('applies current %s model opt-in at each run', async tier => {
