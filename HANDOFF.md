@@ -18,13 +18,18 @@ rejects the unsupported `--wait` option. macOS arm64 and x64 failed the offline
 suite because some test fixture roots still resolved through `/var` symlinks;
 macOS x64 also exceeded the default timeout in the large restored-image test.
 The following all-platform run [37853809403](https://github.com/marcuz-apl/moderado-ide/actions/runs/37853809403)
-reached the same Windows prerequisite check failure with the first attempted
-correction; Linux and macOS were still building when that failure was inspected.
+failed again: Windows still lacked Spectre libraries because the generic
+component ID was not valid for the runner's VS 2026 toolset, and macOS arm64
+ran out of V8 heap during `compile-src` at about 4 GiB. Linux and macOS x64
+were still building when those failures were inspected.
 
 Microsoft documents `--wait` as a bootstrapper-only option; installed VS
 `setup.exe` returns before the component is ready. The Windows job now uses
 Microsoft's Build Tools bootstrapper, verifies its Authenticode signature,
-waits for the modify operation, and checks Spectre before continuing.
+waits for the modify operation, and requests the documented VS 2026
+`Microsoft.VisualStudio.Component.VC.14.50.18.0.x86.x64.Spectre` component
+before continuing. macOS builds now use the 12 GiB V8 heap size used by the
+pinned VSCodium macOS workflows.
 Host and attachment test fixtures canonicalize their temporary roots with
 `realpathSync`, preserving production symlink checks. The restored-image limit
 test keeps its over-limit coverage with smaller fixtures and a 30-second
@@ -34,6 +39,8 @@ only in the macOS build steps.
 Verification on the Windows workspace:
 - `node --test scripts/test/workflow.test.mjs`: 3 passed, including the
   bootstrapper signature and blocking invocation checks.
+- `node --test scripts/test/build-macos.test.mjs`: 6 passed, including the
+  macOS V8 heap configuration.
 - `npm --prefix extensions/moderado-agent test -- test/host.test.ts`: 46 passed.
 - `npm --prefix extensions/moderado-agent test -- test/attachments.test.ts -t
   'caps restored history images across messages'`: 1 passed.

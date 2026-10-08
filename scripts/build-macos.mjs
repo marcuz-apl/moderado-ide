@@ -27,8 +27,8 @@ export function macBuildEnvironment(lock, arch, inherited = process.env) {
     BUILD_SOURCEVERSION: lock.sources.codeOss.commit, MS_COMMIT: lock.sources.codeOss.commit, MS_TAG: lock.sources.codeOss.version,
     VSCODE_ARCH: arch, npm_config_arch: arch, VSCODE_QUALITY: 'stable', SHOULD_BUILD_CLI: 'no',
     SHOULD_BUILD_REH: 'no', SHOULD_BUILD_REH_WEB: 'no',
-    MAX_OLD_SPACE_SIZE: inherited.MODERADO_BUILD_HEAP_MB || '8192',
-    NODE_OPTIONS: `--max-old-space-size=${inherited.MODERADO_BUILD_HEAP_MB || '8192'}` };
+    MAX_OLD_SPACE_SIZE: inherited.MODERADO_BUILD_HEAP_MB || '12288',
+    NODE_OPTIONS: `--max-old-space-size=${inherited.MODERADO_BUILD_HEAP_MB || '12288'}` };
 }
 export function macEditorBuildCommands(arch) {
   assert.ok(['x64', 'arm64'].includes(arch), 'Unsupported macOS arch');

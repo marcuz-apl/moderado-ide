@@ -151,7 +151,7 @@ jobs:
           $vswhere = 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe'
           $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath | Select-Object -First 1
           if (-not $vs) { throw 'Visual Studio C++ Build Tools are missing.' }
-          $component = 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64.Spectre'
+          $component = 'Microsoft.VisualStudio.Component.VC.14.50.18.0.x86.x64.Spectre'
           $ready = & $vswhere -latest -products '*' -requires $component -property installationPath | Select-Object -First 1
           if (-not $ready) {
             $bootstrapper = Join-Path $env:RUNNER_TEMP 'vs_buildtools.exe'

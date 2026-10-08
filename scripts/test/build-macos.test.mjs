@@ -14,6 +14,8 @@ test('mac target and upstream commands remain native and pinned', () => {
   assert.equal(env.OS_NAME, 'osx'); assert.equal(env.VSCODE_ARCH, 'arm64');
   assert.equal(env.MS_COMMIT, lock.sources.codeOss.commit); assert.equal(env.CI_BUILD, 'no');
   assert.equal(env.SHOULD_BUILD_REH, 'no'); assert.equal(env.DISABLE_UPDATE, 'yes');
+  assert.equal(env.MAX_OLD_SPACE_SIZE, '12288');
+  assert.equal(env.NODE_OPTIONS, '--max-old-space-size=12288');
 });
 test('source pins reject unexpected revisions and malformed commits', () => {
   assertSourcePin('a'.repeat(40), 'a'.repeat(40));
