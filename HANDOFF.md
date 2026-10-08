@@ -26,7 +26,8 @@ were still building when those failures were inspected.
 Microsoft documents `--wait` as a bootstrapper-only option; installed VS
 `setup.exe` returns before the component is ready. The Windows job now uses
 Microsoft's Build Tools bootstrapper, verifies its Authenticode signature,
-waits for the modify operation, and requests the documented VS 2026
+uses the VS 2026 stable bootstrapper, waits for the modify operation, and
+requests the documented VS 2026
 `Microsoft.VisualStudio.Component.VC.14.50.18.0.x86.x64.Spectre` component
 before continuing. macOS builds now use the 12 GiB V8 heap size used by the
 pinned VSCodium macOS workflows.
