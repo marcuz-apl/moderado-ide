@@ -155,7 +155,7 @@ jobs:
           $ready = & $vswhere -latest -products '*' -requires $component -property installationPath | Select-Object -First 1
           if (-not $ready) {
             $installer = 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\setup.exe'
-            & $installer modify --installPath "$vs" --add $component --quiet --wait --norestart
+            & $installer modify --installPath "$vs" --add $component --quiet --norestart
             if ($LASTEXITCODE -notin @(0, 3010)) { throw "Spectre installation failed: $LASTEXITCODE" }
           }
           $ready = & $vswhere -latest -products '*' -requires $component -property installationPath | Select-Object -First 1

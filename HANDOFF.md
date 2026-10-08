@@ -10,36 +10,35 @@ is pushed.
 
 ## Cross-platform artifact workflow recovery (2026-10-08 UTC)
 
-The all-platform Actions run [37849583048](https://github.com/marcuz-apl/moderado-ide/actions/runs/37849583048)
-was dispatched before the latest API Config model-label fix. Linux was still
-building when checked; macOS x64 failed its offline suite because macOS temp
-roots resolve through `/var` symlinks, macOS arm64 could not download pinned
-ripgrep after repeated GitHub HTTP 403 responses, and Windows returned before
-the Spectre libraries were installed because the VS Installer UI wrapper did
-not wait for a completed modification.
+The all-platform Actions run [37851930865](https://github.com/marcuz-apl/moderado-ide/actions/runs/37851930865)
+used source `a917986`, before the token-header change, and completed with
+failure. Linux x64 passed and uploaded an artifact, but that artifact does not
+contain the current source. Windows failed because Visual Studio Installer
+rejects the unsupported `--wait` option. macOS arm64 and x64 failed the offline
+suite because some test fixture roots still resolved through `/var` symlinks;
+macOS x64 also exceeded the default timeout in the large restored-image test.
 
-The workflow now gives only the macOS build steps the read-only Actions token
-used by the pinned `@vscode/ripgrep` downloader, and invokes VS `setup.exe`
-with `--wait` before verifying the Spectre component. macOS temp test fixtures
-are canonicalized with `realpathSync`, preserving the production symlink
-checks while avoiding false failures from `/var` on hosted runners.
+The workflow now invokes VS `setup.exe` without `--wait` and verifies the
+Spectre component afterward. Host and attachment test fixtures canonicalize
+their temporary roots with `realpathSync`, preserving production symlink
+checks. The restored-image limit test keeps its over-limit coverage with
+smaller fixtures and a 30-second timeout. The pinned ripgrep downloader still
+uses a read-only Actions token only in the macOS build steps.
 
 Verification on the Windows workspace:
 - `node --test scripts/test/workflow.test.mjs`: 3 passed.
-- `npm --prefix extensions/moderado-agent test -- test/settings-host.test.ts`:
-  39 passed.
-- `npm --prefix extensions/moderado-agent test -- test/sessions.test.ts -t
-  'removes only the requested session|rejects invalid ids|removes the session
-  image sidecar|deletes real image snapshots'`: 4 passed, 2 symlink tests
-  skipped by the focused selector. Running the complete session file locally
-  cannot create Windows symlinks (two `EPERM` failures); hosted macOS will run
-  the complete file.
+- `npm --prefix extensions/moderado-agent test -- test/host.test.ts`: 46 passed.
+- `npm --prefix extensions/moderado-agent test -- test/attachments.test.ts -t
+  'caps restored history images across messages'`: 1 passed.
 - `npm --prefix extensions/moderado-agent run typecheck` and `git diff --check`:
   passed.
+- The full attachment test file still has three symlink cases that cannot run
+  on this Windows workspace without symlink privileges (EPERM); those cases
+  are covered by the macOS workflow.
 
-These corrections still require a new `platform=all`, `macos_arch=both` run
-from the latest source. The previous run's Linux status/artifact result remains
-unconfirmed. No release was published.
+The workflow and fixture fixes require a fresh `platform=all`,
+`macos_arch=both` run from the latest source before any platform can be called
+current or release-ready. Publishing remains disabled and unauthorized.
 
 ## Settings navigation and discovery cleanup (2026-10-08 UTC)
 

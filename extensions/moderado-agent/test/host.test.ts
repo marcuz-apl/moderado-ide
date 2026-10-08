@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -12,7 +12,11 @@ import { preparePrompt } from '../src/attachments.js';
 import { createSession, SessionStore } from '../src/sessions.js';
 
 function workspace(): string {
-  return mkdtempSync(join(tmpdir(), 'moderado-m2-'));
+  return tempDirectory('moderado-m2-');
+}
+
+function tempDirectory(prefix: string): string {
+  return realpathSync(mkdtempSync(join(tmpdir(), prefix)));
 }
 
 function collector() {
@@ -21,7 +25,7 @@ function collector() {
 }
 
 function configuredHome(id: string, connection: Record<string, unknown>, extra: Record<string, unknown> = {}): string {
-  const home = mkdtempSync(join(tmpdir(), 'moderado-host-'));
+  const home = tempDirectory('moderado-host-');
   mkdirSync(join(home, '.moderado'));
   writeFileSync(join(home, '.moderado', 'config.json'), JSON.stringify({
     activeConnectionId: id, connections: { [id]: { id, kind: 'openai-compatible', ...connection } }, ...extra,
@@ -459,8 +463,8 @@ describe('AgentHost approvals', () => {
 
 describe('AgentHost session persistence', () => {
   it('persists a turn to the shared profile and resumes it', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'moderado-home-'));
-    const workspace = mkdtempSync(join(tmpdir(), 'moderado-ws-'));
+    const root = tempDirectory('moderado-home-');
+    const workspace = tempDirectory('moderado-ws-');
     const host = new AgentHost({
       workspaceRoot: workspace,
       moderadoHome: root,
@@ -487,8 +491,8 @@ describe('AgentHost session persistence', () => {
   });
 
   it('never touches the real user profile', async () => {
-    const workspace = mkdtempSync(join(tmpdir(), 'moderado-ws-'));
-    const root = mkdtempSync(join(tmpdir(), 'moderado-home-'));
+    const workspace = tempDirectory('moderado-ws-');
+    const root = tempDirectory('moderado-home-');
     const host = new AgentHost({
       workspaceRoot: workspace,
       moderadoHome: root,
@@ -502,8 +506,8 @@ describe('AgentHost session persistence', () => {
 
   it('exposes model options with cost classification', async () => {
     const host = new AgentHost({
-      workspaceRoot: mkdtempSync(join(tmpdir(), 'moderado-ws-')),
-      moderadoHome: mkdtempSync(join(tmpdir(), 'moderado-home-')),
+      workspaceRoot: tempDirectory('moderado-ws-'),
+      moderadoHome: tempDirectory('moderado-home-'),
       onEvent: () => {},
       promptForApproval: async () => undefined,
     });
@@ -522,7 +526,7 @@ describe('AgentHost run', () => {
     // ~/.moderado is never written.
     const host = new AgentHost({
       workspaceRoot: workspace(),
-      moderadoHome: mkdtempSync(join(tmpdir(), 'moderado-home-')),
+      moderadoHome: tempDirectory('moderado-home-'),
       onEvent,
       promptForApproval: async () => undefined,
     });
@@ -537,7 +541,7 @@ describe('AgentHost run', () => {
   it('routes free-first by default and does not select a paid model', async () => {
     const host = new AgentHost({
       workspaceRoot: workspace(),
-      moderadoHome: mkdtempSync(join(tmpdir(), 'moderado-home-')),
+      moderadoHome: tempDirectory('moderado-home-'),
       onEvent: () => {},
       promptForApproval: async () => undefined,
     });
