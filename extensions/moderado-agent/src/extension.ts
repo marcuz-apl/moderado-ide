@@ -849,6 +849,12 @@ async function openDiffTab(requestId: string): Promise<void> {
       }
       return;
     }
+    if (msg.type === 'renameSession') {
+      if (Object.keys(msg).every(key => key === 'type' || key === 'id') && z.string().uuid().safeParse(msg.id).success) {
+        void renameRecordedSession(String(msg.id));
+      }
+      return;
+    }
     if (msg.type === 'openSession' && typeof msg.id === 'string') {
       // Chat History resume: validate the id, load that session's transcript,
       // and resume it for the next run. Invalid ids are reported, not opened.
@@ -1043,10 +1049,47 @@ async function openDiffTab(requestId: string): Promise<void> {
       id: session.id,
       // The first user message is the session's title in every practical sense;
       // it is user text, so it is escaped like any other transcript content.
-      title: firstLineOf(session) || 'Untitled session',
+      title: savedSessionTitle(session.id) || firstLineOf(session) || 'Untitled session',
       updatedAt: formatWhen(session.updatedAt),
       costLabel: costLabelOf(session.usage),
     }));
+  }
+
+  const sessionTitleKey = (id: string) => `moderado.sessionTitle.${id}`;
+
+  function savedSessionTitle(id: string): string | undefined {
+    const title = context.workspaceState.get<string>(sessionTitleKey(id));
+    return typeof title === 'string' && title.trim() && title.trim().length <= 120 ? title.trim() : undefined;
+  }
+
+  async function renameRecordedSession(id: string): Promise<void> {
+    const session = host.listSessions().sessions.find(item => item.id === id);
+    if (!session) return;
+    const value = await vscode.window.showInputBox({
+      title: 'Rename chat',
+      prompt: 'Enter a name for this chat',
+      placeHolder: 'Chat name',
+      value: (savedSessionTitle(id) || firstLineOf(session) || 'Untitled session').slice(0, 120),
+      ignoreFocusOut: true,
+      validateInput: (input: string) => {
+        const title = input.trim();
+        if (!title) return 'Chat name cannot be empty.';
+        if (title.length > 120) return 'Chat name must be 120 characters or fewer.';
+        return undefined;
+      },
+    });
+    if (value === undefined) return;
+    const title = value.trim();
+    if (!title || title.length > 120) {
+      void vscode.window.showWarningMessage('Chat name must contain 1 to 120 characters.');
+      return;
+    }
+    try {
+      await context.workspaceState.update(sessionTitleKey(id), title);
+      render();
+    } catch {
+      void vscode.window.showErrorMessage('Could not save the chat name. The recorded chat was not changed.');
+    }
   }
 
   async function deleteRecordedSession(id: string): Promise<void> {
@@ -1064,7 +1107,14 @@ async function openDiffTab(requestId: string): Promise<void> {
     if (choice !== 'Delete') return;
     try {
       const current = host.session?.id === id;
-      host.deleteSession(id);
+      const deleted = host.deleteSession(id);
+      if (deleted) {
+        try {
+          await context.workspaceState.update(sessionTitleKey(id), undefined);
+        } catch {
+          void vscode.window.showWarningMessage('The chat was deleted, but its saved display name could not be cleared from workspace state.');
+        }
+      }
       if (current) {
         attachmentEpoch++;
         draftAttachments.clear();

@@ -133,7 +133,7 @@ function recentsHtml(state: ChatViewState): string {
           ${session.costLabel ? `<span class="recent-cost">${escapeHtml(session.costLabel)}</span>` : ''}
           <span class="recent-date">${escapeHtml(session.updatedAt)}</span>
         </span>
-      </button><button type="button" class="delete-session" data-delete-session="${escapeHtml(session.id)}" aria-label="Delete chat: ${escapeHtml(session.title)}" title="Delete chat">Delete</button></div>`,
+      </button><button type="button" class="rename-session" data-rename-session="${escapeHtml(session.id)}" aria-label="Rename chat: ${escapeHtml(session.title)}" title="Rename chat">Rename</button><button type="button" class="delete-session" data-delete-session="${escapeHtml(session.id)}" aria-label="Delete chat: ${escapeHtml(session.title)}" title="Delete chat">Delete</button></div>`,
     )
     .join('');
   return `<section class="recents">
@@ -229,7 +229,7 @@ body { font-family: var(--vscode-font-family); font-size: 13px; color: var(--vsc
   .section-head button:hover { color: var(--vscode-textLink-foreground); }
   .recent-item { display: flex; align-items: center; gap: 0.4rem; }
   .recent-item .recent-row { flex: 1; min-width: 0; }
-  .delete-session { flex: 0 0 auto; }
+  .rename-session, .delete-session { flex: 0 0 auto; font-size: 0.75rem; padding: 0.25rem; }
   .recent-row { display: flex; flex-direction: column; align-items: flex-start; gap: 0.15rem; width: 100%; text-align: left; padding: 0.45rem 0.55rem; margin-bottom: 0.3rem; border: 1px solid var(--vscode-panel-border); border-radius: 4px; background: var(--vscode-editorWidget-background, transparent); }
   .recent-row:hover { background: var(--vscode-list-hoverBackground); }
   .recent-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
@@ -373,11 +373,47 @@ ${toolbarHtml(snapshot.historyOpen)}
 <script nonce="${nonce}">
   const vscode = acquireVsCodeApi();
   const input = document.getElementById('prompt');
+  const savedState = vscode.getState();
+  const promptHistory = Array.isArray(savedState?.promptHistory)
+    ? savedState.promptHistory.filter((entry) => typeof entry === 'string' && entry.trim()).slice(-100)
+    : [];
+  let historyIndex = promptHistory.length;
+  let historyDraft = '';
   const send = document.getElementById('send');
   const cancel = document.getElementById('cancel');
   const transcript = document.getElementById('transcript');
   const approvalHost = document.getElementById('approval-host');
   const scroll = document.getElementById('scroll');
+
+  function savePromptHistory() {
+    const state = vscode.getState();
+    vscode.setState({
+      ...(state && typeof state === 'object' && !Array.isArray(state) ? state : {}),
+      promptHistory: promptHistory.slice(-100),
+    });
+  }
+
+  function browsePromptHistory(direction) {
+    const browsing = historyIndex < promptHistory.length;
+    if (!browsing) {
+      if (input.selectionStart !== input.selectionEnd) return false;
+      const beforeCaret = input.value.slice(0, input.selectionStart);
+      const afterCaret = input.value.slice(input.selectionEnd);
+      if (direction === 'ArrowUp' ? beforeCaret.includes('\\n') : afterCaret.includes('\\n')) return false;
+    }
+    if (direction === 'ArrowUp') {
+      if (historyIndex === promptHistory.length) historyDraft = input.value;
+      if (historyIndex === 0) return browsing;
+      historyIndex -= 1;
+    } else {
+      if (historyIndex === promptHistory.length) return false;
+      historyIndex += 1;
+    }
+    input.value = historyIndex === promptHistory.length ? historyDraft : promptHistory[historyIndex];
+    const caret = direction === 'ArrowUp' ? 0 : input.value.length;
+    input.setSelectionRange(caret, caret);
+    return true;
+  }
 
   function bindApproval(pendingId) {
     const allow = document.getElementById('allow');
@@ -518,16 +554,31 @@ ${toolbarHtml(snapshot.historyOpen)}
 
   // Enter sends; Shift+Enter inserts a newline, as in the reference composer.
   input.addEventListener('keydown', (event) => {
+    if ((event.key === 'ArrowUp' || event.key === 'ArrowDown') && browsePromptHistory(event.key)) {
+      event.preventDefault();
+      return;
+    }
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       document.getElementById('composer').requestSubmit();
     }
+  });
+  input.addEventListener('input', () => {
+    historyIndex = promptHistory.length;
+    historyDraft = input.value;
   });
 
   document.getElementById('composer').addEventListener('submit', (event) => {
     event.preventDefault();
     const text = input.value.trim();
     if (!text && !document.querySelector('[data-attachment-id]')) return;
+    if (text) {
+      promptHistory.push(text);
+      if (promptHistory.length > 100) promptHistory.shift();
+      historyIndex = promptHistory.length;
+      historyDraft = '';
+      savePromptHistory();
+    }
     vscode.postMessage({ type: 'prompt', text });
     input.value = '';
   });
@@ -554,6 +605,9 @@ ${toolbarHtml(snapshot.historyOpen)}
     }
     for (const row of document.querySelectorAll('.recent-row')) {
       row.addEventListener('click', () => vscode.postMessage({ type: 'openSession', id: row.getAttribute('data-session') }));
+    }
+    for (const button of document.querySelectorAll('[data-rename-session]')) {
+      button.addEventListener('click', () => vscode.postMessage({ type: 'renameSession', id: button.getAttribute('data-rename-session') }));
     }
     const all = document.getElementById('view-all-sessions');
     if (all) all.addEventListener('click', () => vscode.postMessage({ type: 'showSessions' }));

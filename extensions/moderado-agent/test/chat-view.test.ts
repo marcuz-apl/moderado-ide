@@ -303,6 +303,8 @@ describe('moderado settings pane', () => {
     expect(html).toContain('RECENT');
     expect(html).toContain('View All');
     expect(html).toContain('Fix the login bug');
+    expect(html).toContain('aria-label="Rename chat: Fix the login bug"');
+    expect(html).toContain("type: 'renameSession'");
     expect(html).toContain('class="recent-cost">$0.00</span>');
     // No cost badge when the engine reported none: two sessions, one badge.
     expect(html.split('class="recent-cost"').length - 1).toBe(1);
@@ -315,6 +317,16 @@ describe('moderado settings pane', () => {
     }), preview);
     expect(html).not.toContain('<img src=x');
     expect(html).toContain('&lt;img src=x');
+  });
+
+  it('exposes a rename action for each chat in Chat History', () => {
+    const html = chatHtml(state({
+      historyOpen: true,
+      recents: [{ id: 's1', title: 'A chat', updatedAt: 'Sep 25', costLabel: null }],
+    }), preview);
+    expect(html).toContain('class="rename-session"');
+    expect(html).toContain('data-rename-session="s1"');
+    expect(html).toContain('title="Rename chat"');
   });
 
   it('pre-enables the requested auto-approve categories but not commands', () => {
@@ -366,6 +378,16 @@ describe('moderado settings pane', () => {
     expect(html).toContain('<textarea id="prompt"');
     expect(html).toContain('Type your task here...');
     expect(html).toContain("event.key === 'Enter' && !event.shiftKey");
+  });
+
+  it('browses submitted prompt history with boundary arrow keys and preserves the draft', () => {
+    const html = chatHtml(state(), preview);
+    expect(html).toContain('const promptHistory = Array.isArray(savedState?.promptHistory)');
+    expect(html).toContain('promptHistory.length > 100');
+    expect(html).toContain("event.key === 'ArrowUp'");
+    expect(html).toContain("event.key === 'ArrowDown'");
+    expect(html).toContain('historyDraft = input.value');
+    expect(html).toContain('vscode.setState');
   });
 
   it('keeps the pane out of the document until it is opened', () => {

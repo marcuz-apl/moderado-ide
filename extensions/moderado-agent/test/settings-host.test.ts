@@ -12,6 +12,7 @@ const harness = vi.hoisted(() => ({
   finalMessage: null as string | null,
   workspaceRoot: '', windows: true, fileDialog: vi.fn(), contextPicker: vi.fn(), findFiles: vi.fn(), errors: vi.fn(),
   prompt: vi.fn(), browser: vi.fn(), write: vi.fn(), openExternal: vi.fn(),
+  workspaceTitles: new Map<string, unknown>(),
 }));
 vi.mock('vscode', () => ({
   version: '1.135.0', ConfigurationTarget: { Global: 1 },
@@ -68,7 +69,7 @@ beforeEach(() => {
   harness.fileDialog.mockResolvedValue(undefined); harness.contextPicker.mockResolvedValue(undefined); harness.findFiles.mockResolvedValue([]);
   harness.configValues.clear();
   harness.configUpdate.mockImplementation(async (key: string, value: unknown) => { harness.configValues.set(key, value); });
-  harness.windows = true; harness.histories = []; harness.currentId = ''; harness.confirm.mockResolvedValue('Delete');
+  harness.windows = true; harness.histories = []; harness.currentId = ''; harness.confirm.mockResolvedValue('Delete'); harness.workspaceTitles.clear();
   vi.clearAllMocks(); harness.messages = []; harness.keys.clear(); harness.profile = {}; harness.invalid = false; harness.runs = []; harness.finalMessage = null;
   harness.prompt.mockResolvedValue('mrd_native-secret');
   harness.browser.mockResolvedValue({ accessToken: 'mrd_browser-secret', expiresAt: Date.now() + 60_000 });
@@ -79,7 +80,10 @@ beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ object: 'list', data: [
     { id: 'Exact/Route', provider: 'owner', owned_by: 'owner', capabilities: ['tools'], data_note: '<note>' },
   ] }))));
-  activate({ subscriptions: [], secrets: { get: async (key: string) => harness.keys.get(key), store: async (key: string, value: string) => { harness.keys.set(key, value); }, delete: async (key: string) => { harness.keys.delete(key); } } } as any);
+  activate({ subscriptions: [], workspaceState: {
+    get: (key: string) => harness.workspaceTitles.get(key),
+    update: async (key: string, value: unknown) => { if (value === undefined) harness.workspaceTitles.delete(key); else harness.workspaceTitles.set(key, value); },
+  }, secrets: { get: async (key: string) => harness.keys.get(key), store: async (key: string, value: string) => { harness.keys.set(key, value); }, delete: async (key: string) => { harness.keys.delete(key); } } } as any);
   harness.provider.resolveWebviewView({
     webview: { options: {}, html: '', onDidReceiveMessage: (receive: unknown) => { harness.receive = receive; },
       postMessage: (message: Record<string, unknown>) => { harness.messages.push(message); return Promise.resolve(true); } },
@@ -332,8 +336,10 @@ describe('saved provider and history workflows', () => {
   });
   it('deletes only a known chat after native confirmation', async () => {
     const session = createSession(harness.workspaceRoot); harness.histories = [session];
+    harness.workspaceTitles.set(`moderado.sessionTitle.${session.id}`, 'Local title');
     send('deleteSession', { id: session.id });
     await vi.waitFor(() => expect(harness.deleted).toHaveBeenCalledWith(session.id));
+    await vi.waitFor(() => expect(harness.workspaceTitles.has(`moderado.sessionTitle.${session.id}`)).toBe(false));
     expect(harness.confirm).toHaveBeenCalledWith(expect.stringContaining('Delete chat'), expect.objectContaining({ modal: true }), 'Delete');
   });
   it('cancellation and malformed delete requests do not delete history', async () => {
@@ -345,6 +351,32 @@ describe('saved provider and history workflows', () => {
     send('deleteSession', { id: '../outside' });
     send('deleteSession', { id: session.id, path: '/outside' });
     expect(harness.confirm).not.toHaveBeenCalled(); expect(harness.deleted).not.toHaveBeenCalled();
+  });
+  it('renames a known chat in workspace-local state without changing the shared session', async () => {
+    const session = createSession(harness.workspaceRoot); harness.histories = [session];
+    harness.prompt.mockResolvedValueOnce('A clearer chat name');
+    send('toggleHistory');
+    send('renameSession', { id: session.id });
+    await vi.waitFor(() => expect(harness.workspaceTitles.get(`moderado.sessionTitle.${session.id}`)).toBe('A clearer chat name'));
+    expect(harness.prompt).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Rename chat',
+      value: 'Untitled session',
+      validateInput: expect.any(Function),
+    }));
+    const validate = vi.mocked(harness.prompt).mock.calls.at(-1)?.[0].validateInput;
+    expect(validate?.('   ')).toBe('Chat name cannot be empty.');
+    expect(validate?.('x'.repeat(121))).toBe('Chat name must be 120 characters or fewer.');
+    expect(harness.histories[0]).toBe(session);
+    expect(String(harness.messages.at(-1)?.recents)).toContain('A clearer chat name');
+  });
+  it('does not persist a cancelled or malformed chat rename', async () => {
+    const session = createSession(harness.workspaceRoot); harness.histories = [session];
+    harness.prompt.mockResolvedValueOnce(undefined);
+    send('renameSession', { id: session.id });
+    await vi.waitFor(() => expect(harness.prompt).toHaveBeenCalled());
+    send('renameSession', { id: session.id, title: 'renderer-controlled' });
+    await vi.waitFor(() => expect(harness.prompt).toHaveBeenCalledTimes(1));
+    expect(harness.workspaceTitles.size).toBe(0);
   });
 });
 

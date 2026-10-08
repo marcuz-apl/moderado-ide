@@ -1223,3 +1223,23 @@ Verification:
 - git diff --check: exit 0. git fetch origin and git rev-list --left-right --count master...origin/master: 0 0 before commit.
 
 Windows CI previously failed three snapshot/deletion security tests; those cases were corrected and verified locally, but native Windows CI still requires rerunning. macOS/Windows installers have not yet been produced by the new manual workflow. The reported Ubuntu profile problem cannot be confirmed on the offline VM; missing/corrupt/unreadable diagnostics are now distinct and do not reveal config contents. No public release, signing certificate, or notarization is claimed.
+
+## Chat composer and history enhancements (2026-10-08 UTC)
+
+- Added bounded (100-entry) prompt history to webview state. Up/Down browses
+  submitted prompts at the textarea's first/last line and restores the unsent
+  draft; multiline caret movement remains native. Attachment-only submissions
+  do not add blank prompts to history.
+- Added a Rename action to each Chat History row. The host validates the
+  session ID, prompts natively, limits names to 120 characters, and stores the
+  custom display name in workspace-local IDE state; shared CLI session records
+  and schema are unchanged.
+- Added requirements F14/F15 and offline tests for prompt history and rename.
+- `npm --prefix extensions/moderado-agent test -- test/chat-view.test.ts test/settings-host.test.ts`:
+  **109/109 pass**.
+- `npm --prefix extensions/moderado-agent run typecheck`: **exit 0**.
+- `npm --prefix extensions/moderado-agent run compile`: **exit 0**, 560 KiB bundle.
+- `node --check scripts/test/settings-webview.test.mjs`: **exit 0**.
+- `node --test scripts/test/settings-webview.test.mjs`: browser test **skipped**
+  because `MODERADO_PLAYWRIGHT_PATH` is not configured in this environment.
+- `git diff --check`: **pass**. Source changes remain uncommitted and unpushed.

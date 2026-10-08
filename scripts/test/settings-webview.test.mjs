@@ -10,7 +10,7 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 const playwrightPath = process.env.MODERADO_PLAYWRIGHT_PATH;
 const require = createRequire(join(root, 'extensions/moderado-agent/package.json'));
 
-test('Settings refreshes models and provider controls, preserves drafts, and closes during loading', { skip: !playwrightPath }, async () => {
+test('Webview preserves settings drafts, browses prompt history, and exposes chat renaming', { skip: !playwrightPath }, async () => {
   const fixture = await mkdtemp(join(tmpdir(), 'moderado-settings-renderer-'));
   let browser;
   try {
@@ -23,7 +23,12 @@ test('Settings refreshes models and provider controls, preserves drafts, and clo
     const page = await browser.newPage();
     await page.addInitScript(() => {
       window.messages = [];
-      window.acquireVsCodeApi = () => ({ postMessage: message => window.messages.push(message) });
+      window.savedState = undefined;
+      window.acquireVsCodeApi = () => ({
+        postMessage: message => window.messages.push(message),
+        getState: () => window.savedState,
+        setState: value => { window.savedState = value; },
+      });
     });
     await page.goto('about:blank');
     const settings = { open: true, preset: 'other', providers: [
@@ -101,12 +106,34 @@ test('Settings refreshes models and provider controls, preserves drafts, and clo
     assert.ok(Math.abs((hintBox.y + hintBox.height / 2) - (sendBox.y + sendBox.height / 2)) < 2);
     await page.locator('#active-ctx').click();
     assert.equal((await page.evaluate(() => window.messages.at(-1))).type, 'openApiConfig');
+    const prompt = page.locator('#prompt');
+    await prompt.fill('first task');
+    await prompt.press('Enter');
+    await prompt.fill('second task');
+    await prompt.press('Enter');
+    await prompt.fill('unsent draft');
+    await prompt.press('ArrowUp');
+    assert.equal(await prompt.inputValue(), 'second task');
+    await prompt.press('ArrowUp');
+    assert.equal(await prompt.inputValue(), 'first task');
+    await prompt.press('ArrowDown');
+    assert.equal(await prompt.inputValue(), 'second task');
+    await prompt.press('ArrowDown');
+    assert.equal(await prompt.inputValue(), 'unsent draft');
+    await prompt.fill('line one\nline two');
+    await prompt.evaluate(field => field.setSelectionRange(12, 12));
+    await prompt.press('ArrowUp');
+    assert.equal(await prompt.inputValue(), 'line one\nline two', 'ArrowUp inside multiline text must move the caret, not browse history');
+    assert.equal(await prompt.evaluate(field => field.selectionStart), 3);
+    assert.deepEqual(await page.evaluate(() => window.savedState.promptHistory), ['first task', 'second task']);
     state.historyOpen = true;
     state.recents = Array.from({length: 9}, (_, index) => ({id: 'session-'+index, title: 'Chat '+index, updatedAt: 'today'}));
     await update();
     assert.equal(await page.locator('[data-delete-session]').count(), 9);
     await page.locator('[data-delete-session="session-8"]').click();
     assert.deepEqual(await page.evaluate(() => window.messages.at(-1)), {type: 'deleteSession', id: 'session-8'});
+    await page.locator('[data-rename-session="session-8"]').click();
+    assert.deepEqual(await page.evaluate(() => window.messages.at(-1)), {type: 'renameSession', id: 'session-8'});
     assert.deepEqual(errors, []);
   } finally {
     await browser?.close();
