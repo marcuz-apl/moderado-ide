@@ -141,10 +141,15 @@ function selectedChoice(state: SettingsState): SettingsProviderChoice | undefine
  */
 function modelOptions(state: SettingsState): string {
   return tabModels(state)
-    .map(
-      (model) =>
-        `<option value="${escapeHtml(model.id)}"${model.id === state.defaultModel ? ' selected' : ''}>${escapeHtml(`${model.isFree ? '★ ' : ''}${model.id === 'auto' ? state.preset === 'moderado-cloud' ? 'AUTO · Gateway routing' : 'AUTO · Free-first' : model.id} — ${model.accessTier}`)}</option>`,
-    )
+    .map((model) => {
+      const name = model.id === 'auto'
+        ? state.preset === 'moderado-cloud' ? 'AUTO · Gateway routing' : 'AUTO · Free-first'
+        : model.id;
+      const tier = model.isFree && model.id.toLowerCase().endsWith(':free')
+        ? ''
+        : ` — ${model.accessTier}`;
+      return `<option value="${escapeHtml(model.id)}"${model.id === state.defaultModel ? ' selected' : ''}>${escapeHtml(`${model.isFree ? '★ ' : ''}${name}${tier}`)}</option>`;
+    })
     .join('');
 }
 

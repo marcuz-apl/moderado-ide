@@ -62,6 +62,16 @@ describe('Gateway and provider Settings boundary', () => {
     expect(html).not.toContain('class="model-card');
   });
 
+  it('does not repeat the free trial tier when a model ID already ends in :free', () => {
+    const html = settingsPaneHtml({ ...gateway(), models: [
+      { id: 'company/model-ver-flash:free', accessTier: 'free_trial', isFree: true },
+      { id: 'company/other-model', accessTier: 'free_trial', isFree: true },
+    ] });
+    expect(html).toContain('★ company/model-ver-flash:free</option>');
+    expect(html).not.toContain('company/model-ver-flash:free — free_trial');
+    expect(html).toContain('★ company/other-model — free_trial');
+  });
+
   it('keeps direct AUTO visible on the Free tab while paid models move to the Paid tab', () => {
     const state = { ...gateway(), preset: 'openrouter', modelTab: 'free', models: [
       { id: 'auto', accessTier: 'unknown', isFree: false },

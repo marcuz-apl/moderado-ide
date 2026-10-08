@@ -1243,3 +1243,14 @@ Windows CI previously failed three snapshot/deletion security tests; those cases
 - `node --test scripts/test/settings-webview.test.mjs`: browser test **skipped**
   because `MODERADO_PLAYWRIGHT_PATH` is not configured in this environment.
 - `git diff --check`: **pass**. Source changes remain uncommitted and unpushed.
+
+## Free-model label cleanup (2026-10-08 UTC)
+
+- API Config model options omit the duplicate access-tier suffix only when a
+  free model ID already ends in `:free`; all other tier labels remain visible.
+- Regression test first failed on `company/model-ver-flash:free — free_trial`,
+  then passed after the label fix.
+- `npm --prefix extensions/moderado-agent test -- test/settings-view.test.ts`:
+  **12/12 pass**; `npm --prefix extensions/moderado-agent run typecheck`: **pass**.
+- The next all-platform Actions run must include this source change before its
+  artifacts can be considered current.
