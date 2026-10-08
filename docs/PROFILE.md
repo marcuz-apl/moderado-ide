@@ -46,6 +46,15 @@ reference enters `config.json`; new plaintext secrets never do. Storage errors
 and timeouts fail the operation instead of falling back to plaintext storage.
 Windows continues to use the shared Credential Manager targets above.
 
+New IDE key saves stage an immutable target of the form
+`moderado/provider/<normalized-provider-id>-<UUID>` and link that exact reference
+from config only after storage succeeds. Existing canonical targets remain
+readable and are never migrated or overwritten by staging. The pinned CLI
+`v0.4.8` preserves the stored reference string and passes it unchanged through
+its resolver to Windows Credential Manager, so these targets need no profile
+schema change. A failed save can leave an unreferenced credential; IDE does not
+automatically delete such entries or claim coordinated CLI credential writes.
+
 On non-Windows platforms the current CLI uses an in-memory credential store
 plus environment or legacy config values. The CLI cannot retrieve keys from
 the IDE's editor secret storage simply by sharing `~/.moderado`; configure its

@@ -1191,3 +1191,23 @@ Updated artifacts and final checks:
 - python3 build/verify-installers.py: exit 0, updated RPM payload hashes/metadata/mode/dependencies verified; manifest and checksums updated for build 4.
 - cd build/installers && sha256sum --check SHA256SUMS: both OK.
 - git diff --check: exit 0. Source changes remain uncommitted; no remote update performed.
+
+## Complete Settings workflow and source push (2026-10-08 UTC)
+
+Owner requested an editable preset-filled Base URL, masked API Key paste, automatic free-model discovery plus Reload, Save settings, per-chat history deletion, and About. Features/General screenshots were FYI only; owner chose working Moderado controls only and simpler pages. Implemented Features (paid/unknown model opt-ins, web search, history at startup, approval timeout) and General (preferred reply language). Preferences persist in native editor configuration and apply to new tasks. Narrow sidebars use horizontal wrapping navigation.
+
+Security: staged immutable credential references prevent conflict/cancellation/timeout from overwriting old linked credentials. Existing canonical references remain readable; pinned CLI v0.4.8 resolves stored references verbatim, requiring no schema/shared-engine change. Browser-token reuse retains its existing reference. Edited endpoints cannot inherit a stored key silently. Key drafts clear on save/close/provider changes; exact-key errors are redacted and credential-reflecting catalogs are rejected. Native credential failures report a safe, actionable message. History deletion is native-confirmed, workspace-scoped, rejects symlinks, removes image snapshots, and refuses active runs. No CLI repository writes or new application runtime dependencies.
+
+Verification:
+- New offline regressions failed first for editable URLs, key submissions, secret storage, custom provider reload, missing-key validation, browser reference reuse, credential echo, preferences, and history deletion.
+- npm test --prefix extensions/moderado-agent > build/logs/settings-verified-suite.log 2>&1: exit 0, 383 passed, 4 skipped, 19 files passed. Includes profile compatibility/security fixtures.
+- npm run typecheck --prefix extensions/moderado-agent > build/logs/settings-verified-typecheck.log 2>&1: exit 0.
+- npm run compile --prefix extensions/moderado-agent > build/logs/settings-verified-compile.log 2>&1: exit 0.
+- MODERADO_PLAYWRIGHT_PATH=/mnt/d/projects/moderado-ide/.cache/vscodium/vscode/node_modules/playwright/index.mjs PATH="$PWD/build/toolchain/bin:$PATH" node --test scripts/test/*.test.mjs > build/logs/settings-complete-browser.log 2>&1: 12 passed, 0 skipped. Existing pinned editor Playwright used; no new dependency.
+- node scripts/smoke-linux.mjs > build/logs/settings-verified-agent-smoke.log 2>&1: exit 0; real packaged host activated and fake-provider turn completed in isolated state.
+- dbus-run-session -- python3 build/run-keyring-gui.py > build/logs/settings-verified-gui.log 2>&1: exit 0. Complete real Linux editor flow verified with local mock HTTP provider and isolated profiles/keyring: default/edited URL, unsaved-key model discovery, no plaintext key in shared config, saved key and preferences survive restart, all Settings pages, exact About version, chat deletion, window close. Encryption backend gnome_libsecret reported available. Result build/settings-complete-gui-aeMwqb/result.json.
+- The WSL environment without a recognized OS keyring correctly refused secure key saving. Test-only keyring packages were downloaded/extracted under build/toolchain; no system installation and no acceptance of weaker encryption.
+- Focused independent functional/security reviews completed; identified reference reuse/conflict defects fixed and tested.
+- git diff --check and IDE-local hook shell syntax checks: exit 0; core.hooksPath=.githooks verified. git fetch origin and git rev-list --left-right --count master...origin/master: 0 0 before commit.
+
+Owner explicitly authorized committing/pushing all changes. Source only; ignored build artifacts and keyring fixtures remain local. Linux packages will be rebuilt from the committed version; no public installers, signing, or release publication authorized. Native Windows/macOS credential behavior is not claimed verified by these Linux checks.

@@ -64,6 +64,12 @@ agent in a complete editor. The first complete flow is:
 | F7 | Resolve Windows provider credentials using the existing `moderado/provider/<id>` Credential Manager references. | A CLI-stored test credential works in IDE without copying the secret into `config.json` or the UI. |
 | F8 | Discover and run explicitly configured MCP tools only after the user trusts that server. MCP calls are auto-approved by default; users can turn off Use MCP servers to require per-call approval. | A fake MCP server cannot launch before explicit server trust; when per-call approval is enabled, it cannot bypass approval. Provider credentials are removed from its inherited environment. The UI explains that an MCP server is an external process with its own filesystem privileges. |
 | F9 | Add project-file context references with @ and explicitly selected text files/images with + in the composer, with removable attachment chips. | @ rejects paths outside the canonical project jail; + accepts human-selected external files within bounded format/size limits. Fake-provider tests verify image content parts and IDE-only snapshot restoration while shared sessions remain text-only. |
+| F10 | API Config provides an editable preset-filled Base URL, a masked write-only API Key input, automatic free-model discovery after URL/key edits, Reload models, and Save settings. Unknown endpoints are reported explicitly. | Offline browser/host tests cover unsaved-key discovery, correct provider endpoints, safe key persistence on Linux/Windows, no secret echo, reload, and save. |
+| F11 | Users can delete any recorded chat in their workspace from Chat History. | Native confirmation precedes deletion; UUID/path/symlink checks constrain deletion to that workspace and its image snapshots; active runs block deletion. |
+| F12 | Settings includes a simple About subpage showing IDE version, editor version, MIT license, and project link. | Escaping and browser tests verify page navigation and built version metadata. |
+| F13 | Features and General use simple grouped settings with working Moderado controls: paid/unknown cost opt-ins, web search, history on startup, approval timeout, and preferred reply language. Preferences remain in editor configuration. | Offline host/browser tests verify validated settings persist, affect new tasks, block disabled web search, and never write shared agent config. |
+
+
 
 Auto-Approve defaults to Read files, Edit files, Fetch web content, and Use MCP
 servers. Execute commands stays off by default. These host-side defaults are
@@ -102,8 +108,8 @@ See [the detailed profile contract](docs/PROFILE.md).
 ## 6. Non-functional requirements
 
 - **Security:** Keep the Moderado tool jail and approval boundary authoritative;
-  workspace and model content are untrusted. Never send provider secrets into
-  renderer events, logs, crash reports, or child process environments. A local
+  workspace and model content are untrusted. Never send stored or resolved provider secrets into
+  renderer events, logs, crash reports, or child process environments. A user-pasted key may exist transiently in the Settings password input and is accepted only by validated discovery/save messages; it is never echoed by the host. A local
   MCP server is separately trusted executable code and is not confined by the
   file-tool workspace jail.
 - **Reliability:** Fail closed on malformed config, session, provider, or tool

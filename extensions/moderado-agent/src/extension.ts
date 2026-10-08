@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { createContextAttachment, createFileAttachment, preparePrompt, type DraftAttachment } from './attachments.js';
 import * as vscode from 'vscode';
+import { defaultSettingsPreferences, parsePreferenceChange, type SettingsPreferences } from './settings-preferences.js';
 import { IDE_VERSION } from './ide-version.js';
 import { AgentEvent, ApprovalRequest } from '@moderado/contracts';
 import { AgentHost, RunOutcome } from './host.js';
@@ -12,6 +13,8 @@ import {
   EditorCredentialStore,
   credentialManagerAvailable,
   credentialReference,
+  newCredentialReference,
+  type CredentialStore,
   resolveCredential,
 } from './credentials.js';
 import { ChatViewState, TranscriptEntry, AutoApproveState, chatHtml, viewSnapshot } from './chat-view.js';
@@ -75,6 +78,14 @@ export function activate(context: vscode.ExtensionContext): ModeradoApi {
   context.subscriptions.push(output);
 
   const config = () => vscode.workspace.getConfiguration('moderado');
+  function readPreferences(): SettingsPreferences {
+    const preferences: SettingsPreferences = { ...defaultSettingsPreferences };
+    for (const key of Object.keys(preferences) as (keyof SettingsPreferences)[]) {
+      const parsed = parsePreferenceChange(key, config().get(key, preferences[key]));
+      if (parsed.ok) Object.assign(preferences, { [parsed.value.key]: parsed.value.value });
+    }
+    return preferences;
+  }
   const pendingApprovals = new Map<string, (raw: RawDecision | undefined) => void>();
   /**
    * The request behind each id, kept so a sidebar "show full diff" action can
@@ -82,7 +93,7 @@ export function activate(context: vscode.ExtensionContext): ModeradoApi {
    * read-only preview and can never authorize anything on its own.
    */
   const pendingApprovalRequests = new Map<string, ApprovalRequest>();
-  const settings: SettingsState = { ...emptySettings(), ideVersion: IDE_VERSION, editorVersion: vscode.version };
+  const settings: SettingsState = { ...emptySettings(), ideVersion: IDE_VERSION, editorVersion: vscode.version, preferences: readPreferences() };
   const credentialStore = credentialManagerAvailable() ? new WindowsCredentialStore() : new EditorCredentialStore(context.secrets);
   let discoveryRequest = 0;
   let discoveryAbort: AbortController | undefined;
@@ -108,6 +119,7 @@ export function activate(context: vscode.ExtensionContext): ModeradoApi {
 
   const view: ChatViewState & { planMode: boolean } = {
     transcript: [],
+    historyOpen: settings.preferences?.showHistoryOnStartup ?? false,
     running: false,
     pendingApproval: null,
     planMode: false,
@@ -154,6 +166,7 @@ export function activate(context: vscode.ExtensionContext): ModeradoApi {
     // On Windows the key comes from Credential Manager; elsewhere the in-memory
     // default keeps Desktop usable without a keychain.
     credentialStore,
+    getPreferences: readPreferences,
     approvalTimeoutMs: config().get<number>('approvalTimeoutSeconds', 120) * 1000,
     allowPaid: config().get<boolean>('allowPaidModels', false),
     allowUnknown: config().get<boolean>('allowUnknownModels', false),
@@ -292,8 +305,9 @@ async function openDiffTab(requestId: string): Promise<void> {
     settings.open = true;
     settings.profileError = undefined;
     settings.models = [];
-    settings.allowPaid = config().get<boolean>('allowPaidModels', false);
-    settings.allowUnknown = config().get<boolean>('allowUnknownModels', false);
+    settings.preferences = readPreferences();
+    settings.allowPaid = settings.preferences.allowPaidModels;
+    settings.allowUnknown = settings.preferences.allowUnknownModels;
     if (status) {
       // Show the in-flight text immediately, then let the settled outcome below
       // replace it. Re-using the placeholder as the final value is what left the
@@ -466,7 +480,8 @@ async function openDiffTab(requestId: string): Promise<void> {
     const sensitiveValues: string[] = [];
     const result = await discoverModelOptions(async () => {
       const baseUrl = discoveryForm.baseUrl;
-      const endpointChanged = typeof stored?.baseUrl === 'string' && baseUrl.replace(/\/+$/, '') !== stored.baseUrl.replace(/\/+$/, '');
+      const knownBaseUrl = typeof stored?.baseUrl === 'string' ? stored.baseUrl : choice?.baseUrl;
+      const endpointChanged = !knownBaseUrl || baseUrl.replace(/\/+$/, '') !== knownBaseUrl.replace(/\/+$/, '');
       const apiKey = pending?.apiKey || (discoveryForm.loginMethod === 'public' && preset === 'moderado-cloud' || endpointChanged
         ? undefined : await storedKey(presetConnectionId(preset), stored));
       if (controller.signal.aborted) return [];
@@ -552,15 +567,34 @@ async function openDiffTab(requestId: string): Promise<void> {
     settingsBusy = true;
     loginAbort = new AbortController();
     const signal = loginAbort.signal;
+    let savePhase = 'validation';
     try {
       // Validate the endpoint before collecting a credential or opening a browser.
       const discovery = buildDiscoveryConnection({ preset: form.preset, storedBaseUrl: form.baseUrl,
         displayName: form.displayName, defaultModel: form.modelId || 'auto' }, connectConfig);
       const stored = connectionRecord(profileConfig, discovery.id);
       const pastedKey = 'apiKey' in form && typeof form.apiKey === 'string' ? form.apiKey : undefined;
-      const endpointChanged = typeof stored?.baseUrl === 'string' && discovery.baseUrl.replace(/\/+$/, '') !== stored.baseUrl.replace(/\/+$/, '');
+      const knownBaseUrl = typeof stored?.baseUrl === 'string' ? stored.baseUrl : choice.baseUrl;
+      const endpointChanged = !knownBaseUrl || discovery.baseUrl.replace(/\/+$/, '') !== knownBaseUrl.replace(/\/+$/, '');
       let apiKey = pastedKey || (endpointChanged ? undefined : await storedKey(discovery.id, stored));
+      let stagedReference: string | undefined;
+      const stagedStore: CredentialStore = {
+        get: reference => credentialStore.get(reference),
+        set: async (_reference, secret) => {
+          stagedReference = newCredentialReference(discovery.id);
+          savePhase = 'credential storage';
+          await credentialStore.set(stagedReference, secret);
+          savePhase = 'validation';
+        },
+        // Public access drops the profile reference; preserve previous keys.
+        delete: async () => {},
+      };
       let connection: ProviderConnectionRecord;
+      if (action === 'save' && !apiKey && (choice.requiresApiKey || (discovery.id === 'moderado-cloud' && form.loginMethod === 'manual'))) {
+        settings.status = 'Paste an API key before saving.';
+        render();
+        return;
+      }
       if (discovery.id === 'moderado-cloud') {
         if (form.loginMethod === 'public') {
           connection = buildGatewayConnection('public', { baseUrl: discovery.baseUrl });
@@ -571,21 +605,24 @@ async function openDiffTab(requestId: string): Promise<void> {
               settings.status = 'Waiting for browser sign-in?'; render();
               const credential = await authorizeGatewayInBrowser({ openExternal: url => Promise.resolve(vscode.env.openExternal(vscode.Uri.parse(url))), signal });
               if (signal.aborted) throw new Error('Gateway login cancelled.');
-              connection = await persistGatewayLogin('browser', { baseUrl: discovery.baseUrl, key: credential.accessToken, expiresAt: credential.expiresAt }, credentialStore);
-            } else connection = buildGatewayConnection('browser', { baseUrl: discovery.baseUrl, key: apiKey, expiresAt: expiry });
+              connection = await persistGatewayLogin('browser', { baseUrl: discovery.baseUrl, key: credential.accessToken, expiresAt: credential.expiresAt }, stagedStore);
+            } else {
+              connection = buildGatewayConnection('browser', { baseUrl: discovery.baseUrl, key: apiKey, expiresAt: expiry });
+              if (typeof stored?.credentialReference === 'string') connection.credentialReference = stored.credentialReference;
+            }
           } else {
             if (!pastedKey && (action === 'key' || !apiKey || stored?.authMethod === 'browser')) {
-              apiKey = await vscode.window.showInputBox({ prompt: 'Gateway key beginning with mrd_ (stored in Windows Credential Manager)', password: true, ignoreFocusOut: true });
+              apiKey = await vscode.window.showInputBox({ prompt: 'Gateway key beginning with mrd_ (stored in secure credential storage)', password: true, ignoreFocusOut: true });
               if (apiKey === undefined || signal.aborted) throw new Error('Gateway key entry cancelled.');
             }
             if (!apiKey) throw new Error('Paste a Gateway key before saving.');
-            connection = await persistGatewayLogin('manual', { baseUrl: discovery.baseUrl, key: apiKey.trim() }, credentialStore);
+            connection = await persistGatewayLogin('manual', { baseUrl: discovery.baseUrl, key: apiKey.trim() }, stagedStore);
           }
         }
         connection.defaultModel = form.modelId || 'auto';
       } else {
         if (!pastedKey && (action === 'key' || (choice.requiresApiKey && !apiKey))) {
-          apiKey = await vscode.window.showInputBox({ prompt: 'API key (stored in Windows Credential Manager)', password: true, ignoreFocusOut: true });
+          apiKey = await vscode.window.showInputBox({ prompt: 'API key (stored in secure credential storage)', password: true, ignoreFocusOut: true });
           if (apiKey === undefined || signal.aborted) throw new Error('API key entry cancelled.');
           if (!apiKey.trim()) throw new Error('Enter a nonempty API key.');
         }
@@ -594,25 +631,31 @@ async function openDiffTab(requestId: string): Promise<void> {
         // NVIDIA's fixed endpoint still needs to persist the chosen model.
         connection.defaultModel = form.modelId || 'auto';
         if (apiKey && (pastedKey || action === 'key' || !stored?.credentialReference)) {
-          await credentialStore.set(credentialReference(connection.id), apiKey.trim());
-          connection.credentialReference = credentialReference(connection.id);
+          await stagedStore.set(credentialReference(connection.id), apiKey.trim());
+          connection.credentialReference = stagedReference;
         } else connection.credentialReference = !endpointChanged && typeof stored?.credentialReference === 'string' ? stored.credentialReference : undefined;
       }
+      if (stagedReference) connection.credentialReference = stagedReference;
       if (signal.aborted) throw new Error('Provider connection cancelled.');
       const saved = { ...stored, ...connection, apiKey: undefined,
         ...(discovery.id === 'moderado-cloud' ? {
           credentialReference: connection.credentialReference,
           credentialExpiresAt: 'credentialExpiresAt' in connection ? connection.credentialExpiresAt : undefined,
         } : {}) };
+      savePhase = 'profile persistence';
       const result = updateConfigCoordinated(configPath(), {
         connections: { [connection.id]: saved }, activeConnectionId: connection.id, defaultModel: connection.defaultModel,
       }, { expected: { connections: profileConfig.connections, activeConnectionId: profileConfig.activeConnectionId, defaultModel: profileConfig.defaultModel } });
       if (!result.written) { settings.status = result.conflict?.reason ?? result.reason ?? 'Could not save the settings.'; render(); return; }
+      void chatView?.webview.postMessage({ type: 'providerSaved' });
       await loadSettingsState('Saved.', { skipModels: true });
       await loadModelsForPreset(settings.preset);
     } catch {
-      // Never expose native input, credential service errors, or OAuth responses.
-      settings.status = signal.aborted ? 'Provider connection cancelled.' : 'Provider connection failed or key entry was cancelled. Check the endpoint, key, and login method, then retry.';
+      // Log only a fixed phase label, never native input or service responses.
+      output.appendLine(`Provider save failed during ${savePhase}.`);
+      settings.status = signal.aborted ? 'Provider connection cancelled.'
+        : savePhase === 'credential storage' ? 'Could not store the API key securely. Unlock or configure your desktop credential storage, then retry.'
+          : 'Provider connection failed or key entry was cancelled. Check the endpoint, key, and login method, then retry.';
       render();
     } finally {
       settingsBusy = false;
@@ -673,6 +716,21 @@ async function openDiffTab(requestId: string): Promise<void> {
     } finally { pickingAttachments = false; }
   }
 
+  async function savePreference(message: Record<string, unknown>): Promise<void> {
+    const parsed = parsePreferenceChange(message.key, message.value);
+    if (!parsed.ok) { settings.status = parsed.error; render(); return; }
+    try {
+      await config().update(parsed.value.key, parsed.value.value, vscode.ConfigurationTarget.Global);
+      settings.preferences = readPreferences();
+      settings.allowPaid = settings.preferences.allowPaidModels;
+      settings.allowUnknown = settings.preferences.allowUnknownModels;
+      settings.status = 'Saved.';
+    } catch {
+      settings.status = 'Could not save this setting. Please retry.';
+    }
+    render();
+  }
+
   /** Handles every message the chat webview can send. */
   function handleWebviewMessage(message: unknown): void {
     if (!message || typeof message !== 'object') return;
@@ -713,6 +771,10 @@ async function openDiffTab(requestId: string): Promise<void> {
       render();
       return;
     }
+    if (msg.type === 'setPreference') {
+      void savePreference(msg);
+      return;
+    }
     if (msg.type === 'setModelTab' && (msg.tab === 'free' || msg.tab === 'paid')) {
       const parsed = parseSettingsForm(msg);
       if (parsed.ok) applySettingsForm(parsed.value);
@@ -747,6 +809,11 @@ async function openDiffTab(requestId: string): Promise<void> {
       host.startNewSession();
       refreshRecents();
       settings.status = undefined;
+      render();
+      return;
+    }
+    if (msg.type === 'showSessions') {
+      view.historyOpen = true;
       render();
       return;
     }

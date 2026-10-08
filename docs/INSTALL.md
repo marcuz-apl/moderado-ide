@@ -172,3 +172,8 @@ The editor is built from MIT-licensed Code OSS through VSCodium's MIT-licensed
 build scripts. `LICENSES.chromium.html` ships with the packaged editor and
 carries the bundled Chromium/Electron third-party notices. Moderado's own code is
 MIT; see [LICENSE](LICENSE).
+
+
+### Provider keys on Linux
+
+API Config accepts a pasted key in its masked API Key field. Save uses the editor’s secret storage and writes only a credential reference to the shared Moderado config. Unlock or configure your desktop keyring if secure storage is unavailable; the IDE does not silently write the key into config.json. A Linux IDE-stored key is local to the editor and is not available to the CLI’s in-memory credential store.

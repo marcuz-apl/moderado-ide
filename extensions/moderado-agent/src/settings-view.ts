@@ -1,3 +1,4 @@
+import { defaultSettingsPreferences, settingsFeaturesHtml, settingsGeneralHtml, type SettingsPreferences } from './settings-preferences.js';
 import { settingsAboutHtml } from './settings-about.js';
 import { escapeHtml } from './html.js';
 import { validateProviderBaseUrl } from './provider-setup.js';
@@ -8,8 +9,8 @@ import type { GatewayLoginMethod } from './gateway-login.js';
  *
  * Same split as chat-view.ts: no `vscode` import, so this is directly testable.
  *
- * SECURITY BOUNDARY. This pane carries nonsecret choices only. Keys are entered
- * in the native extension-host prompt and stored directly in Credential Manager.
+ * SECURITY BOUNDARY. This pane carries nonsecret choices only. User-entered keys live transiently
+ * in a password input; stored keys are never rendered and persistence stays in the host.
  *  - Everything rendered here (provider names, base URLs, model ids, profile
  *    errors) is untrusted data from the shared profile and is escaped.
  */
@@ -86,6 +87,7 @@ export interface SettingsState {
   modelTab?: string;
   ideVersion?: string;
   editorVersion?: string;
+  preferences?: SettingsPreferences;
 }
 
 export function emptySettings(): SettingsState {
@@ -212,11 +214,14 @@ function modelCards(state: SettingsState): string {
 export function settingsPaneHtml(state: SettingsState): string {
   // A corrupt profile must stop the user here. Rendering an empty form would
   // invite saving defaults over data that was never successfully read.
-  if (state.page === 'about') {
+  if (state.page === 'about' || state.page === 'features' || state.page === 'general') {
+    const preferences = state.preferences ?? { ...defaultSettingsPreferences };
+    const content = state.page === 'about' ? settingsAboutHtml(state.ideVersion ?? 'Development', state.editorVersion)
+      : state.page === 'features' ? settingsFeaturesHtml(preferences) : settingsGeneralHtml(preferences);
     return `<section id="settings-pane" class="settings" aria-label="Moderado settings">
       <div class="set-head"><h2>Settings</h2><button id="close-settings" type="button" class="done">Done</button></div>
-      <div class="set-body"><nav class="set-nav" aria-label="Settings sections">${settingsNav('about')}</nav>
-      <div class="set-content">${settingsAboutHtml(state.ideVersion ?? 'Development', state.editorVersion)}</div></div>
+      <div class="set-body"><nav class="set-nav" aria-label="Settings sections">${settingsNav(state.page)}</nav>
+      <div class="set-content">${content}<p id="settings-status" class="status" role="status">${escapeHtml(state.status ?? '')}</p></div></div>
     </section>`;
   }
   const blocked = Boolean(state.profileError);

@@ -1,5 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import { EditorCredentialStore, WindowsCredentialStore } from '../src/credentials.js';
+import { credentialReference, EditorCredentialStore, MemoryCredentialStore, newCredentialReference, WindowsCredentialStore } from '../src/credentials.js';
+
+describe('immutable credential references', () => {
+  it('stages unique keys without replacing an existing canonical key', async () => {
+    const canonical = credentialReference(' Test Provider ');
+    const first = newCredentialReference(' Test Provider ');
+    const second = newCredentialReference(' Test Provider ');
+    expect(first).toMatch(/^moderado\/provider\/test-provider-[a-f0-9-]{36}$/);
+    expect(second).not.toBe(first);
+    const secrets = new MemoryCredentialStore();
+    const editor = new EditorCredentialStore({ get: key => secrets.get(key), store: (key, value) => secrets.set(key, value), delete: key => secrets.delete(key) });
+    await editor.set(canonical, 'old-key');
+    await editor.set(first, 'new-key');
+    expect(await editor.get(canonical)).toBe('old-key');
+    expect(await editor.get(first)).toBe('new-key');
+  });
+
+  it('bounds references and rejects empty or oversized provider identifiers', () => {
+    expect(newCredentialReference('x'.repeat(201))).toHaveLength(256);
+    expect(() => newCredentialReference('x'.repeat(202))).toThrow();
+    expect(() => newCredentialReference('  ')).toThrow();
+  });
+});
 
 describe('editor secret storage', () => {
   it('persists provider keys across adapter instances and deletes them', async () => {

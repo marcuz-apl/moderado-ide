@@ -7,13 +7,13 @@ const harness = vi.hoisted(() => ({
   profile: {} as Record<string, unknown>, invalid: false,
   messages: [] as Record<string, unknown>[], keys: new Map<string, string>(),
   provider: undefined as any, receive: undefined as any,
-  agentOptions: undefined as any, histories: [] as StoredSession[], currentId: '', deleted: vi.fn(), confirm: vi.fn(),
+  agentOptions: undefined as any, configValues: new Map<string, unknown>(), configUpdate: vi.fn(), histories: [] as StoredSession[], currentId: '', deleted: vi.fn(), confirm: vi.fn(),
   runs: [] as Record<string, unknown>[],
   workspaceRoot: '', windows: true, fileDialog: vi.fn(), contextPicker: vi.fn(), findFiles: vi.fn(), errors: vi.fn(),
   prompt: vi.fn(), browser: vi.fn(), write: vi.fn(), openExternal: vi.fn(),
 }));
 vi.mock('vscode', () => ({
-  version: '1.135.0',
+  version: '1.135.0', ConfigurationTarget: { Global: 1 },
   window: {
     createOutputChannel: () => ({ appendLine: vi.fn(), dispose: vi.fn() }),
     registerWebviewViewProvider: (_id: string, provider: unknown) => { harness.provider = provider; return { dispose: vi.fn() }; },
@@ -21,7 +21,7 @@ vi.mock('vscode', () => ({
     showErrorMessage: harness.errors, showWarningMessage: harness.confirm,
   },
   workspace: { get workspaceFolders() { return [{ uri: { fsPath: harness.workspaceRoot } }]; }, findFiles: harness.findFiles,
-    getConfiguration: () => ({ get: (_key: string, fallback: unknown) => fallback }) },
+    getConfiguration: () => ({ get: (key: string, fallback: unknown) => harness.configValues.has(key) ? harness.configValues.get(key) : fallback, update: harness.configUpdate }) },
   commands: { registerCommand: () => ({ dispose: vi.fn() }) },
   env: { openExternal: harness.openExternal }, Uri: { parse: (url: string) => url, file: (fsPath: string) => ({ fsPath, scheme: 'file' }) },
   RelativePattern: class { constructor(public base: unknown, public pattern: string) {} },
@@ -65,6 +65,8 @@ const html = () => String(harness.messages.at(-1)?.settings ?? '');
 beforeEach(() => {
   harness.workspaceRoot = mkdtempSync(join(tmpdir(), 'moderado-composer-workspace-'));
   harness.fileDialog.mockResolvedValue(undefined); harness.contextPicker.mockResolvedValue(undefined); harness.findFiles.mockResolvedValue([]);
+  harness.configValues.clear();
+  harness.configUpdate.mockImplementation(async (key: string, value: unknown) => { harness.configValues.set(key, value); });
   harness.windows = true; harness.histories = []; harness.currentId = ''; harness.confirm.mockResolvedValue('Delete');
   vi.clearAllMocks(); harness.messages = []; harness.keys.clear(); harness.profile = {}; harness.invalid = false; harness.runs = [];
   harness.prompt.mockResolvedValue('mrd_native-secret');
@@ -90,9 +92,9 @@ describe('host-only Settings credentials', () => {
     send('setProviderKey', form);
     await vi.waitFor(() => expect(harness.write).toHaveBeenCalled());
     expect(harness.prompt).toHaveBeenCalledWith(expect.objectContaining({ password: true, ignoreFocusOut: true }));
-    expect(harness.keys.get('moderado/provider/moderado-cloud')).toBe('mrd_native-secret');
+    expect(harness.keys.get((harness.profile.connections as Record<string, Record<string, string>>)['moderado-cloud']?.credentialReference)).toBe('mrd_native-secret');
     expect(harness.profile).toMatchObject({ defaultModel: 'Exact/Route', connections: { 'moderado-cloud': {
-      authMethod: 'manual', credentialReference: 'moderado/provider/moderado-cloud', defaultModel: 'Exact/Route',
+      authMethod: 'manual', credentialReference: expect.stringMatching(/^moderado\/provider\/moderado-cloud-/), defaultModel: 'Exact/Route',
     } } });
     await vi.waitFor(() => expect(html()).toContain('Credential stored'));
     expect(JSON.stringify(harness.messages)).not.toMatch(/mrd_native-secret|moderado\/provider\//);
@@ -289,9 +291,9 @@ describe('API Config paste, discover, then save', () => {
     expect(JSON.stringify(harness.messages)).not.toContain('draft-private-key');
     send('saveSettings', values);
     await vi.waitFor(() => expect(harness.write).toHaveBeenCalled());
-    expect(harness.keys.get('moderado/provider/nvidia-nim')).toBe('draft-private-key');
+    expect(harness.keys.get((harness.profile.connections as Record<string, Record<string, string>>)['nvidia-nim']?.credentialReference)).toBe('draft-private-key');
     expect(harness.prompt).not.toHaveBeenCalled();
-    expect(harness.profile).toMatchObject({ connections: { 'nvidia-nim': { baseUrl: 'https://provider.example/v1', credentialReference: 'moderado/provider/nvidia-nim' } } });
+    expect(harness.profile).toMatchObject({ connections: { 'nvidia-nim': { baseUrl: 'https://provider.example/v1', credentialReference: expect.stringMatching(/^moderado\/provider\/nvidia-nim-/) } } });
     expect(JSON.stringify(harness.profile)).not.toContain('draft-private-key');
   });
   it('explains an unknown URL without making a request', async () => {
@@ -341,5 +343,95 @@ describe('saved provider and history workflows', () => {
     send('deleteSession', { id: '../outside' });
     send('deleteSession', { id: session.id, path: '/outside' });
     expect(harness.confirm).not.toHaveBeenCalled(); expect(harness.deleted).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('API Config secure save boundaries', () => {
+  it('clears an old optional key reference when saving a changed endpoint', async () => {
+    harness.profile = { activeConnectionId: 'ollama', connections: { ollama: { id: 'ollama', baseUrl: 'http://localhost:11434/v1', credentialReference: 'moderado/provider/ollama', defaultModel: 'auto' } } };
+    harness.keys.set('moderado/provider/ollama', 'old-key');
+    send('saveSettings', { preset: 'ollama', baseUrl: 'http://localhost:5999/v1', modelId: 'auto' });
+    await vi.waitFor(() => expect(harness.write).toHaveBeenCalled());
+    expect((harness.profile.connections as Record<string, Record<string, unknown>>).ollama.credentialReference).toBeUndefined();
+    expect(fetch).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer old-key' }) }));
+  });
+  it('uses editor secret storage to save a pasted key on Linux', async () => {
+    harness.windows = false;
+    activate({ subscriptions: [], secrets: { get: async (key: string) => harness.keys.get(key), store: async (key: string, value: string) => { harness.keys.set(key, value); }, delete: async (key: string) => { harness.keys.delete(key); } } } as any);
+    harness.provider.resolveWebviewView({ webview: { options: {}, html: '', onDidReceiveMessage: (receive: unknown) => { harness.receive = receive; }, postMessage: (message: Record<string, unknown>) => { harness.messages.push(message); return Promise.resolve(true); } }, onDidDispose: vi.fn() });
+    send('saveSettings', { preset: 'nvidia-nim', baseUrl: 'https://provider.example/v1', modelId: 'auto', apiKey: 'linux-private-key' });
+    await vi.waitFor(() => expect(harness.keys.get((harness.profile.connections as Record<string, Record<string, string>>)['nvidia-nim']?.credentialReference)).toBe('linux-private-key'));
+    await vi.waitFor(() => expect(harness.write).toHaveBeenCalled());
+    expect(harness.prompt).not.toHaveBeenCalled();
+    expect(JSON.stringify(harness.messages)).not.toContain('linux-private-key');
+    expect(JSON.stringify(harness.profile)).not.toContain('linux-private-key');
+  });
+});
+
+
+describe('immutable credential saves', () => {
+  it('a config conflict never overwrites a previously referenced key', async () => {
+    const originalReference = 'moderado/provider/nvidia-nim';
+    harness.profile = { activeConnectionId: 'nvidia-nim', connections: { 'nvidia-nim': { id: 'nvidia-nim', baseUrl: 'https://provider.example/v1', credentialReference: originalReference } } };
+    harness.keys.set(originalReference, 'original-key');
+    harness.write.mockReturnValue({ written: false, reason: 'config changed' });
+    send('saveSettings', { preset: 'nvidia-nim', baseUrl: 'https://provider.example/v1', modelId: 'auto', apiKey: 'replacement-key' });
+    await vi.waitFor(() => expect(harness.write).toHaveBeenCalled());
+    expect(harness.keys.get(originalReference)).toBe('original-key');
+    expect((harness.profile.connections as Record<string, Record<string, string>>)['nvidia-nim'].credentialReference).toBe(originalReference);
+    expect(JSON.stringify(harness.messages)).not.toContain('replacement-key');
+  });
+  it('missing required keys use the API Config validation instead of opening a prompt', async () => {
+    send('saveSettings', { preset: 'nvidia-nim', baseUrl: 'https://provider.example/v1', modelId: 'auto' });
+    await vi.waitFor(() => expect(html()).toContain('Paste an API key before saving'));
+    expect(harness.prompt).not.toHaveBeenCalled();
+    expect(harness.write).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('Features and General editor preferences', () => {
+  it('saves only validated preferences to editor configuration and supplies them to new runs', async () => {
+    send('setPreference', { key: 'preferredLanguage', value: 'French' });
+    await vi.waitFor(() => expect(harness.configUpdate).toHaveBeenCalledWith('preferredLanguage', 'French', 1));
+    expect(harness.agentOptions.getPreferences().preferredLanguage).toBe('French');
+    expect(harness.write).not.toHaveBeenCalled();
+    send('setPreference', { key: 'webSearchEnabled', value: false });
+    await vi.waitFor(() => expect(harness.agentOptions.getPreferences().webSearchEnabled).toBe(false));
+  });
+  it('rejects arbitrary configuration keys and malformed values', () => {
+    send('setPreference', { key: 'providerSecret', value: 'invalid' });
+    send('setPreference', { key: 'allowPaidModels', value: 'true' });
+    send('setPreference', { key: 'approvalTimeoutSeconds', value: 601 });
+    expect(harness.configUpdate).not.toHaveBeenCalled();
+    expect(harness.write).not.toHaveBeenCalled();
+  });
+  it('switches to separate Features, General, and About content', async () => {
+    send('openSettings');
+    await vi.waitFor(() => expect(html()).toContain('id="settings-provider"'));
+    send('setSettingsPage', { page: 'features' });
+    expect(html()).toContain('data-preference="webSearchEnabled"');
+    expect(html()).not.toContain('id="settings-provider"');
+    send('setSettingsPage', { page: 'general' });
+    expect(html()).toContain('data-preference="preferredLanguage"');
+    expect(html()).not.toContain('id="settings-provider"');
+    send('setSettingsPage', { page: 'about' });
+    expect(html()).toContain('IDE version');
+    expect(html()).not.toContain('id="settings-provider"');
+  });
+});
+
+describe('Gateway credential reference reuse', () => {
+  it('retains the immutable stored reference when saving an existing browser login', async () => {
+    send('gatewayBrowserLogin', { ...form, loginMethod: 'browser' });
+    await vi.waitFor(() => expect(html()).toContain('model(s) available'));
+    const originalReference = (harness.profile.connections as Record<string, Record<string, string>>)['moderado-cloud'].credentialReference;
+    expect(originalReference).toMatch(/^moderado\/provider\/moderado-cloud-/);
+    send('saveSettings', { ...form, loginMethod: 'browser' });
+    await vi.waitFor(() => expect(harness.write).toHaveBeenCalledTimes(2));
+    expect((harness.profile.connections as Record<string, Record<string, string>>)['moderado-cloud'].credentialReference).toBe(originalReference);
+    expect(harness.keys.get(originalReference)).toBe('mrd_browser-secret');
+    expect(harness.browser).toHaveBeenCalledTimes(1);
   });
 });

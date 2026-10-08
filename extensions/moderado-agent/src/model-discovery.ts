@@ -64,6 +64,10 @@ export async function discoverModelOptions(
       ...(model.capabilities !== undefined ? { capabilities: [...model.capabilities] } : {}),
       ...(model.dataNote !== undefined ? { dataNote: model.dataNote } : {}),
     }));
+    if (models.some(model => Object.values(model).flat().some(value => typeof value === 'string'
+      && sensitiveValues.some(secret => secret && value.includes(secret))))) {
+      return { models: [], status: 'The provider catalog contained credential data and was rejected.' };
+    }
     return {
       models,
       status: models.length

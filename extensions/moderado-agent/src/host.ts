@@ -20,6 +20,7 @@ import { DESKTOP_PROVIDER_PRESETS } from './provider-catalog.js';
 import { fetchGatewayRoutes, type GatewayRoute } from './provider-discovery.js';
 import { DesktopOpenAIAdapter } from './provider-transport.js';
 import { DesktopModelRouter } from './model-router.js';
+import type { SettingsPreferences } from './settings-preferences.js';
 import { validateProviderBaseUrl } from './provider-setup.js';
 
 export interface AgentHostOptions {
@@ -30,6 +31,7 @@ export interface AgentHostOptions {
   promptForApproval: (request: ApprovalRequest, signal: AbortSignal) => Promise<RawDecision | undefined>;
   approvalTimeoutMs?: number;
   nonInteractive?: boolean;
+  getPreferences?: () => SettingsPreferences;
   allowPaid?: boolean;
   allowUnknown?: boolean;
   pinnedModelId?: string;
@@ -216,7 +218,8 @@ export interface ModelOption {
  */
 export class AgentHost implements IApprovalHandler {
   private readonly options: AgentHostOptions;
-  private readonly approvals: ApprovalCoordinator;
+  private approvals: ApprovalCoordinator;
+  private approvalTimeoutMs: number | undefined;
   private router = new DesktopModelRouter({ providerId: 'fake', inventory: [], allowPaid: false, allowUnknown: false, requireTools: true });
   private catalogConnectionId = 'fake';
   /**
@@ -231,9 +234,10 @@ export class AgentHost implements IApprovalHandler {
 
   constructor(options: AgentHostOptions) {
     this.options = options;
+    this.approvalTimeoutMs = options.getPreferences ? options.getPreferences().approvalTimeoutSeconds * 1000 : options.approvalTimeoutMs;
     this.approvals = new ApprovalCoordinator({
       prompt: options.promptForApproval,
-      timeoutMs: options.approvalTimeoutMs,
+      timeoutMs: this.approvalTimeoutMs,
       nonInteractive: options.nonInteractive,
     });
     this.sessions = new SessionStore(options.moderadoHome);
@@ -303,6 +307,15 @@ export class AgentHost implements IApprovalHandler {
   }): Promise<RunOutcome> {
     if (this.running) throw new Error('A Moderado run is already in progress.');
 
+    const configuredPreferences = this.options.getPreferences?.();
+    const preferences = configuredPreferences ? { ...configuredPreferences } : undefined;
+    const timeoutMs = preferences ? preferences.approvalTimeoutSeconds * 1000 : this.options.approvalTimeoutMs;
+    if (timeoutMs !== this.approvalTimeoutMs) {
+      this.approvals.denyAll('cancelled', 'Approval settings changed before the next task.');
+      this.approvalTimeoutMs = timeoutMs;
+      this.approvals = new ApprovalCoordinator({ prompt: this.options.promptForApproval,
+        timeoutMs, nonInteractive: this.options.nonInteractive });
+    }
     const controller = new AbortController();
     this.controller = controller;
     this.running = true;
@@ -344,7 +357,7 @@ export class AgentHost implements IApprovalHandler {
       }
       const { inventory } = await this.discoverInventory(resolution, controller.signal);
       this.catalogConnectionId = resolution.connectionId ?? provider.id;
-      this.router = this.routerFor(resolution, inventory);
+      this.router = this.routerFor(resolution, inventory, preferences);
       const requested = input.modelId || this.options.pinnedModelId
         || (state.kind === 'ok' && typeof state.config.defaultModel === 'string' ? state.config.defaultModel : undefined)
         || resolution.defaultModel;
@@ -368,7 +381,8 @@ export class AgentHost implements IApprovalHandler {
       const result = await new AgentLoop().run(input.task, {
         workspaceRoot: this.options.workspaceRoot,
         provider,
-        tools: createDefaultToolRegistry(),
+        tools: this.toolsFor(preferences?.webSearchEnabled ?? true),
+        skillContext: preferences ? `Respond in ${preferences.preferredLanguage}.` : undefined,
         approvalHandler: this,
         router: this.router,
         policy,
@@ -378,8 +392,8 @@ export class AgentHost implements IApprovalHandler {
         eventListener: (event) => this.options.onEvent(event),
         routeOptions: {
           pinnedModelId: requested === 'auto' ? undefined : requested,
-          allowPaid: this.options.allowPaid ?? false,
-          allowUnknown: this.options.allowUnknown ?? false,
+          allowPaid: preferences?.allowPaidModels ?? this.options.allowPaid ?? false,
+          allowUnknown: preferences?.allowUnknownModels ?? this.options.allowUnknown ?? false,
           requireTools: true,
         },
       });
@@ -469,6 +483,7 @@ export class AgentHost implements IApprovalHandler {
    * can show paid and unknown-cost models behind their explicit opt-ins.
    */
   async discoverModels(): Promise<ModelOption[]> {
+    const preferences = this.options.getPreferences?.();
     const resolution = await resolveProvider(
       readConfig(this.options.moderadoHome),
       this.credentials,
@@ -477,7 +492,7 @@ export class AgentHost implements IApprovalHandler {
     );
     const { inventory, routes } = await this.discoverInventory(resolution);
     this.catalogConnectionId = resolution.connectionId ?? resolution.adapter.id;
-    this.router = this.routerFor(resolution, inventory);
+    this.router = this.routerFor(resolution, inventory, preferences);
 
     const models: ModelOption[] = inventory.map((entry) => {
       const classification = this.router.classifyModel(entry.id);
@@ -498,9 +513,20 @@ export class AgentHost implements IApprovalHandler {
     return models;
   }
 
-  private routerFor(resolution: ProviderResolution, inventory: ModelInventoryEntry[]): DesktopModelRouter {
+  private routerFor(resolution: ProviderResolution, inventory: ModelInventoryEntry[], preferences?: SettingsPreferences): DesktopModelRouter {
     return new DesktopModelRouter({ providerId: resolution.connectionId ?? resolution.adapter.id, inventory,
-      allowPaid: this.options.allowPaid ?? false, allowUnknown: this.options.allowUnknown ?? false, requireTools: true });
+      allowPaid: preferences?.allowPaidModels ?? this.options.allowPaid ?? false, allowUnknown: preferences?.allowUnknownModels ?? this.options.allowUnknown ?? false, requireTools: true });
+  }
+
+  private toolsFor(webSearchEnabled: boolean) {
+    const tools = createDefaultToolRegistry();
+    if (webSearchEnabled) return tools;
+    return {
+      register: tools.register.bind(tools),
+      get: (name: string) => name === 'web_search' ? undefined : tools.get(name),
+      list: () => tools.list().filter(tool => tool.name !== 'web_search'),
+      getDeclarations: () => tools.getDeclarations().filter(tool => tool.name !== 'web_search'),
+    };
   }
 
   private async discoverInventory(resolution: ProviderResolution, signal?: AbortSignal): Promise<{ inventory: ModelInventoryEntry[]; routes?: GatewayRoute[] }> {

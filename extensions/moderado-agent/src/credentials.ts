@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 
 /**
  * Credential resolution against the shared Windows Credential Manager targets.
@@ -99,6 +100,13 @@ export function credentialReference(providerId: string): string {
   const safeId = providerId.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-');
   if (!safeId) throw new Error('Provider ID is required for credential storage.');
   return `moderado/provider/${safeId}`;
+}
+
+/** Stage a new key without overwriting a reference used by any saved profile. */
+export function newCredentialReference(providerId: string): string {
+  const reference = `${credentialReference(providerId)}-${randomUUID()}`;
+  if (reference.length > 256) throw new Error('Provider ID is too long for credential storage.');
+  return reference;
 }
 
 /**

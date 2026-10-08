@@ -16,14 +16,14 @@ describe('Gateway and provider Settings boundary', () => {
     expect(html).toContain('Public access');
   });
 
-  it('collects keys in a native host prompt and never renders a password field', () => {
+  it('offers a masked write-only key field without returning stored credentials', () => {
     const state = { ...gateway(), loginMethod: 'manual' as const, apiKeyStored: true };
     const html = settingsPaneHtml(state);
-    expect(html).toContain('id="settings-set-key"');
-    expect(html).toContain('Set or update key');
+    expect(html).toContain('id="settings-api-key"');
+    expect(html).toContain('Key stored · paste to replace');
     expect(html).toContain('Credential stored');
-    expect(html).not.toContain('type="password"');
-    expect(html).not.toContain('settings-api-key');
+    expect(html).toContain('type="password"');
+    expect(html).toContain('value=""');
     expect(JSON.stringify(settingsSnapshot(state))).not.toContain('moderado/provider/');
   });
 

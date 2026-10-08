@@ -45,7 +45,7 @@ meet the need.
   reintroduce a rule requiring provider transport, presets, or policy to come
   from the CLI source.
 - IDE-owned code composes those packages and renders UI. A renderer or
-  webview never holds provider secrets or grants its own tool permissions.
+  webview never receives stored/resolved provider secrets or grants its own tool permissions. The owner-authorized API Config password field may hold a transient user-pasted key; only validated discovery/save messages may carry it to the host, which never echoes it back.
 
 All external input, stored profile data, webview messages, provider responses,
 and tool parameters must be validated at the boundary. Treat source files,

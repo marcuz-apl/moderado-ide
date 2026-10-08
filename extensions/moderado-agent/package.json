@@ -73,7 +73,8 @@
           "type": "number",
           "default": 120,
           "minimum": 1,
-          "description": "Seconds a human approval request stays open before it is denied. A closed view, timeout, or cancellation denies the action."
+          "description": "Seconds a human approval request stays open before it is denied. A closed view, timeout, or cancellation denies the action.",
+          "maximum": 600
         },
         "moderado.allowPaidModels": {
           "type": "boolean",
@@ -89,6 +90,30 @@
           "type": "boolean",
           "default": true,
           "description": "Require an explicit human decision for file mutations, commands, diagnostics, and MCP calls. Disabling this is not recommended."
+        },
+        "moderado.webSearchEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Allow the agent to use the built-in web search tool. Applies to new tasks."
+        },
+        "moderado.showHistoryOnStartup": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show recorded chats when the Moderado view starts."
+        },
+        "moderado.preferredLanguage": {
+          "type": "string",
+          "enum": [
+            "English",
+            "French",
+            "Spanish",
+            "German",
+            "Chinese",
+            "Japanese",
+            "Portuguese"
+          ],
+          "default": "English",
+          "description": "Preferred language for agent replies. Applies to new tasks."
         }
       }
     }

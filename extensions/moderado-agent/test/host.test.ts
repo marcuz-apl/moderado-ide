@@ -35,6 +35,78 @@ function fakeHTTP(data: unknown[]) {
     : Response.json({ object: 'list', data }));
 }
 
+describe('Settings runtime preferences', () => {
+  const defaults = { allowPaidModels: false, allowUnknownModels: false, webSearchEnabled: true, showHistoryOnStartup: false, preferredLanguage: 'English' as const, approvalTimeoutSeconds: 120 };
+  it.each(['paid', 'unknown'])('applies current %s model opt-in at each run', async tier => {
+    let preferences = { ...defaults };
+    const entry = tier === 'paid' ? { id: 'candidate', pricing: { prompt: '1', completion: '1' }, supported_parameters: ['tools'] } : { id: 'candidate', supported_parameters: ['tools'] };
+    const host = new AgentHost({ workspaceRoot: workspace(), moderadoHome: configuredHome('openrouter', { baseUrl: 'https://example.invalid/v1', apiKey: 'fixture' }), fetchImpl: fakeHTTP([entry]), onEvent: () => {}, promptForApproval: async () => undefined, getPreferences: () => preferences });
+    await expect(host.startRun({ task: 'Hello.', modelId: 'auto' })).rejects.toThrow(/No eligible models/);
+    preferences = { ...preferences, allowPaidModels: tier === 'paid', allowUnknownModels: tier === 'unknown' };
+    expect((await host.startRun({ task: 'Hello.', modelId: 'auto' })).model).toBe('candidate');
+  });
+  it('uses the preference approval deadline when a host is created', async () => {
+    vi.useFakeTimers();
+    try {
+      const host = new AgentHost({ workspaceRoot: workspace(), onEvent: () => {}, promptForApproval: () => new Promise(() => {}), getPreferences: () => ({ ...defaults, approvalTimeoutSeconds: 1 }) });
+      const pending = host.requestApproval({ requestId: 'settings-deadline', toolName: 'web_search', actionSummary: 'Search', exactPayload: {}, timestamp: Date.now() });
+      await vi.advanceTimersByTimeAsync(1001);
+      expect(await Promise.race([pending, Promise.resolve('still pending')])).toMatchObject({ status: 'denied', reason: expect.stringMatching(/timeout|deadline/i) });
+      host.dispose();
+    } finally { vi.useRealTimers(); }
+  });
+  it('applies a changed approval timeout to the next run', async () => {
+    let preferences = { ...defaults };
+    let posts = 0;
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async (_url, init) => {
+      if (init?.method !== 'POST') return Response.json({ object: 'list', data: [] });
+      const delta = ++posts === 1
+        ? { tool_calls: [{ index: 0, id: 'write-deadline', type: 'function', function: { name: 'run_command', arguments: '{"command":"node","args":["-e","process.exit(0)"]}' } }] }
+        : { content: 'Done.' };
+      return new Response('data: ' + JSON.stringify({ choices: [{ delta, finish_reason: posts === 1 ? 'tool_calls' : 'stop' }] }) + '\n\ndata: [DONE]\n\n');
+    });
+    const root = workspace();
+    const promptForApproval = vi.fn(() => new Promise<undefined>(() => {}));
+    const { events, onEvent } = collector();
+    const host = new AgentHost({ workspaceRoot: root, moderadoHome: configuredHome('moderado-cloud', { baseUrl: 'http://127.0.0.1:4788/v1' }), fetchImpl, onEvent, promptForApproval, getPreferences: () => preferences });
+    preferences = { ...preferences, approvalTimeoutSeconds: 1 };
+    vi.useFakeTimers();
+    try {
+      const run = host.startRun({ task: 'Write deadline.txt.', modelId: 'auto' });
+      await vi.waitFor(() => expect(promptForApproval).toHaveBeenCalled());
+      await vi.advanceTimersByTimeAsync(1100);
+      expect(await Promise.race([run, Promise.resolve('still running')])).toMatchObject({ status: 'completed' });
+      expect(events).toContainEqual(expect.objectContaining({ type: 'tool_result', result: expect.objectContaining({ toolName: 'run_command', status: 'denied', output: expect.stringContaining('approval deadline') }) }));
+    } finally { host.dispose(); vi.useRealTimers(); }
+  });
+  it('refuses a provider-requested web search when disabled', async () => {
+    let posts = 0;
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async (_url, init) => {
+      if (init?.method !== 'POST') return Response.json({ object: 'list', data: [] });
+      const delta = ++posts === 1
+        ? { tool_calls: [{ index: 0, id: 'disabled-search', type: 'function', function: { name: 'web_search', arguments: '{"query":"test"}' } }] }
+        : { content: 'Done.' };
+      return new Response('data: ' + JSON.stringify({ choices: [{ delta, finish_reason: posts === 1 ? 'tool_calls' : 'stop' }] }) + '\n\ndata: [DONE]\n\n');
+    });
+    const { events, onEvent } = collector();
+    const promptForApproval = vi.fn(async () => undefined);
+    const host = new AgentHost({ workspaceRoot: workspace(), moderadoHome: configuredHome('moderado-cloud', { baseUrl: 'http://127.0.0.1:4788/v1' }), fetchImpl, onEvent, promptForApproval, getPreferences: () => ({ ...defaults, webSearchEnabled: false }) });
+    await host.startRun({ task: 'Search.', modelId: 'auto' });
+    expect(events).toContainEqual(expect.objectContaining({ type: 'tool_result', result: expect.objectContaining({ toolName: 'web_search', status: 'error', output: expect.stringContaining('Unknown tool') }) }));
+    expect(promptForApproval).not.toHaveBeenCalled();
+    expect(fetchImpl.mock.calls.every(([url]) => String(url).startsWith('http://127.0.0.1:4788/v1'))).toBe(true);
+  });
+  it('removes disabled web search declarations and adds the selected response language', async () => {
+    const fetchImpl = fakeHTTP([]);
+    const host = new AgentHost({ workspaceRoot: workspace(), moderadoHome: configuredHome('moderado-cloud', { baseUrl: 'http://127.0.0.1:4788/v1' }), fetchImpl, onEvent: () => {}, promptForApproval: async () => undefined, getPreferences: () => ({ ...defaults, webSearchEnabled: false, preferredLanguage: 'French' }) });
+    await host.startRun({ task: 'Hello.', modelId: 'auto' });
+    const body = JSON.parse(String(fetchImpl.mock.calls.find(([, init]) => init?.method === 'POST')![1]?.body));
+    expect(body.tools.map((tool: any) => tool.function.name)).not.toContain('web_search');
+    expect(body.tools.map((tool: any) => tool.function.name)).toContain('read_file');
+    expect(body.messages.find((message: any) => message.role === 'system').content).toContain('Respond in French');
+  });
+});
+
 describe('Desktop provider host integration', () => {
   it('deletes a recorded chat and resets only the matching resumed session', () => {
     const workspaceRoot = workspace();

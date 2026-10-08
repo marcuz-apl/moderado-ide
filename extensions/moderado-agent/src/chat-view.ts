@@ -319,6 +319,18 @@ body { font-family: var(--vscode-font-family); font-size: 13px; color: var(--vsc
   .settings .model-name { font-weight: 600; font-size: 0.85rem; overflow-wrap: anywhere; }
   .settings .model-badge { font-size: 0.62rem; letter-spacing: 0.05em; padding: 0.05rem 0.35rem; border-radius: 3px; background: var(--vscode-charts-blue, #2f7ae5); color: #fff; }
   .settings .model-desc { font-size: 0.75rem; color: var(--vscode-descriptionForeground); overflow-wrap: anywhere; }
+  @media (max-width: 480px) {
+    .settings .set-body { flex-direction: column; }
+    .settings .set-nav { width: auto; display: flex; flex-wrap: wrap; border-right: none; border-bottom: 1px solid var(--vscode-panel-border); }
+    .settings .set-nav button { width: auto; flex: 1 0 auto; text-align: center; }
+    .settings .set-content { min-height: 0; }
+  }
+  .settings-card { border: 1px solid var(--vscode-panel-border); border-radius: 6px; padding: 0.8rem; margin: 0.7rem 0 1.2rem; }
+  .settings-card h3 { margin: 0 0 0.8rem; font-size: 0.85rem; font-weight: 600; }
+  .settings .settings-toggle { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin: 0.8rem 0; }
+  .settings-toggle > span { min-width: 0; }
+  .settings-toggle .note { display: block; margin-top: 0.3rem; font-weight: normal; }
+  .settings .settings-toggle input { width: auto; flex: 0 0 auto; accent-color: var(--vscode-button-background); }
   .settings .tab-row { display: flex; gap: 1rem; border-bottom: 1px solid var(--vscode-panel-border); margin: 0.4rem 0 0.6rem; }
   .settings .tab-row button { padding: 0.35rem 0.2rem; font-size: 0.8rem; opacity: 0.75; border-bottom: 2px solid transparent; }
   .settings .tab-row button.on { opacity: 1; border-bottom-color: var(--vscode-textLink-foreground); }
@@ -447,7 +459,7 @@ ${toolbarHtml(snapshot.historyOpen)}
       if (model) model.value = modelSelect.value;
       vscode.postMessage({ type: 'chooseModel', ...readSettings(), id: modelSelect.value });
     });
-    if (close) close.addEventListener('click', () => { clearTimeout(discoveryTimer); vscode.postMessage({ type: 'closeSettings' }); });
+    if (close) close.addEventListener('click', () => { clearTimeout(discoveryTimer); if (apiKey) apiKey.value = ''; vscode.postMessage({ type: 'closeSettings' }); });
     if (save) save.addEventListener('click', () => {
       say('Saving…');
       clearTimeout(discoveryTimer);
@@ -473,6 +485,12 @@ ${toolbarHtml(snapshot.historyOpen)}
       const query = search.value.trim().toLowerCase();
       for (const card of document.querySelectorAll('.model-card')) card.hidden = !card.textContent.toLowerCase().includes(query);
     });
+    for (const field of document.querySelectorAll('[data-preference]')) {
+      field.addEventListener('change', () => {
+        const value = field.type === 'checkbox' ? field.checked : field.type === 'number' ? Number(field.value) : field.value;
+        vscode.postMessage({ type: 'setPreference', key: field.getAttribute('data-preference'), value });
+      });
+    }
     // Model cards, the free/recommended tabs, and the settings nav.
     for (const card of document.querySelectorAll('.model-card')) {
       card.addEventListener('click', () => vscode.postMessage({ type: 'chooseModel', ...readSettings(), id: card.getAttribute('data-model') }));
@@ -481,7 +499,7 @@ ${toolbarHtml(snapshot.historyOpen)}
       tab.addEventListener('click', () => vscode.postMessage({ type: 'setModelTab', ...readSettings(), tab: tab.getAttribute('data-tab') }));
     }
     for (const nav of document.querySelectorAll('.set-nav button')) {
-      nav.addEventListener('click', () => vscode.postMessage({ type: 'setSettingsPage', ...readSettings(), page: nav.getAttribute('data-page') }));
+      nav.addEventListener('click', () => { clearTimeout(discoveryTimer); vscode.postMessage({ type: 'setSettingsPage', ...readSettings(), page: nav.getAttribute('data-page') }); });
     }
   }
 
@@ -554,6 +572,11 @@ ${toolbarHtml(snapshot.historyOpen)}
   // discard whatever the user is currently typing and steal focus.
   window.addEventListener('message', (event) => {
     const update = event.data;
+    if (update && update.type === 'providerSaved') {
+      const field = document.getElementById('settings-api-key');
+      if (field) field.value = '';
+      return;
+    }
     if (!update || update.type !== 'update') return;
     // Measured before the DOM is rewritten. A reader who scrolled up to re-read
     // earlier output must not be dragged back down by the next streamed token,

@@ -60,4 +60,10 @@ describe('model discovery for the settings pane', () => {
     expect(result.status).not.toContain('custom-private-key');
   });
 
+  it('rejects catalog metadata that reflects a supplied credential', async () => {
+    const result = await discoverModelOptions(async () => [{ id: 'model', accessTier: 'local', toolSupport: 'supported', isFree: true, dataNote: 'echoed private-catalog-key' }], 1000, ['private-catalog-key']);
+    expect(result.models).toEqual([]);
+    expect(result.status).not.toContain('private-catalog-key');
+  });
+
 });
