@@ -250,7 +250,7 @@ export function settingsPaneHtml(state: SettingsState): string {
   const keyField = `<label for="settings-api-key">API Key${needsKey ? '' : ' (optional)'}</label>
     <input id="settings-api-key" type="password" autocomplete="off" spellcheck="false" maxlength="8192"
            placeholder="${keyStored ? 'Key stored · paste to replace' : 'Paste API key'}" value=""${disabled} />
-    <p class="note">${keyStored ? 'Credential stored. A key is already stored for this provider.' : 'No credential stored. Keys are stored securely when you save.'}</p>
+    <p class="note">${keyStored ? 'Credential stored. A key is already stored for this provider; this field stays blank. Paste only to replace it.' : 'No credential stored. Keys are stored securely when you save.'}</p>
     ${!needsKey ? `<p class="note">${gateway ? 'Public access uses the Gateway without a key.' : 'This local runtime needs no API key.'}</p>` : ''}
     ${gateway && loginMethod === 'browser' ? `<button id="settings-browser-login" type="button"${disabled}>Sign in with browser</button>` : ''}`;
 
@@ -301,6 +301,7 @@ export function settingsPaneHtml(state: SettingsState): string {
           <button id="settings-save" type="button"${disabled}>Save settings</button>
           <button id="settings-refresh" type="button"${disabled}>Reload models</button>
         </div>
+        <p class="note">Save settings to keep the provider and model after restart.</p>
         <p id="settings-status" class="status" role="status">${escapeHtml(state.status ?? '')}</p>
       </div>
     </div>

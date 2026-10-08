@@ -264,6 +264,23 @@ describe('moderado settings pane', () => {
     expect(html.indexOf('id="open-settings"')).toBeLessThan(html.indexOf('id="scroll"'));
   });
 
+  it('places the single sessions icon immediately before Settings in the top bar', () => {
+    const html = chatHtml(state(), preview);
+    expect(html).toMatch(/id="toggle-history"[^>]*>[^<]*<\/button>\s*<button id="open-settings"/);
+    expect(html).not.toContain('id="foot-history"');
+  });
+
+  it('opens API Config from the current provider and model control', () => {
+    const html = chatHtml(state({ activeProviderName: 'OpenRouter', activeModelId: 'route/free' }), preview);
+    expect(html).toContain('<button type="button" id="active-ctx"');
+    expect(html).toContain("getElementById('active-ctx').addEventListener('click', () => vscode.postMessage({ type: 'openApiConfig' }))");
+  });
+
+  it('keeps the attachment hint in the Cancel and Send row', () => {
+    const html = chatHtml(state(), preview);
+    expect(html).toMatch(/<div class="composer-foot">\s*<p class="composer-hint"[^>]*>[^<]*<\/p>\s*<button type="button" id="cancel"/);
+  });
+
   it('shows the brand welcome state only while the transcript is empty', () => {
     const fresh = chatHtml(state(), preview);
     expect(fresh).toContain('class="empty-state"');
@@ -397,9 +414,15 @@ describe('moderado settings pane', () => {
       ],
     }));
     expect(pane).toContain('already stored for this provider');
+    expect(pane).toContain('field stays blank');
     // The secret is collected by a native host prompt, not an editable field.
     expect(pane).toContain('id="settings-api-key"');
     expect(pane).toContain('type="password"');
+  });
+
+  it('explains that provider and model changes need Save settings', () => {
+    const pane = settingsPaneHtml(settings());
+    expect(pane).toContain('Save settings to keep the provider and model after restart.');
   });
 
   it('lists free models in a compact dropdown and summarises the counts', () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fetchDirectModels, fetchGatewayRoutes } from '../src/provider-discovery.js';
+import { isDesktopFreeModel } from '../src/provider-catalog.js';
 
 describe('Gateway model discovery', () => {
   it('preserves a Gateway route ID and provider metadata', async () => {
@@ -65,6 +66,22 @@ describe('direct provider model discovery', () => {
     await expect(fetchDirectModels('https://provider.example/v1', undefined, {
       fetchImpl: async () => Response.json({ object: 'list', data: [{ id: 'good' }, { id: '' }] }),
     })).rejects.toThrow();
+  });
+
+  it.each([
+    ['OpenRouter overrides', { overrides: [{ prompt: '1', completion: '1' }] }],
+    ['OrcaRouter tiers', { tiers: [{ prompt: '1', completion: '1' }] }],
+  ])('keeps models with nested %s pricing but does not classify their cost as free', async (_name, extra) => {
+    const models = await fetchDirectModels('https://provider.example/v1', 'key', {
+      fetchImpl: async () => Response.json({ object: 'list', data: [
+        { id: 'provider/free', pricing: { prompt: '0', completion: '0' }, supported_parameters: ['tools'] },
+        { id: 'provider/variable', pricing: { prompt: '0', completion: '0', ...extra }, supported_parameters: ['tools'] },
+      ] }),
+    });
+    expect(models).toHaveLength(2);
+    expect(models[0].pricing).toEqual({ prompt: '0', completion: '0' });
+    expect(models[1].pricing).toEqual(expect.objectContaining({ prompt: '0', completion: '0', [Object.keys(extra)[0]]: 'unknown' }));
+    expect(isDesktopFreeModel(models[1], 'openrouter')).toBe(false);
   });
 });
 

@@ -92,11 +92,11 @@ export function createNonce(): string {
   return text;
 }
 
-/** Top toolbar: New Session + Chat History before the gear, right aligned. */
+/** Top toolbar: New Session + Sessions before the gear, right aligned. */
 function toolbarHtml(historyOpen: boolean): string {
   return `<div id="panel-bar">
     <button id="new-session" type="button" title="New session" aria-label="New session">&#65291;</button>
-    <button id="toggle-history" type="button" title="Chat history" aria-label="Chat history" aria-pressed="${historyOpen ? 'true' : 'false'}">&#9783;</button>
+    <button id="toggle-history" type="button" title="Sessions" aria-label="Sessions" aria-pressed="${historyOpen ? 'true' : 'false'}">&#128340;</button>
     <button id="open-settings" type="button" title="Moderado settings" aria-label="Moderado settings">&#9881;</button>
   </div>`;
 }
@@ -249,16 +249,17 @@ body { font-family: var(--vscode-font-family); font-size: 13px; color: var(--vsc
   /* Composer */
   #composer { flex: 0 0 auto; display: flex; flex-direction: column; border: 1px solid var(--vscode-input-border, var(--vscode-focusBorder)); border-radius: 5px; margin: 0.5rem 0.75rem; background: var(--vscode-input-background); }
   #prompt { resize: none; border: none; outline: none; background: transparent; color: inherit; font: inherit; padding: 0.55rem 0.6rem 0.2rem; min-height: 3.2rem; max-height: 12rem; }
-  .composer-foot { display: flex; align-items: center; justify-content: flex-end; gap: 0.4rem; padding: 0.25rem 0.4rem 0.4rem; }
+  .composer-foot { display: flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0.4rem 0.4rem; }
   .composer-foot button { padding: 0.25rem 0.6rem; border-radius: 4px; border: 1px solid var(--vscode-panel-border); font-size: 0.78rem; }
   .composer-foot #send { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border-color: transparent; }
-  .composer-hint { font-size: 0.68rem; opacity: 0.55; padding: 0 0.6rem 0.4rem; }
+  .composer-hint { flex: 1; min-width: 0; margin: 0; font-size: 0.68rem; opacity: 0.65; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* Footer */
   #panel-foot { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; padding: 0.3rem 0.75rem; border-top: 1px solid var(--vscode-panel-border); font-size: 0.72rem; }
   .foot-left { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
   .foot-left button { padding: 0.1rem 0.3rem; opacity: 0.8; }
   .ws-label { opacity: 0.75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .ctx-label { opacity: 0.75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 14rem; }
+  .ctx-label { opacity: 0.75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 14rem; min-width: 0; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .ctx-label:hover { text-decoration: underline; }
   .mode-toggle { display: flex; border: 1px solid var(--vscode-panel-border); border-radius: 4px; overflow: hidden; }
   .mode-toggle button { padding: 0.15rem 0.5rem; font-size: 0.72rem; opacity: 0.8; }
   .mode-toggle button.on { background: var(--vscode-button-background); color: var(--vscode-button-foreground); opacity: 1; }
@@ -351,8 +352,8 @@ ${toolbarHtml(snapshot.historyOpen)}
   <label class="sr-only" for="prompt">Ask Moderado</label>
   <div id="attachments-host" role="list" aria-label="Attached context">${snapshot.attachments}</div>
   <textarea id="prompt" placeholder="Type your task here..." autocomplete="off" ${snapshot.running ? 'disabled' : ''}></textarea>
-  <p class="composer-hint">Use @ for project context or + to attach files and images.</p>
   <div class="composer-foot">
+    <p class="composer-hint" title="Use @ for project context or + to attach files and images.">Use @ for project context or + to attach files and images.</p>
     <button type="button" id="cancel" ${snapshot.running ? '' : 'disabled'}>Cancel</button>
     <button type="submit" id="send" ${snapshot.running ? 'disabled' : ''}>Send</button>
   </div>
@@ -361,9 +362,8 @@ ${toolbarHtml(snapshot.historyOpen)}
   <span class="foot-left">
     <button type="button" id="foot-context" title="Add context" aria-label="Add context" ${snapshot.running ? 'disabled' : ''}>@</button>
     <button type="button" id="foot-add" title="Add files and Images" aria-label="Add files and Images" ${snapshot.running ? 'disabled' : ''}>&#43;</button>
-    <button type="button" id="foot-history" title="Sessions" aria-label="Sessions">&#128340;</button>
     <span class="ws-label">${escapeHtml(state.workspaceLabel ?? '')}</span>
-    <span class="ctx-label" id="active-ctx" title="Active provider and model">${snapshot.activeContext}</span>
+    <button type="button" id="active-ctx" class="ctx-label" title="Open API Config" aria-label="Open API Config for current provider and model">${snapshot.activeContext || 'Choose model'}</button>
   </span>
   <span class="mode-toggle">
     <button type="button" id="mode-plan" class="${snapshot.planMode ? 'on' : ''}">Plan</button>
@@ -510,11 +510,11 @@ ${toolbarHtml(snapshot.historyOpen)}
   document.getElementById('new-session').addEventListener('click', () => vscode.postMessage({ type: 'newSession' }));
   document.getElementById('toggle-history').addEventListener('click', () => vscode.postMessage({ type: 'toggleHistory' }));
   document.getElementById('open-settings').addEventListener('click', () => vscode.postMessage({ type: 'openSettings' }));
+  document.getElementById('active-ctx').addEventListener('click', () => vscode.postMessage({ type: 'openApiConfig' }));
   document.getElementById('mode-plan').addEventListener('click', () => vscode.postMessage({ type: 'setMode', mode: 'Plan' }));
   document.getElementById('mode-act').addEventListener('click', () => vscode.postMessage({ type: 'setMode', mode: 'Act' }));
   document.getElementById('foot-context').addEventListener('click', () => vscode.postMessage({ type: 'addContext' }));
   document.getElementById('foot-add').addEventListener('click', () => vscode.postMessage({ type: 'addFiles' }));
-  document.getElementById('foot-history').addEventListener('click', () => vscode.postMessage({ type: 'showSessions' }));
 
   // Enter sends; Shift+Enter inserts a newline, as in the reference composer.
   input.addEventListener('keydown', (event) => {
@@ -612,7 +612,7 @@ ${toolbarHtml(snapshot.historyOpen)}
     if (update.activeContext !== undefined && update.activeContext !== renderedContext) {
       renderedContext = update.activeContext;
       const ctx = document.getElementById('active-ctx');
-      if (ctx) ctx.innerHTML = update.activeContext;
+      if (ctx) ctx.innerHTML = update.activeContext || 'Choose model';
     }
     // Discovery and provider/model changes must refresh an already-open pane.
     // Identical snapshots leave the form intact during unrelated chat updates.

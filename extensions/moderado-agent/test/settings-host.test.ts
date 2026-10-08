@@ -9,6 +9,7 @@ const harness = vi.hoisted(() => ({
   provider: undefined as any, receive: undefined as any,
   agentOptions: undefined as any, configValues: new Map<string, unknown>(), configUpdate: vi.fn(), histories: [] as StoredSession[], currentId: '', deleted: vi.fn(), confirm: vi.fn(),
   runs: [] as Record<string, unknown>[],
+  finalMessage: null as string | null,
   workspaceRoot: '', windows: true, fileDialog: vi.fn(), contextPicker: vi.fn(), findFiles: vi.fn(), errors: vi.fn(),
   prompt: vi.fn(), browser: vi.fn(), write: vi.fn(), openExternal: vi.fn(),
 }));
@@ -38,7 +39,7 @@ vi.mock('../src/host.js', () => ({ AgentHost: class {
   async discoverModels() { return []; }
   async startRun(input: Record<string, unknown>) {
     harness.runs.push(input);
-    return { status: 'completed', finalMessage: null, model: String(input.modelId ?? 'auto'), totalSteps: 0, sessionId: 's' };
+    return { status: 'completed', finalMessage: harness.finalMessage, model: String(input.modelId ?? 'auto'), totalSteps: 0, sessionId: 's' };
   }
   dispose() {} cancel() {}
 } }));
@@ -68,7 +69,7 @@ beforeEach(() => {
   harness.configValues.clear();
   harness.configUpdate.mockImplementation(async (key: string, value: unknown) => { harness.configValues.set(key, value); });
   harness.windows = true; harness.histories = []; harness.currentId = ''; harness.confirm.mockResolvedValue('Delete');
-  vi.clearAllMocks(); harness.messages = []; harness.keys.clear(); harness.profile = {}; harness.invalid = false; harness.runs = [];
+  vi.clearAllMocks(); harness.messages = []; harness.keys.clear(); harness.profile = {}; harness.invalid = false; harness.runs = []; harness.finalMessage = null;
   harness.prompt.mockResolvedValue('mrd_native-secret');
   harness.browser.mockResolvedValue({ accessToken: 'mrd_browser-secret', expiresAt: Date.now() + 60_000 });
   harness.write.mockImplementation((_path, patch) => {
@@ -295,6 +296,7 @@ describe('API Config paste, discover, then save', () => {
     expect(harness.prompt).not.toHaveBeenCalled();
     expect(harness.profile).toMatchObject({ connections: { 'nvidia-nim': { baseUrl: 'https://provider.example/v1', credentialReference: expect.stringMatching(/^moderado\/provider\/nvidia-nim-/) } } });
     expect(JSON.stringify(harness.profile)).not.toContain('draft-private-key');
+    await vi.waitFor(() => expect(html()).toContain('Settings saved.'));
   });
   it('explains an unknown URL without making a request', async () => {
     send('selectPreset', { preset: 'openai-compatible' });
@@ -419,6 +421,28 @@ describe('Features and General editor preferences', () => {
     send('setSettingsPage', { page: 'about' });
     expect(html()).toContain('IDE version');
     expect(html()).not.toContain('id="settings-provider"');
+  });
+
+  it('opens API Config from the current model even after viewing About', async () => {
+    send('openSettings');
+    await vi.waitFor(() => expect(html()).toContain('id="settings-provider"'));
+    send('setSettingsPage', { page: 'about' });
+    expect(html()).not.toContain('id="settings-provider"');
+    send('openApiConfig');
+    await vi.waitFor(() => expect(html()).toContain('id="settings-provider"'));
+    expect(html()).toContain('data-page="api" class="on"');
+  });
+});
+
+describe('simple answer presentation', () => {
+  it('shows one answer without appending the model and session details', async () => {
+    harness.finalMessage = 'I am Moderado, your coding assistant.';
+    send('prompt', { text: 'Who are you?' });
+    await vi.waitFor(() => expect(String(harness.messages.at(-1)?.rows)).toContain(harness.finalMessage));
+    const rows = String(harness.messages.at(-1)?.rows);
+    expect(rows.match(/class="assistant"/g)).toHaveLength(1);
+    expect(rows).not.toContain('>Session</span>');
+    expect(rows).not.toContain('session s');
   });
 });
 

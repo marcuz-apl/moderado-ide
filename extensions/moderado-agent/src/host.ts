@@ -393,7 +393,10 @@ export class AgentHost implements IApprovalHandler {
         workspaceRoot: this.options.workspaceRoot,
         provider,
         tools: this.toolsFor(preferences?.webSearchEnabled ?? true),
-        skillContext: preferences ? `Respond in ${preferences.preferredLanguage}.` : undefined,
+        skillContext: [
+          preferences ? `Respond in ${preferences.preferredLanguage}.` : undefined,
+          'For simple conversational questions, answer directly and briefly. Do not volunteer the active model or session details unless asked.',
+        ].filter(Boolean).join('\n'),
         approvalHandler: this,
         router: this.router,
         policy,

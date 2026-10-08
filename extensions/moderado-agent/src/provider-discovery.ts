@@ -119,7 +119,18 @@ export async function fetchDirectModels(
   if (!Array.isArray(data)) throw new ProviderError('Provider returned a malformed model catalog', 'ERR_MALFORMED_RESPONSE');
   const entries: ModelInventoryEntry[] = [];
   for (const item of data) {
-    const parsed = ModelInventoryEntrySchema.safeParse(item);
+    // Some providers add structured pricing tiers or overrides. Preserve the
+    // model while marking that price as unknown so routing cannot treat a base
+    // zero price as proof that every tier is free.
+    let candidate = item;
+    if (item && typeof item === 'object' && !Array.isArray(item) && 'pricing' in item) {
+      const price = (item as Record<string, unknown>).pricing;
+      const pricing = price && typeof price === 'object' && !Array.isArray(price)
+        ? Object.fromEntries(Object.entries(price).map(([key, value]) => [key, typeof value === 'string' ? value : 'unknown']))
+        : { unverified: 'unknown' };
+      candidate = { ...item, pricing };
+    }
+    const parsed = ModelInventoryEntrySchema.safeParse(candidate);
     if (!parsed.success) throw new ProviderError('Provider returned a malformed model entry', 'ERR_MALFORMED_RESPONSE');
     entries.push(parsed.data);
   }

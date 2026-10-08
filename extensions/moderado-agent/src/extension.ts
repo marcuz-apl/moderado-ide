@@ -185,16 +185,16 @@ export function activate(context: vscode.ExtensionContext): ModeradoApi {
   context.subscriptions.push({ dispose: () => host.dispose() });
 
   /** Coalesces streamed assistant text into a single transcript entry. */
-  let streaming: { text: string } | null = null;
+  let streaming: { text: string; entry: TranscriptEntry } | null = null;
   function appendDelta(delta: string): void {
     if (!streaming) {
-      streaming = { text: '' };
-      view.transcript.push({ kind: 'assistant', label: 'Moderado', text: '' });
+      const entry: TranscriptEntry = { kind: 'assistant', label: 'Moderado', text: '' };
+      streaming = { text: '', entry };
+      view.transcript.push(entry);
       if (view.transcript.length > 200) view.transcript.shift();
     }
     streaming.text += delta;
-    const entry = view.transcript[view.transcript.length - 1];
-    entry.text = streaming.text;
+    streaming.entry.text = streaming.text;
     render();
   }
   function endStreaming(): void {
@@ -657,6 +657,10 @@ async function openDiffTab(requestId: string): Promise<void> {
       void chatView?.webview.postMessage({ type: 'providerSaved' });
       await loadSettingsState('Saved.', { skipModels: true });
       await loadModelsForPreset(settings.preset);
+      if (settings.open) {
+        settings.status = `Settings saved. ${settings.status ?? ''}`.trim();
+        render();
+      }
     } catch {
       // Log only a fixed phase label, never native input or service responses.
       output.appendLine(`Provider save failed during ${savePhase}.`);
@@ -852,6 +856,11 @@ async function openDiffTab(requestId: string): Promise<void> {
       return;
     }
     if (msg.type === 'openSettings') {
+      void openSettingsPane();
+      return;
+    }
+    if (msg.type === 'openApiConfig') {
+      settings.page = 'api';
       void openSettingsPane();
       return;
     }
@@ -1152,11 +1161,14 @@ async function openDiffTab(requestId: string): Promise<void> {
       // selection). The webview contributes only the prompt text.
       const result = await host.startRun({ task: prepared.task, images: prepared.images, planMode: view.planMode, modelId: view.activeModelId });
       if (result.status === 'completed') draftAttachments.clear();
-      if (result.finalMessage) append({ kind: 'assistant', label: 'Moderado', text: result.finalMessage });
-      append({ kind: 'tool', label: 'Session', text: `${result.status} · ${result.model} · ${result.totalSteps} step(s) · session ${result.sessionId}` });
+      if (result.finalMessage) {
+        if (streaming) { streaming.entry.text = result.finalMessage; render(); }
+        else append({ kind: 'assistant', label: 'Moderado', text: result.finalMessage });
+      }
     } catch (error) {
       append({ kind: 'error', label: 'Error', text: (error as Error).message });
     } finally {
+      endStreaming();
       view.running = false;
       view.pendingApproval = null;
       render();

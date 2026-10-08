@@ -125,7 +125,9 @@ describe('Settings runtime preferences', () => {
     const body = JSON.parse(String(fetchImpl.mock.calls.find(([, init]) => init?.method === 'POST')![1]?.body));
     expect(body.tools.map((tool: any) => tool.function.name)).not.toContain('web_search');
     expect(body.tools.map((tool: any) => tool.function.name)).toContain('read_file');
-    expect(body.messages.find((message: any) => message.role === 'system').content).toContain('Respond in French');
+    const systemPrompt = body.messages.find((message: any) => message.role === 'system').content;
+    expect(systemPrompt).toContain('Respond in French');
+    expect(systemPrompt).toContain('Do not volunteer the active model or session details');
   });
 });
 

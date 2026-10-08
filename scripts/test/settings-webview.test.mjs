@@ -89,6 +89,18 @@ test('Settings refreshes models and provider controls, preserves drafts, and clo
     await update();
     assert.equal(await page.locator('#settings-host').innerHTML(), '');
     assert.equal(await page.locator('#composer').isVisible(), true);
+    await page.setViewportSize({ width: 320, height: 700 });
+    const sessionsBox = await page.locator('#toggle-history').boundingBox();
+    const settingsBox = await page.locator('#open-settings').boundingBox();
+    assert.ok(sessionsBox.x < settingsBox.x && sessionsBox.y === settingsBox.y);
+    assert.equal(await page.locator('#foot-history').count(), 0);
+    const hintBox = await page.locator('.composer-hint').boundingBox();
+    const cancelBox = await page.locator('#cancel').boundingBox();
+    const sendBox = await page.locator('#send').boundingBox();
+    assert.ok(hintBox.x < cancelBox.x && cancelBox.x < sendBox.x);
+    assert.ok(Math.abs((hintBox.y + hintBox.height / 2) - (sendBox.y + sendBox.height / 2)) < 2);
+    await page.locator('#active-ctx').click();
+    assert.equal((await page.evaluate(() => window.messages.at(-1))).type, 'openApiConfig');
     state.historyOpen = true;
     state.recents = Array.from({length: 9}, (_, index) => ({id: 'session-'+index, title: 'Chat '+index, updatedAt: 'today'}));
     await update();
