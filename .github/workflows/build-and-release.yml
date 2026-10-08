@@ -155,8 +155,8 @@ jobs:
           $ready = & $vswhere -latest -products '*' -requires $component -property installationPath | Select-Object -First 1
           if (-not $ready) {
             $installer = 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe'
-            $process = Start-Process -FilePath $installer -ArgumentList @('modify', '--installPath', ('"' + $vs + '"'), '--add', $component, '--quiet', '--wait', '--norestart') -Wait -PassThru
-            if ($process.ExitCode -notin @(0, 3010)) { throw "Spectre installation failed: $($process.ExitCode)" }
+            & $installer modify --installPath "$vs" --add $component --quiet --norestart
+            if ($LASTEXITCODE -notin @(0, 3010)) { throw "Spectre installation failed: $LASTEXITCODE" }
           }
           $ready = & $vswhere -latest -products '*' -requires $component -property installationPath | Select-Object -First 1
           if (-not $ready) { throw 'Spectre component is still missing after installation.' }
@@ -273,6 +273,8 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install macOS build utilities
+        run: brew install gnu-sed jq
       - name: Build the pinned editor and macOS installers
         run: node scripts/build-macos.mjs --arch arm64
       - name: Upload installers and build evidence
@@ -305,6 +307,8 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install macOS build utilities
+        run: brew install gnu-sed jq
       - name: Build the pinned editor and macOS installers
         run: node scripts/build-macos.mjs --arch x64
       - name: Upload installers and build evidence
