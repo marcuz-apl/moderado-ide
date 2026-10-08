@@ -27,14 +27,15 @@ Microsoft documents `--wait` as a bootstrapper-only option; installed VS
 `setup.exe` returns before the component is ready. The Windows job now uses
 Microsoft's Build Tools bootstrapper, verifies its Authenticode signature,
 uses the VS 2026 stable bootstrapper, waits for the modify operation, and
-targets the matching `VisualStudio.18.Release` channel before requesting the
-documented VS 2026
-`Microsoft.VisualStudio.Component.VC.14.50.18.0.x86.x64.Spectre` component
-before continuing. macOS builds now use the 12 GiB V8 heap size used by the
-pinned VSCodium macOS workflows.
-The latest run [37855805909](https://github.com/marcuz-apl/moderado-ide/actions/runs/37855805909)
-confirmed that using the VS 2022 channel ID with the VS 2026 bootstrapper leaves
-the Spectre component uninstalled. Windows failed at prerequisite verification;
+targets the VS 18 instance explicitly. When absent, the workflow installs the
+VS 2026 Build Tools C++ workload and
+`Microsoft.VisualStudio.Component.VC.14.50.18.0.x86.x64.Spectre` into a fresh
+VS 18 instance rather than trying to add a VS 18 component to an older VS
+instance. macOS builds now use the 12 GiB V8 heap size used by the pinned
+VSCodium macOS workflows.
+The latest run [37856607916](https://github.com/marcuz-apl/moderado-ide/actions/runs/37856607916)
+confirmed that modifying the runner's selected C++ instance on the VS 18
+channel still left the Spectre component absent. Windows failed at prerequisite verification;
 macOS and Linux were still building when this handoff was updated. The channel
 ID correction is covered by the workflow test and needs a fresh all-platform
 run before any artifact is called release-ready.
