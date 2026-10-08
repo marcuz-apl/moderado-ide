@@ -154,9 +154,17 @@ jobs:
           $component = 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64.Spectre'
           $ready = & $vswhere -latest -products '*' -requires $component -property installationPath | Select-Object -First 1
           if (-not $ready) {
-            $installer = 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\setup.exe'
-            & $installer modify --installPath "$vs" --add $component --quiet --norestart
-            if ($LASTEXITCODE -notin @(0, 3010)) { throw "Spectre installation failed: $LASTEXITCODE" }
+            $bootstrapper = Join-Path $env:RUNNER_TEMP 'vs_buildtools.exe'
+            Invoke-WebRequest -Uri 'https://aka.ms/vs/17/release/vs_buildtools.exe' -OutFile $bootstrapper
+            $signature = Get-AuthenticodeSignature $bootstrapper
+            if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'CN=Microsoft Corporation') {
+              throw 'The Visual Studio Build Tools bootstrapper signature is invalid.'
+            }
+            $process = Start-Process -FilePath $bootstrapper -ArgumentList @(
+              'modify', '--installPath', "`"$vs`"", '--channelId', 'VisualStudio.17.Release',
+              '--add', $component, '--quiet', '--wait', '--norestart'
+            ) -Wait -PassThru
+            if ($process.ExitCode -notin @(0, 3010)) { throw "Spectre installation failed: $($process.ExitCode)" }
           }
           $ready = & $vswhere -latest -products '*' -requires $component -property installationPath | Select-Object -First 1
           if (-not $ready) { throw 'Spectre component is still missing after installation.' }

@@ -30,9 +30,11 @@ test('publishing stays disabled and external actions are immutable', () => {
   assert.ok(actions.length > 0);
   for (const action of actions) assert.match(action, /^actions\/[a-z-]+@[a-f0-9]{40}$/);
   assert.match(workflow, /Microsoft\.VisualStudio\.Component\.VC\.Tools\.x86\.x64\.Spectre/);
-  assert.match(workflow, /& \$installer modify --installPath "\$vs" --add \$component --quiet --norestart/);
-  assert.doesNotMatch(workflow, /setup\.exe[^\r\n]*--wait/);
-  assert.match(workflow, /Installer\\setup\.exe/);
+  assert.match(workflow, /https:\/\/aka\.ms\/vs\/17\/release\/vs_buildtools\.exe/);
+  assert.match(workflow, /Get-AuthenticodeSignature \$bootstrapper/);
+  assert.match(workflow, /Start-Process -FilePath \$bootstrapper -ArgumentList @\([\s\S]*'--channelId', 'VisualStudio\.17\.Release'[\s\S]*'--wait'[\s\S]*\) -Wait -PassThru/);
+  assert.match(workflow, /Installer\\vswhere\.exe/);
+  assert.doesNotMatch(workflow, /Installer\\setup\.exe[^\r\n]*--wait/);
   assert.doesNotMatch(workflow, /Installer\\vs_installer\.exe/);
   assert.equal((workflow.match(/GITHUB_TOKEN: \$\{\{ github\.token \}\}/g) ?? []).length, 2);
   assert.match(workflow, /NODE_VERSION: '24\.18\.0'/);

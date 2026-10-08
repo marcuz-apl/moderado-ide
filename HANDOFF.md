@@ -17,16 +17,23 @@ contain the current source. Windows failed because Visual Studio Installer
 rejects the unsupported `--wait` option. macOS arm64 and x64 failed the offline
 suite because some test fixture roots still resolved through `/var` symlinks;
 macOS x64 also exceeded the default timeout in the large restored-image test.
+The following all-platform run [37853809403](https://github.com/marcuz-apl/moderado-ide/actions/runs/37853809403)
+reached the same Windows prerequisite check failure with the first attempted
+correction; Linux and macOS were still building when that failure was inspected.
 
-The workflow now invokes VS `setup.exe` without `--wait` and verifies the
-Spectre component afterward. Host and attachment test fixtures canonicalize
-their temporary roots with `realpathSync`, preserving production symlink
-checks. The restored-image limit test keeps its over-limit coverage with
-smaller fixtures and a 30-second timeout. The pinned ripgrep downloader still
-uses a read-only Actions token only in the macOS build steps.
+Microsoft documents `--wait` as a bootstrapper-only option; installed VS
+`setup.exe` returns before the component is ready. The Windows job now uses
+Microsoft's Build Tools bootstrapper, verifies its Authenticode signature,
+waits for the modify operation, and checks Spectre before continuing.
+Host and attachment test fixtures canonicalize their temporary roots with
+`realpathSync`, preserving production symlink checks. The restored-image limit
+test keeps its over-limit coverage with smaller fixtures and a 30-second
+timeout. The pinned ripgrep downloader still uses a read-only Actions token
+only in the macOS build steps.
 
 Verification on the Windows workspace:
-- `node --test scripts/test/workflow.test.mjs`: 3 passed.
+- `node --test scripts/test/workflow.test.mjs`: 3 passed, including the
+  bootstrapper signature and blocking invocation checks.
 - `npm --prefix extensions/moderado-agent test -- test/host.test.ts`: 46 passed.
 - `npm --prefix extensions/moderado-agent test -- test/attachments.test.ts -t
   'caps restored history images across messages'`: 1 passed.
