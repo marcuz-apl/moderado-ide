@@ -27,10 +27,17 @@ Microsoft documents `--wait` as a bootstrapper-only option; installed VS
 `setup.exe` returns before the component is ready. The Windows job now uses
 Microsoft's Build Tools bootstrapper, verifies its Authenticode signature,
 uses the VS 2026 stable bootstrapper, waits for the modify operation, and
-requests the documented VS 2026
+targets the matching `VisualStudio.18.Release` channel before requesting the
+documented VS 2026
 `Microsoft.VisualStudio.Component.VC.14.50.18.0.x86.x64.Spectre` component
 before continuing. macOS builds now use the 12 GiB V8 heap size used by the
 pinned VSCodium macOS workflows.
+The latest run [37855805909](https://github.com/marcuz-apl/moderado-ide/actions/runs/37855805909)
+confirmed that using the VS 2022 channel ID with the VS 2026 bootstrapper leaves
+the Spectre component uninstalled. Windows failed at prerequisite verification;
+macOS and Linux were still building when this handoff was updated. The channel
+ID correction is covered by the workflow test and needs a fresh all-platform
+run before any artifact is called release-ready.
 Host and attachment test fixtures canonicalize their temporary roots with
 `realpathSync`, preserving production symlink checks. The restored-image limit
 test keeps its over-limit coverage with smaller fixtures and a 30-second

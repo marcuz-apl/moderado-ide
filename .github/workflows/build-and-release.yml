@@ -161,7 +161,7 @@ jobs:
               throw 'The Visual Studio Build Tools bootstrapper signature is invalid.'
             }
             $process = Start-Process -FilePath $bootstrapper -ArgumentList @(
-              'modify', '--installPath', "`"$vs`"", '--channelId', 'VisualStudio.17.Release',
+              'modify', '--installPath', "`"$vs`"", '--channelId', 'VisualStudio.18.Release',
               '--add', $component, '--quiet', '--wait', '--norestart'
             ) -Wait -PassThru
             if ($process.ExitCode -notin @(0, 3010)) { throw "Spectre installation failed: $($process.ExitCode)" }

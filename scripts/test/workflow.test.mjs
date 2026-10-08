@@ -32,7 +32,7 @@ test('publishing stays disabled and external actions are immutable', () => {
   assert.match(workflow, /Microsoft\.VisualStudio\.Component\.VC\.14\.50\.18\.0\.x86\.x64\.Spectre/);
   assert.match(workflow, /https:\/\/aka\.ms\/vs\/stable\/vs_buildtools\.exe/);
   assert.match(workflow, /Get-AuthenticodeSignature \$bootstrapper/);
-  assert.match(workflow, /Start-Process -FilePath \$bootstrapper -ArgumentList @\([\s\S]*'--channelId', 'VisualStudio\.17\.Release'[\s\S]*'--wait'[\s\S]*\) -Wait -PassThru/);
+  assert.match(workflow, /Start-Process -FilePath \$bootstrapper -ArgumentList @\([\s\S]*'--channelId', 'VisualStudio\.18\.Release'[\s\S]*'--wait'[\s\S]*\) -Wait -PassThru/);
   assert.match(workflow, /Installer\\vswhere\.exe/);
   assert.doesNotMatch(workflow, /Installer\\setup\.exe[^\r\n]*--wait/);
   assert.doesNotMatch(workflow, /Installer\\vs_installer\.exe/);
