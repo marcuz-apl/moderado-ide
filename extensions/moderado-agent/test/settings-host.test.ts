@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -65,7 +65,7 @@ function send(type: string, values: Record<string, unknown> = {}) { harness.rece
 const html = () => String(harness.messages.at(-1)?.settings ?? '');
 
 beforeEach(() => {
-  harness.workspaceRoot = mkdtempSync(join(tmpdir(), 'moderado-composer-workspace-'));
+  harness.workspaceRoot = realpathSync(mkdtempSync(join(tmpdir(), 'moderado-composer-workspace-')));
   harness.fileDialog.mockResolvedValue(undefined); harness.contextPicker.mockResolvedValue(undefined); harness.findFiles.mockResolvedValue([]);
   harness.configValues.clear();
   harness.configUpdate.mockImplementation(async (key: string, value: unknown) => { harness.configValues.set(key, value); });
@@ -236,7 +236,7 @@ describe('host-owned composer attachments', () => {
   });
 
   it('adds an explicitly selected external file without clearing the conversation and sends its contents', async () => {
-    const outside = mkdtempSync(join(tmpdir(), 'moderado-explicit-file-'));
+    const outside = realpathSync(mkdtempSync(join(tmpdir(), 'moderado-explicit-file-')));
     try {
       const path = join(outside, 'example.txt'); writeFileSync(path, 'explicitly selected external content');
       send('prompt', { text: 'Existing conversation.' });

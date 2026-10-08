@@ -154,8 +154,8 @@ jobs:
           $component = 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64.Spectre'
           $ready = & $vswhere -latest -products '*' -requires $component -property installationPath | Select-Object -First 1
           if (-not $ready) {
-            $installer = 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe'
-            & $installer modify --installPath "$vs" --add $component --quiet --norestart
+            $installer = 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\setup.exe'
+            & $installer modify --installPath "$vs" --add $component --quiet --wait --norestart
             if ($LASTEXITCODE -notin @(0, 3010)) { throw "Spectre installation failed: $LASTEXITCODE" }
           }
           $ready = & $vswhere -latest -products '*' -requires $component -property installationPath | Select-Object -First 1
@@ -276,6 +276,8 @@ jobs:
       - name: Install macOS build utilities
         run: brew install gnu-sed jq
       - name: Build the pinned editor and macOS installers
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/build-macos.mjs --arch arm64
       - name: Upload installers and build evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -310,6 +312,8 @@ jobs:
       - name: Install macOS build utilities
         run: brew install gnu-sed jq
       - name: Build the pinned editor and macOS installers
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/build-macos.mjs --arch x64
       - name: Upload installers and build evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

@@ -1,11 +1,45 @@
 # Project Handoff
 
-Updated: 2026-10-07 UTC
+Updated: 2026-10-08 UTC
 Branch: master
 Status: Source renamed **Moderado IDE** (`moderado-ide`) and baseline advanced
-and verified against CLI **v0.4.8**. Linux build stopped at the owner's request.
+and verified against CLI **v0.4.8**. Owner-triggered Linux/macOS/Windows
+artifact builds are being repaired; publishing remains disabled and unauthorized.
 Local and remote repositories are renamed, and source checkpoint `7ec0923`
-is pushed. Next priority: improve the existing Windows IDE GUI. Signing/publication remain unauthorized.
+is pushed.
+
+## Cross-platform artifact workflow recovery (2026-10-08 UTC)
+
+The all-platform Actions run [37849583048](https://github.com/marcuz-apl/moderado-ide/actions/runs/37849583048)
+was dispatched before the latest API Config model-label fix. Linux was still
+building when checked; macOS x64 failed its offline suite because macOS temp
+roots resolve through `/var` symlinks, macOS arm64 could not download pinned
+ripgrep after repeated GitHub HTTP 403 responses, and Windows returned before
+the Spectre libraries were installed because the VS Installer UI wrapper did
+not wait for a completed modification.
+
+The workflow now gives only the macOS build steps the read-only Actions token
+used by the pinned `@vscode/ripgrep` downloader, and invokes VS `setup.exe`
+with `--wait` before verifying the Spectre component. macOS temp test fixtures
+are canonicalized with `realpathSync`, preserving the production symlink
+checks while avoiding false failures from `/var` on hosted runners.
+
+Verification on the Windows workspace:
+- `node --test scripts/test/workflow.test.mjs`: 3 passed.
+- `npm --prefix extensions/moderado-agent test -- test/settings-host.test.ts`:
+  39 passed.
+- `npm --prefix extensions/moderado-agent test -- test/sessions.test.ts -t
+  'removes only the requested session|rejects invalid ids|removes the session
+  image sidecar|deletes real image snapshots'`: 4 passed, 2 symlink tests
+  skipped by the focused selector. Running the complete session file locally
+  cannot create Windows symlinks (two `EPERM` failures); hosted macOS will run
+  the complete file.
+- `npm --prefix extensions/moderado-agent run typecheck` and `git diff --check`:
+  passed.
+
+These corrections still require a new `platform=all`, `macos_arch=both` run
+from the latest source. The previous run's Linux status/artifact result remains
+unconfirmed. No release was published.
 
 ## Auto-Approve defaults (2026-10-07 UTC)
 

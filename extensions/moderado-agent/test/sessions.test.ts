@@ -8,8 +8,8 @@ import { createSession, SessionStore } from '../src/sessions.js';
 import { createFileAttachment, imageContextDirectory, preparePrompt, saveImageContext } from '../src/attachments.js';
 
 function fixture() {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'moderado-delete-'));
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'moderado-delete-workspace-'));
+  const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'moderado-delete-')));
+  const workspace = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'moderado-delete-workspace-')));
   const store = new SessionStore(home);
   const session = store.save(createSession(workspace));
   return { home, workspace, store, session, target: store.getSessionPath(session) };
