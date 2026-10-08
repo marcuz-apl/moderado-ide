@@ -23,6 +23,10 @@ validate_identifier() {
 
 detect_bump_type() {
   msg=$1
+  # The message may already carry a stamped identifier prefix
+  # (`v<m.n.p>+<build> <type>: ...`); strip it so the type match works
+  # whether the message is raw or already stamped.
+  msg=$(printf '%s' "$msg" | sed -E 's/^[[:space:]]*v[0-9]+\.[0-9]+\.[0-9]+[+-][0-9A-Za-z]+[[:space:]]+//')
   case "$msg" in
     *BREAKING\ CHANGE*|*!:\ *) echo "major_requires_approval" ;;
     release\(minor\):*)        echo "minor" ;;

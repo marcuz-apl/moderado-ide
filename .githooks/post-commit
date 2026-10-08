@@ -1,0 +1,58 @@
+#!/bin/sh
+# Corrects the semver part of VERSION when the final commit message calls for
+# a bump (e.g. `feat:` bumps p) that pre-commit could not see: at pre-commit
+# time an editor-driven commit has no message yet, so pre-commit only ever
+# advances the daily build counter. Staging a fix in commit-msg would be too
+# late (the commit tree is already snapshotted), so this hook amends with
+# --no-verify and never recurses. It is a no-op when the semver part already
+# moved (manual bump) or the message maps to a build-only bump.
+HOOKDIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+. "$HOOKDIR/versionlib.sh"
+
+git rev-parse --verify --quiet HEAD~1 >/dev/null 2>&1 || exit 0
+[ "$(git rev-list --parents -n 1 HEAD | tr -d '\r' | wc -w)" -eq 2 ] || exit 0
+
+parent=$(git show "HEAD~1:$VERSION_FILE" 2>/dev/null | tr -d '\r\n\t ') || exit 0
+head_id=$(read_version) || exit 0
+validate_identifier "$head_id" || exit 0
+case "$parent" in v*.*.*+*) ;; *) exit 0 ;; esac
+
+bump=$(detect_bump_type "$(git log -1 --format=%B HEAD)")
+[ "$bump" = build ] && exit 0
+
+pver=${parent%+*}
+hver=${head_id%+*}
+hbuild=${head_id#*+}
+[ "$hver" = "$pver" ] || exit 0
+
+case "$bump" in
+  major_requires_approval|major)
+    [ "${ALFAZEN_MAJOR_APPROVED:-0}" = 1 ] || {
+      echo "alfazen-versioning: major bump detected but ALFAZEN_MAJOR_APPROVED!=1; leaving $head_id unchanged" >&2
+      exit 0
+    }
+    bump=major ;;
+esac
+
+newver=$(bump_semver "$pver" "$bump") || exit 1
+new="$newver+$hbuild"
+validate_identifier "$new" || exit 1
+printf '%s\n' "$new" > "$VERSION_FILE"
+git add -- "$VERSION_FILE"
+
+# The message file must live inside the repo: `-F` resolves relative to it
+# when a pathspec is present, and GIT_DIR context forbids outside paths.
+tmp="$PWD/.git/ALFAZEN_MSG_EDITMSG"
+git log -1 --format=%B HEAD | awk -v stamp="$new" '
+  !done && $0 !~ /^#/ {
+    sub(/^v[0-9]+\.[0-9]+\.[0-9]+[+-][0-9A-Za-z]+ /, "")
+    print stamp " " $0
+    done = 1
+    next
+  }
+  { print }
+' > "$tmp"
+git commit --amend --no-verify -F "$tmp" -- "$VERSION_FILE" >/dev/null 2>&1
+st=$?
+rm -f -- "$tmp"
+exit $st

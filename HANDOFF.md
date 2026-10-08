@@ -1015,3 +1015,18 @@ Notes:
   (`signed: false`, `published: false`); publishing is disabled in CI pending
   a code signature.
 
+
+## Linux packaging merged into master
+
+Merged `rewrite-replay` (packaging commit `9a7f533`) into local `master` at
+owner request, without creating a branch. Retained master's version hooks;
+resolved rewritten-history conflicts using the rewritten AGENTS.md, HANDOFF.md,
+and VERSION. Preserved the existing uncommitted pre-commit edit and local .deb.
+
+Fresh verification commands and outcomes:
+- `cd extensions/moderado-agent && npm test`: 333 passed, 4 skipped, exit 0.
+- `npm run typecheck && npm run compile` in that package: both exit 0.
+- `node --test scripts/test/build-linux.test.mjs`: 4 passed, exit 0.
+- `bash -n scripts/build-deb.sh` and `sh -n scripts/build-rpm.sh`: exit 0.
+
+No fresh installer build, install/launch test, signing, or publishing performed.
