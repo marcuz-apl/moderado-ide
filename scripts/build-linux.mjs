@@ -62,7 +62,7 @@ function main() {
   assert.equal(process.platform, 'linux', 'Run this build inside Linux/WSL');
   assert.equal(process.arch, 'x64', 'This local build targets Linux x64');
   assert.ok(!realpathSync(root).startsWith('/mnt/'), 'Build from the WSL/Linux filesystem');
-  const checkout = join(root, '.cache/vscodium');
+  const checkout = join(root, 'build/vscodium');
   const editor = join(checkout, 'vscode');
   const lock = json(join(root, 'sources.lock.json'));
   assert.equal(json(join(root, 'vendor/moderado/VENDORED.json')).pinnedCommit, lock.sources.moderado.commit, 'Vendored agent does not match the source lock');

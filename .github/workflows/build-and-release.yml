@@ -145,7 +145,7 @@ jobs:
           # A packaging regression can produce a healthy-looking editor with no
           # agent in it. Assert on the artifact, not the staging tree.
           Add-Type -AssemblyName System.IO.Compression.FileSystem
-          $zip = Get-ChildItem .cache/vscodium/assets -Filter '*-win32-x64-*.zip' | Select-Object -First 1
+          $zip = Get-ChildItem build/vscodium/assets -Filter '*-win32-x64-*.zip' | Select-Object -First 1
           if (-not $zip) { throw 'No portable archive was produced.' }
           $a = [System.IO.Compression.ZipFile]::OpenRead($zip.FullName)
           try {
@@ -164,12 +164,12 @@ jobs:
           if-no-files-found: error
           retention-days: 30
           path: |
-            .cache/vscodium/assets/*.zip
-            .cache/vscodium/assets/*.exe
-            .cache/vscodium/assets/build-manifest.json
-            .cache/vscodium/assets/provenance.json
-            .cache/vscodium/assets/THIRD-PARTY-NOTICES.md
-            .cache/vscodium/assets/release-verification.json
+            build/vscodium/assets/*.zip
+            build/vscodium/assets/*.exe
+            build/vscodium/assets/build-manifest.json
+            build/vscodium/assets/provenance.json
+            build/vscodium/assets/THIRD-PARTY-NOTICES.md
+            build/vscodium/assets/release-verification.json
 
   publish:
     name: Publish GitHub Release (manual; requires a signature)

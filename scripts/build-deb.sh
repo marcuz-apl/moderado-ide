@@ -6,16 +6,16 @@
 #   ./scripts/build-deb.sh [editor-tree] [output-dir]
 #
 #   editor-tree   Path to the directory produced by scripts/build-linux.mjs
-#                 (defaults to .cache/vscodium/VSCode-linux-x64).
-#   output-dir    Where the .deb is written (defaults to cwd).
+#                 (defaults to build/vscodium/VSCode-linux-x64).
+#   output-dir    Where the .deb is written (defaults to build/installers; created automatically).
 #
 # Requires: dpkg (dpkg-deb), GNU coreutils, GNU sed. No sudo needed to build
 # the package itself.
 set -eu
 
 REPO_DIR=$(cd "$(dirname "$0")/.." && pwd)
-EDITOR_TREE=${1:-"$REPO_DIR/.cache/vscodium/VSCode-linux-x64"}
-OUT_DIR=${2:-"$REPO_DIR"}
+EDITOR_TREE=${1:-"$REPO_DIR/build/vscodium/VSCode-linux-x64"}
+OUT_DIR=${2:-"$REPO_DIR/build/installers"}
 
 if [ ! -d "$EDITOR_TREE" ]; then
   echo "error: editor tree not found: $EDITOR_TREE" >&2
@@ -28,12 +28,17 @@ if [ ! -x "$EDITOR_TREE/moderado-ide" ]; then
   exit 1
 fi
 
-VERSION_RAW=$(cat "$REPO_DIR/VERSION" 2>/dev/null || true)
-VERSION=${VERSION_RAW#v}
-# Debian forbids '+' in the Version field -> Debian revision via '~'.
-DEB_VERSION=$(printf '%s' "$VERSION" | sed 's/+/~/')
+mkdir -p "$OUT_DIR"
 
-ARCH=$(dpkg --print-architecture 2>/dev/null || echo amd64)
+VERSION_RAW=$(cat "$REPO_DIR/VERSION")
+VERSION=${VERSION_RAW#v}
+DEB_VERSION=$VERSION
+
+ARCH=$(dpkg --print-architecture)
+if [ "$ARCH" != amd64 ]; then
+  echo "error: this x64 Debian builder requires amd64; detected $ARCH" >&2
+  exit 1
+fi
 PKG_NAME="moderado-ide_${DEB_VERSION}_${ARCH}.deb"
 PKG_PATH=$(cd "$OUT_DIR" && printf '%s' "$PWD/$PKG_NAME")
 
@@ -47,6 +52,7 @@ mkdir -p "$STAGING/DEBIAN" \
 
 # 1. control -------------------------------------------------------------
 cp "$REPO_DIR/packaging/deb/DEBIAN/control" "$STAGING/DEBIAN/control"
+sed -i "s/^Version:.*/Version: $DEB_VERSION/; s/^Architecture:.*/Architecture: $ARCH/" "$STAGING/DEBIAN/control"
 
 # 2. metadata ------------------------------------------------------------
 cp "$REPO_DIR/packaging/common/moderado-ide.desktop" "$STAGING/usr/share/applications/moderado-ide.desktop"
@@ -56,6 +62,14 @@ cp "$REPO_DIR/packaging/common/copyright" "$STAGING/usr/share/doc/moderado-ide/c
 # 3. editor tree ---------------------------------------------------------
 mkdir -p "$STAGING/opt/moderado-ide"
 cp -a "$EDITOR_TREE/." "$STAGING/opt/moderado-ide/"
+if [ ! -x "$STAGING/opt/moderado-ide/bin/moderado-ide" ]; then
+  echo "error: editor CLI launcher is missing" >&2
+  exit 1
+fi
+mkdir -p "$STAGING/usr/bin"
+ln -s /opt/moderado-ide/bin/moderado-ide "$STAGING/usr/bin/moderado-ide"
+INSTALLED_SIZE=$(du -sk "$STAGING/opt" "$STAGING/usr" | awk '{total += $1} END {print total}')
+sed -i "s/^Installed-Size:.*/Installed-Size: $INSTALLED_SIZE/" "$STAGING/DEBIAN/control"
 
 # 4. build ----------------------------------------------------------------
 dpkg-deb --build --root-owner-group "$STAGING" "$PKG_PATH"

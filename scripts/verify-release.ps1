@@ -1,5 +1,5 @@
 param(
-  [string]$Assets = (Join-Path $PSScriptRoot '..\.cache\vscodium\assets'),
+  [string]$Assets = (Join-Path $PSScriptRoot '..\build\vscodium\assets'),
   [switch]$SkipExtension
 )
 

@@ -7,8 +7,8 @@ import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const lock = JSON.parse(readFileSync(join(root, 'sources.lock.json'))).sources.moderado;
-const source = realpathSync(resolve(root, process.argv[2] || '.cache/moderado-v0.4.8'));
-assert.ok(source.startsWith(join(root, '.cache') + sep), 'Source must be an IDE-local cached upstream checkout');
+const source = realpathSync(resolve(root, process.argv[2] || 'build/moderado-v0.4.8'));
+assert.ok(source.startsWith(join(root, 'build') + sep), 'Source must be an IDE-local cached upstream checkout');
 function run(cmd, args) {
   const result = spawnSync(cmd, args, { cwd: source, encoding: 'utf8', shell: false });
   if (result.error) throw result.error;
@@ -17,7 +17,7 @@ function run(cmd, args) {
 }
 assert.equal(run('git', ['rev-parse', `${lock.tag}^{}`]), lock.commit, 'Pinned tag commit mismatch');
 assert.equal(run('git', ['rev-parse', lock.tag]), lock.tagObject, 'Pinned tag object mismatch');
-const staging = mkdtempSync(join(root, '.cache/vendor-staging-'));
+const staging = mkdtempSync(join(root, 'build/vendor-staging-'));
 const target = join(root, 'vendor/moderado');
 try {
   run('git', ['archive', '--format=tar', `--output=${join(staging, 'snapshot.tar')}`, lock.commit, 'packages', 'package.json', 'tsconfig.base.json', 'LICENSE']);

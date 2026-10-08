@@ -1030,3 +1030,110 @@ Fresh verification commands and outcomes:
 - `bash -n scripts/build-deb.sh` and `sh -n scripts/build-rpm.sh`: exit 0.
 
 No fresh installer build, install/launch test, signing, or publishing performed.
+
+## Build directory and installer output (2026-10-07)
+
+Owner requested installers outside the repository root, then renamed the
+repository's `.cache` directory to `build`. Moved the local directory and
+updated active build/vendor/smoke scripts, Windows CI artifact paths, README,
+installation guidance, and Git ignore rules. Historical evidence above retains
+its original paths. OS-specific fixture `profile/.cache` remains an OS cache.
+Both Linux installer scripts now create `build/installers` by default and
+create explicit custom output directories as well. Corrected RPM temporary
+subdirectory creation to use portable `/bin/sh` syntax.
+
+Verification:
+- New offline installer tests failed before implementation (missing default
+  editor/output paths and RPM directory creation); all four passed afterward.
+- `node --test scripts/test/*.test.mjs`: 8 passed, exit 0; external package
+  builders are mocked, file copies and output routing are real.
+- In `extensions/moderado-agent`: `npm test` (333 passed, 4 skipped),
+  `npm run typecheck`, and `npm run compile`: exit 0.
+- `node scripts/smoke-linux.mjs`: exit 0; packaged extension activated and a
+  fake-provider turn completed under isolated profile state. Result:
+  `build/linux-hostcheck-k68Phj/result.json`.
+- `bash -n scripts/build-deb.sh`, `sh -n scripts/build-rpm.sh`, and
+  `node --check` for build-linux.mjs, smoke-linux.mjs, vendor-moderado.mjs:
+  exit 0. `git diff --check`: exit 0.
+
+Work is on master, with the pre-existing uncommitted hook edit preserved.
+No real installer rebuild or publishing. PowerShell is unavailable here;
+Windows paths were reviewed but not executed on Windows.
+
+## Debian packaging and GUI investigation (2026-10-07)
+
+Owner reported inaccessible minimize/maximize/close controls and apparently
+fixed agent width after installing a local .deb. Work remains on master with
+prior uncommitted changes and the hook edit preserved.
+
+Confirmed Debian defects fixed:
+- Missing /usr/bin/moderado-ide: install a symlink to the upstream CLI wrapper
+  /opt/moderado-ide/bin/moderado-ide, rather than raw Electron.
+- Use VERSION for archive/control version, retain Debian-supported '+', and
+  calculate Installed-Size. Require amd64 for the x64 editor payload.
+- Match StartupWMClass to product nameShort (Moderado IDE), retain desktop %U.
+- Declare omitted runtime libraries/xdg-utils from the pinned upstream list;
+  remove inappropriate VSCodium conflicts/replacements so editions coexist.
+
+New actual-dpkg archive regression initially failed for the missing launcher.
+Unsupported-architecture regression also failed before the amd64 guard.
+`node --test scripts/test/*.test.mjs`: 10 passed, exit 0.
+In extensions/moderado-agent, `npm test`: 333 passed, 4 skipped; `npm run
+ typecheck` and `npm run compile`: exit 0. `bash -n scripts/build-deb.sh` and
+`git diff --check`: exit 0. Focused independent review checked the packaging
+changes; URI-placeholder and architecture concerns were addressed.
+
+`./scripts/build-deb.sh > build/deb-build-check.log 2>&1`: exit 0, produced
+build/installers/moderado-ide_0.1.22+2610082_amd64.deb (214467076 bytes).
+Actual archive inspection verified wrapper symlink, root/root ownership and
+4755 mode of chrome-sandbox, current version and amd64 metadata. Extracted
+CLI --version exited 0. `apt-get -s install ./build/installers/
+moderado-ide_0.1.22+2610082_amd64.deb`: exit 0; dependency resolution succeeds
+and includes previously absent xdg-utils. This was only an install simulation;
+the installed system package was not upgraded, and no packages were published.
+
+GUI evidence uses isolated HOME/editor state and Playwright already installed
+in the pinned editor checkout, not a new runtime dependency. The environment is
+Ubuntu 24.04 under WSL2/WSLg 1.0.71, with two reported 1920x1080 displays.
+- Installed package activation and fake-provider smoke:
+  `node build/smoke-installed.mjs`: exit 0, result
+  build/linux-hostcheck-ZifgcQ/result.json.
+- `node build/gui-wsl-check.mjs`: exit 0; actual editor sash drag enlarged the
+  sidebar from 300 to 520 pixels. Extension does not fix the sidebar width.
+- `node build/gui-controls-verify.mjs > build/gui-controls-verify.log 2>&1`:
+  exit 0; temporary settings selected window.controlsStyle=custom. Clicked
+  maximize/restore and awaited close-button/page-close event successfully.
+  Maximized bounds 0,0,1920,1032 fit the reported display. Screenshot/result
+  location build/deb-gui-check-IaJyex. Minimize click produced no minimized
+  state or native event; direct BrowserWindow.minimize() behaved similarly.
+- `node build/gui-native-check.mjs > build/gui-native-check.log 2>&1`: exit 0;
+  temporary native titlebar kept maximized client bounds within the display,
+  but likewise reported no minimized state.
+
+No fix for WSLg minimize or the user's off-screen placement is claimed.
+Off-screen placement did not reproduce with clean state. docs/INSTALL.md now
+explains the sidebar divider and a tested custom-controls diagnostic setting;
+no existing user settings or shared Moderado profile were changed.
+Unrelated icon/font and RPM dependency issues found during inspection remain
+outside this Debian/window investigation.
+
+Final artifact SHA-256:
+90ecf65bb18390cf9b3c4d17d376017c5efe8d0c5d1886b917aa3e2b79bcfe80.
+After the final rebuild, `dpkg-deb --extract` into build/deb-archive-check
+confirmed %U desktop dispatch and the wrapper link. `node
+build/smoke-deb-archive.mjs > build/deb-archive-smoke.log 2>&1` exited 0:
+the final archive's packaged extension activated and completed the fake turn.
+
+## Commit and push milestone (2026-10-07)
+
+Owner requested pushing all pending source changes on master, including the
+previously preserved pre-commit hook edit. Fresh pre-commit verification:
+- `node --test scripts/test/*.test.mjs`: 10 passed, exit 0.
+- In extensions/moderado-agent, `npm test`: 333 passed, 4 skipped;
+  `npm run typecheck` and `npm run compile`: exit 0.
+- Shell syntax checks for both installer scripts and IDE version hooks,
+  VERSION validation/build-counter check, and `git diff --check`: exit 0.
+- `git fetch origin`: exit 0; origin/master has no commits missing locally.
+
+Ignored build directories and installers stay local; this source push is not
+an installer publication or a claim that WSLg window issues are fixed.

@@ -16,7 +16,7 @@ $revision = $lock.sources.moderado.commit
 # when the local path is absent, so a runner and a developer produce the same
 # vendored tree from the same immutable revision.
 if (!(Test-Path -LiteralPath $CliRepository)) {
-  $clone = Join-Path $root '.cache\cli-pinned'
+  $clone = Join-Path $root 'build\cli-pinned'
   if (Test-Path -LiteralPath $clone) { Remove-Item -LiteralPath $clone -Recurse -Force }
   Write-Output "No local CLI checkout at $CliRepository; cloning pinned upstream."
   & git clone --no-checkout $lock.sources.moderado.repository $clone
@@ -51,13 +51,13 @@ if (Test-Path -LiteralPath $target) {
 if (!(Test-Path -LiteralPath (Join-Path $target 'package.json'))) { throw 'Vendored package.json is missing; the npm wrapper must be committed.' }
 if (!(Test-Path -LiteralPath (Join-Path $target 'package-lock.json'))) { throw 'Vendored package-lock.json is missing; the npm wrapper must be committed.' }
 
-$staging = Join-Path $root '.cache\vendor-staging'
+$staging = Join-Path $root 'build\vendor-staging'
 if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging -Recurse -Force }
 [System.IO.Directory]::CreateDirectory($staging) | Out-Null
 
 # Export the pinned trees into a staging directory. A temporary tar file is used
 # because piping `git archive` straight into `tar` is unreliable on Windows.
-$archive = Join-Path $root '.cache\moderado-pinned.tar'
+$archive = Join-Path $root 'build\moderado-pinned.tar'
 if (Test-Path -LiteralPath $archive) { Remove-Item -LiteralPath $archive -Force }
 & git -C $repo archive --format=tar --output=$archive $revision packages package.json tsconfig.base.json LICENSE
 if ($LASTEXITCODE -ne 0) { throw 'Moderado source export failed.' }

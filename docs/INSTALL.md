@@ -17,6 +17,27 @@
 
 For Linux development, follow the [Linux build instructions](../README.md#build-the-linux-editor-locally). A completed Linux or macOS build is not claimed here. Existing Windows evidence predates the IDE rename and CLI `v0.4.8` source update; it does not verify these new artifacts. Windows/Linux cross-home profile sharing is outside this milestone: the two environments have different home directories and do not automatically share a `~/.moderado` profile.
 
+## Local Debian installer and WSLg window checks
+
+After building the Linux editor, run `./scripts/build-deb.sh`. It writes the
+unsigned x64 installer into `build/installers/`. Install the selected file with
+`sudo apt install ./build/installers/<filename>.deb` so runtime dependencies
+are resolved. Launch it with `moderado-ide` or the application menu.
+
+The agent sidebar uses the editor's resize divider. Drag the vertical edge
+between the agent and editor to change its width; the prompt textarea's
+non-resizable border is a different control.
+
+On WSLg, the custom titlebar's native Electron control overlay may need a
+separate check from the app content. In **Preferences: Open User Settings
+(JSON)**, set `"window.controlsStyle": "custom"`, then close and restart the
+app to try editor-drawn controls. Tests with an isolated profile verified
+maximize/restore and clicking the close button with this setting. They did
+not verify minimize: WSLg reported no minimized state or minimize event.
+This setting is a diagnostic option, not a confirmed fix for all WSLg display
+configurations. `Alt+F4` can close a focused window whose close button is
+inaccessible. No existing user settings are changed by the build script.
+
 ## Building Windows locally
 
 Prerequisites: Git Bash, Node 24.18.0, Python 3.11, jq, 7-Zip, Rust, and Visual
@@ -35,7 +56,7 @@ fails on purpose rather than re-cloning over a prepared checkout.
 
 ## Windows artifact names
 
-The renamed Windows build is configured to write the following files to `.cache/vscodium/assets/`; these names do not imply that renamed artifacts have been built:
+The renamed Windows build is configured to write the following files to `build/vscodium/assets/`; these names do not imply that renamed artifacts have been built:
 
 | File | What it is |
 | --- | --- |

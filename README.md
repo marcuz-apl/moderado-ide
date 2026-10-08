@@ -29,10 +29,22 @@ Use Node.js 24.18.0 and install the Linux build prerequisites:
 ```sh
 sudo apt-get update
 sudo apt-get install -y build-essential pkg-config jq python3 libx11-dev libx11-xcb-dev libxkbfile-dev libsecret-1-dev libkrb5-dev libnss3 libgtk-3-0t64 libasound2t64 libgbm-dev xvfb rustc cargo
-git clone --depth 1 --branch 1.135.06055 https://github.com/VSCodium/vscodium.git .cache/vscodium
-git clone --depth 1 --branch 1.135.0 https://github.com/microsoft/vscode.git .cache/vscodium/vscode
+git clone --depth 1 --branch 1.135.06055 https://github.com/VSCodium/vscodium.git build/vscodium
+git clone --depth 1 --branch 1.135.0 https://github.com/microsoft/vscode.git build/vscodium/vscode
 node scripts/build-linux.mjs
 ```
+
+To package the built editor as Linux installers:
+
+```sh
+./scripts/build-deb.sh
+./scripts/build-rpm.sh
+```
+
+Both scripts create `build/installers/` and write their installer there by
+default. Debian packaging requires `dpkg-deb`; RPM packaging requires
+`rpmbuild`. Supply an editor tree and output directory as positional arguments
+to override the defaults.
 
 ### Windows x64
 

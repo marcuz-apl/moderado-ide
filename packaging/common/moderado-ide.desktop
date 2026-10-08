@@ -7,5 +7,5 @@ Exec=moderado-ide %U
 Icon=moderado-ide
 Terminal=false
 Categories=Development;IDE;Science;
-StartupWMClass=moderado-ide
+StartupWMClass=Moderado IDE
 MimeType=x-scheme-handler/moderado-ide;x-scheme-handler/moderado-ide-server;

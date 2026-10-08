@@ -6,8 +6,8 @@ import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const portable = join(root, '.cache/vscodium/VSCode-linux-x64');
-const fixture = mkdtempSync(join(root, '.cache/linux-hostcheck-'));
+const portable = join(root, 'build/vscodium/VSCode-linux-x64');
+const fixture = mkdtempSync(join(root, 'build/linux-hostcheck-'));
 for (const folder of ['profile', 'workspace', 'extensions', 'user-data']) mkdirSync(join(fixture, folder));
 mkdirSync(join(fixture, 'profile/.moderado'));
 writeFileSync(join(fixture, 'profile/.moderado/config.json'), '{}');

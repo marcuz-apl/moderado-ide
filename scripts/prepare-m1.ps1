@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $lock = Get-Content -Raw -LiteralPath (Join-Path $root 'sources.lock.json') | ConvertFrom-Json
-$checkout = Join-Path $root '.cache\vscodium'
+$checkout = Join-Path $root 'build\vscodium'
 if (Test-Path -LiteralPath $checkout) { throw 'Prepared checkout already exists. Use scripts/build-m1.ps1.' }
 
 & git clone --branch $lock.sources.vscodium.tag --single-branch $lock.sources.vscodium.repository $checkout

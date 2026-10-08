@@ -1,4 +1,4 @@
-param([string]$Checkout = (Join-Path $PSScriptRoot '..\.cache\vscodium'))
+param([string]$Checkout = (Join-Path $PSScriptRoot '..\build\vscodium'))
 
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path

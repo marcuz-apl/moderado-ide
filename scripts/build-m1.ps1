@@ -1,5 +1,5 @@
 param(
-  [string]$Checkout = (Join-Path $PSScriptRoot '..\.cache\vscodium'),
+  [string]$Checkout = (Join-Path $PSScriptRoot '..\build\vscodium'),
   [switch]$AssetsOnly,
   [switch]$PackingOnly
 )

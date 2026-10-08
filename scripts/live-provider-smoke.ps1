@@ -60,7 +60,7 @@ Write-Warning "Task: $Task"
 Write-Output @"
 To complete this smoke procedure:
 
-  1. Launch the built editor: .cache\vscodium\VSCode-win32-x64\Moderado IDE.exe
+  1. Launch the built editor: build\vscodium\VSCode-win32-x64\Moderado IDE.exe
   2. Run 'Moderado: Configure Provider Connection' and supply the key for '$ConnectionId'.
      It is written to Windows Credential Manager, never to config.json.
   3. Run 'Moderado: Open Agent Chat' and send: $Task

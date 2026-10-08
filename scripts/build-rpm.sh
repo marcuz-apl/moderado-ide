@@ -6,8 +6,8 @@
 #   ./scripts/build-rpm.sh [editor-tree] [output-dir]
 #
 #   editor-tree   Path to the directory produced by scripts/build-linux.mjs
-#                 (defaults to .cache/vscodium/VSCode-linux-x64).
-#   output-dir    Where the .rpm is written (defaults to cwd).
+#                 (defaults to build/vscodium/VSCode-linux-x64).
+#   output-dir    Where the .rpm is written (defaults to build/installers; created automatically).
 #
 # Requires: rpm-build (rpmbuild), GNU coreutils. If rpmbuild is missing the
 # script exits with a message telling you how to install it.
@@ -17,8 +17,8 @@
 set -eu
 
 REPO_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-EDITOR_TREE=${1:-"$REPO_DIR/.cache/vscodium/VSCode-linux-x64"}
-OUT_DIR=${2:-"$REPO_DIR"}
+EDITOR_TREE=${1:-"$REPO_DIR/build/vscodium/VSCode-linux-x64"}
+OUT_DIR=${2:-"$REPO_DIR/build/installers"}
 
 if [ ! -d "$EDITOR_TREE" ]; then
   echo "error: editor tree not found: $EDITOR_TREE" >&2
@@ -39,6 +39,8 @@ if ! command -v rpmbuild >/dev/null 2>&1; then
   exit 1
 fi
 
+mkdir -p "$OUT_DIR"
+
 VERSION_RAW=$(cat "$REPO_DIR/VERSION" 2>/dev/null || true)
 VERSION=${VERSION_RAW#v}                     # 0.1.22+261007a
 RPM_VERSION=${VERSION%%+*}                   # 0.1.22+261007a -> 0.1.22
@@ -46,7 +48,8 @@ RPM_VERSION=${VERSION%%+*}                   # 0.1.22+261007a -> 0.1.22
 TOPDIR=$(mktemp -d "$REPO_DIR/build-rpm.XXXXXX") || exit 1
 trap 'rm -rf "$TOPDIR"' EXIT
 
-mkdir -p "$TOPDIR"/{SPECS,SOURCES,BUILD,BUILDROOT,SRPMS,RPMS}
+mkdir -p "$TOPDIR/SPECS" "$TOPDIR/SOURCES" "$TOPDIR/BUILD" \
+         "$TOPDIR/BUILDROOT" "$TOPDIR/SRPMS" "$TOPDIR/RPMS"
 
 cp "$REPO_DIR/packaging/rpm/moderado-ide.spec" "$TOPDIR/SPECS/moderado-ide.spec"
 cp "$REPO_DIR/packaging/common/moderado-ide.desktop" "$TOPDIR/SOURCES/"
