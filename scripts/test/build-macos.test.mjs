@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { macBuildEnvironment, assertSourcePin, createMacIcon, macArtifactManifest, parseMacArgs, macEditorBuildCommands, adHocSignMacApp } from '../build-macos.mjs';
+import { macBuildEnvironment, assertSourcePin, createMacIcon, macArtifactManifest, parseMacArgs, macEditorBuildCommands, adHocSignMacApp, verifyPackagedMacAgentFreshness } from '../build-macos.mjs';
 
 const lock = { sources: { vscodium: { commit: 'a'.repeat(40), version: '1.135.06055' }, codeOss: { commit: 'b'.repeat(40) }, moderado: { commit: 'c'.repeat(40) } } };
 test('mac target and upstream commands remain native and pinned', () => {
@@ -59,6 +59,24 @@ test('mac editor packing commands match pinned upstream and avoid signing', () =
     ['npm', ['run', 'gulp', 'vscode-darwin-arm64-min-packing']],
   ]);
   assert.throws(() => macEditorBuildCommands('universal'), /arch/);
+});
+
+test('macOS agent freshness follows the app bundle resource layout', () => {
+  const root = mkdtempSync(join(tmpdir(), 'moderado-mac-agent-'));
+  try {
+    const extension = join(root, 'extension');
+    const app = join(root, 'Moderado IDE.app');
+    const packaged = join(app, 'Contents/Resources/app/extensions/moderado-agent');
+    for (const base of [extension, packaged]) {
+      mkdirSync(join(base, 'dist'), { recursive: true });
+      writeFileSync(join(base, 'package.json'), '{"name":"moderado-agent"}');
+      writeFileSync(join(base, 'dist/extension.js'), 'entry');
+      writeFileSync(join(base, 'dist/agent-core.js'), 'core');
+    }
+    assert.doesNotThrow(() => verifyPackagedMacAgentFreshness(app, extension));
+    writeFileSync(join(packaged, 'dist/agent-core.js'), 'stale');
+    assert.throws(() => verifyPackagedMacAgentFreshness(app, extension), /stale/i);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 test('development app is ad-hoc signed then verified with native codesign', () => {

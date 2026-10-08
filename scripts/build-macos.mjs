@@ -45,6 +45,9 @@ export function adHocSignMacApp(app, execute = run) {
   execute('codesign', ['--force', '--deep', '--sign', '-', app]);
   execute('codesign', ['--verify', '--deep', '--strict', app]);
 }
+export function verifyPackagedMacAgentFreshness(app, extension) {
+  verifyAgentFreshness(join(app, 'Contents'), extension);
+}
 function run(command, args, cwd = root, env = process.env) {
   console.log(`Build: ${command} ${args.join(' ')} (${cwd})`);
   const result = spawnSync(command, args, { cwd, env, stdio: 'inherit', shell: false });
@@ -129,7 +132,7 @@ function main() {
   const product = json(join(resources, 'app/product.json'));
   for (const [key, expected] of Object.entries(json(join(root, 'branding/product.json')))) assert.deepEqual(product[key], expected, `Packaged branding ${key}`);
   assertSourcePin(product.commit, lock.sources.codeOss.commit);
-  verifyAgentFreshness(resources, extension);
+  verifyPackagedMacAgentFreshness(app, extension);
   const iconName = output('plutil', ['-extract', 'CFBundleIconFile', 'raw', '-o', '-', join(app, 'Contents/Info.plist')]);
   assert.equal(iconName, `${json(join(editor, 'package.json')).name}.icns`, 'Packaged icon name');
   assert.deepEqual(readFileSync(join(resources, iconName)), readFileSync(join(editor, 'resources/darwin/code.icns')), 'Packaged macOS icon mismatch');
