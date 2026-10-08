@@ -62,6 +62,21 @@ Verification:
   It checks the empty success status, absent General tab, and retained language
   preference interaction in a real webview browser.
 
+## Token usage in the Moderado header (2026-10-08 UTC)
+
+The header now shows the current task's cumulative input, output, and total
+tokens plus rounded output rate in the requested `In: n | Out: n | Total: n |
+Rate: n tok/s` format. Counts update from provider usage events, reset when a
+new task begins, and retain an explanatory tooltip distinguishing estimated
+counts from provider-reported usage.
+
+Verification:
+- `npm --prefix extensions/moderado-agent test -- test/chat-view.test.ts
+  test/settings-host.test.ts`: 112 passed.
+- `node --test scripts/test/settings-webview.test.mjs` with the pinned editor
+  Playwright: 1 passed; verifies live header refresh and exact formatted text.
+- `npm --prefix extensions/moderado-agent run typecheck`: passed.
+
 ## Auto-Approve defaults (2026-10-07 UTC)
 
 - Enabled Read files, Edit files, Fetch web content, and Use MCP servers on

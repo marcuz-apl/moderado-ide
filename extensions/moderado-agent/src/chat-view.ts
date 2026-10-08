@@ -1,6 +1,6 @@
 import type { AttachmentDescriptor } from './attachments.js';
 import { DEFAULT_AUTO_APPROVE } from './auto-approve.js';
-import type { ApprovalRequest } from '@moderado/contracts';
+import type { ApprovalRequest, UsageEvent } from '@moderado/contracts';
 import { escapeHtml } from './html.js';
 import { settingsPaneHtml, SettingsState, emptySettings } from './settings-view.js';
 
@@ -62,6 +62,8 @@ export interface ChatViewState {
   activeProviderName?: string;
   /** Display-safe active model id (`auto` or an exact route) for the footer. */
   activeModelId?: string;
+  /** Cumulative usage for the current or most recent task. */
+  tokenUsage?: Pick<UsageEvent, 'usage' | 'outputTokensPerSecond' | 'estimated'>;
 }
 
 /** The parts of the view the webview updates in place. */
@@ -82,6 +84,8 @@ export interface ViewSnapshot {
   empty: boolean;
   /** Escaped `provider · model` footer context, refreshed with the connection. */
   activeContext: string;
+  tokenUsage: string;
+  tokenUsageTitle: string;
 }
 
 /** A fresh per-render nonce, which is what a VS Code webview CSP expects. */
@@ -93,8 +97,10 @@ export function createNonce(): string {
 }
 
 /** Top toolbar: New Session + Sessions before the gear, right aligned. */
-function toolbarHtml(historyOpen: boolean): string {
+function toolbarHtml(historyOpen: boolean, tokenUsage: string, tokenUsageTitle: string): string {
   return `<div id="panel-bar">
+    <strong class="brand-title">MODERADO</strong>
+    <span id="token-usage" class="token-usage" title="${escapeHtml(tokenUsageTitle)}" aria-label="Token consumption">${escapeHtml(tokenUsage)}</span>
     <button id="new-session" type="button" title="New session" aria-label="New session">&#65291;</button>
     <button id="toggle-history" type="button" title="Sessions" aria-label="Sessions" aria-pressed="${historyOpen ? 'true' : 'false'}">&#128340;</button>
     <button id="open-settings" type="button" title="Moderado settings" aria-label="Moderado settings">&#9881;</button>
@@ -218,6 +224,8 @@ body { font-family: var(--vscode-font-family); font-size: 13px; color: var(--vsc
   #panel-bar { display: flex; align-items: center; justify-content: flex-end; gap: 0.15rem; padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--vscode-panel-border); flex: 0 0 auto; }
   #panel-bar button { padding: 0.2rem 0.4rem; line-height: 1; border-radius: 3px; font-size: 1rem; opacity: 0.85; }
   #panel-bar button:hover { background: var(--vscode-toolbar-hoverBackground); opacity: 1; }
+  .brand-title { flex: 0 0 auto; margin-right: auto; font-size: 0.7rem; letter-spacing: 0.06em; }
+  .token-usage { flex: 0 1 auto; min-width: 0; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; margin-right: 0.25rem; font-size: 0.62rem; opacity: 0.75; }
   /* Scrollable middle: welcome state, recents, transcript. */
   #scroll { flex: 1; overflow-y: auto; min-height: 0; padding: 0.5rem 0.75rem; }
   .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 2rem 0 1.5rem; }
@@ -339,7 +347,7 @@ body { font-family: var(--vscode-font-family); font-size: 13px; color: var(--vsc
 </style>
 </head>
 <body${snapshot.settingsOpen ? ' class="settings-open"' : ''}>
-${toolbarHtml(snapshot.historyOpen)}
+${toolbarHtml(snapshot.historyOpen, snapshot.tokenUsage, snapshot.tokenUsageTitle)}
 <div id="settings-host">${snapshot.settings}</div>
 <div id="scroll">
   ${snapshot.empty ? emptyStateHtml() : ''}
@@ -624,6 +632,11 @@ ${toolbarHtml(snapshot.historyOpen)}
       return;
     }
     if (!update || update.type !== 'update') return;
+    const tokenUsage = document.getElementById('token-usage');
+    if (tokenUsage) {
+      tokenUsage.textContent = update.tokenUsage ?? '';
+      tokenUsage.title = update.tokenUsageTitle ?? 'Token consumption for the current task';
+    }
     // Measured before the DOM is rewritten. A reader who scrolled up to re-read
     // earlier output must not be dragged back down by the next streamed token,
     // so the tail is only followed when it was already in view.
@@ -744,6 +757,12 @@ export function viewSnapshot(
   const activeContext = escapeHtml(
     [state.activeProviderName, state.activeModelId].filter((part) => part && part.trim()).join(' · '),
   );
+  const tokenUsage = state.tokenUsage
+    ? `In: ${state.tokenUsage.usage.promptTokens} | Out: ${state.tokenUsage.usage.completionTokens} | Total: ${state.tokenUsage.usage.totalTokens} | Rate: ${Math.round(state.tokenUsage.outputTokensPerSecond)} tok/s`
+    : '';
+  const tokenUsageTitle = state.tokenUsage
+    ? `${state.tokenUsage.estimated ? 'Estimated' : 'Provider-reported'} token usage for the current task`
+    : 'Token consumption for the current task';
   return {
     attachments: (state.attachments ?? []).map(attachment => `<span class="attachment-chip" role="listitem" title="${escapeHtml(attachment.kind)}"><span>${attachment.kind === 'context' ? '@ ' : ''}${escapeHtml(attachment.label)}</span><button type="button" data-attachment-id="${escapeHtml(attachment.id)}" aria-label="Remove ${escapeHtml(attachment.label)}" ${state.running ? 'disabled' : ''}>&times;</button></span>`).join(''),
     rows,
@@ -763,5 +782,7 @@ export function viewSnapshot(
     settings: settings.open ? settingsPaneHtml(settings) : '',
     settingsStatus: settings.status ?? '',
     activeContext,
+    tokenUsage,
+    tokenUsageTitle,
   };
 }

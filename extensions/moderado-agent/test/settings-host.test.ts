@@ -494,6 +494,24 @@ describe('simple answer presentation', () => {
   });
 });
 
+describe('token usage header', () => {
+  it('updates the MODERADO header from a validated usage event', () => {
+    harness.agentOptions.onEvent({
+      type: 'usage',
+      usage: { promptTokens: 1234, completionTokens: 2345, totalTokens: 3579 },
+      estimated: false,
+      outputTokensPerSecond: 111.6,
+      generationMs: 32100,
+      final: true,
+      timestamp: Date.now(),
+    });
+    expect(harness.messages.at(-1)?.tokenUsage)
+      .toBe('In: 1234 | Out: 2345 | Total: 3579 | Rate: 112 tok/s');
+    expect(harness.messages.at(-1)?.tokenUsageTitle)
+      .toBe('Provider-reported token usage for the current task');
+  });
+});
+
 describe('Gateway credential reference reuse', () => {
   it('retains the immutable stored reference when saving an existing browser login', async () => {
     send('gatewayBrowserLogin', { ...form, loginMethod: 'browser' });

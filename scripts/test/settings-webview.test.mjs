@@ -51,9 +51,15 @@ test('Webview preserves settings drafts, browses prompt history, and exposes cha
     await page.locator('#settings-base-url').evaluate(field => field.setSelectionRange(8, 12));
     settings.models = [ { id: 'auto', isFree: true, accessTier: 'local' }, { id: 'local-model', isFree: true, accessTier: 'local' } ];
     settings.status = '';
+    state.tokenUsage = {
+      usage: { promptTokens: 1234, completionTokens: 2345, totalTokens: 3579 },
+      outputTokensPerSecond: 111.6,
+      estimated: false,
+    };
     await update();
     assert.equal(await page.locator('#settings-model-select option').count(), 2, 'discovery must refresh the open pane');
     assert.equal(await page.locator('#settings-status').textContent(), '', 'successful discovery must not show a model count');
+    assert.equal(await page.locator('#token-usage').textContent(), 'In: 1234 | Out: 2345 | Total: 3579 | Rate: 112 tok/s');
     assert.equal(await page.locator('#settings-base-url').inputValue(), 'http://localhost:5999/v1', 'discovery must retain a typed endpoint');
     assert.equal(await page.locator('#settings-api-key').inputValue(), 'draft-browser-key');
     assert.equal(await page.locator('.model-card').count(), 0);

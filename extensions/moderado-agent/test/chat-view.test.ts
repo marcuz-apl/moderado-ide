@@ -78,6 +78,19 @@ describe('chat view', () => {
     expect(html).toMatch(/#settings-host:empty\s*\{[^}]*display:\s*none/);
   });
 
+  it('shows current task token usage in the Moderado header', () => {
+    const usage = {
+      usage: { promptTokens: 1234, completionTokens: 2345, totalTokens: 3579 },
+      outputTokensPerSecond: 111.6,
+      estimated: false,
+    };
+    const html = chatHtml(state({ tokenUsage: usage }), preview);
+    expect(html).toContain('MODERADO');
+    expect(html).toContain('In: 1234 | Out: 2345 | Total: 3579 | Rate: 112 tok/s');
+    expect(viewSnapshot(state({ tokenUsage: usage }), preview).tokenUsage)
+      .toBe('In: 1234 | Out: 2345 | Total: 3579 | Rate: 112 tok/s');
+  });
+
   it('gives the settings pane the whole sidebar while it is open', () => {
     // Settings is its own full-height screen. Leaving the transcript, composer,
     // and auto-approve bar mounted underneath it stacks the chat into a strip.

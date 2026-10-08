@@ -176,6 +176,14 @@ export function activate(context: vscode.ExtensionContext): ModeradoApi {
         view.pendingApproval = event.request;
         render();
       }
+      if (event.type === 'usage') {
+        view.tokenUsage = {
+          usage: event.usage,
+          outputTokensPerSecond: event.outputTokensPerSecond,
+          estimated: event.estimated,
+        };
+        render();
+      }
       if (event.type === 'error') append({ kind: 'error', label: 'Error', text: event.message });
       if (event.type === 'assistant_delta') appendDelta(event.delta);
     },
@@ -1202,6 +1210,7 @@ async function openDiffTab(requestId: string): Promise<void> {
     let prepared: ReturnType<typeof preparePrompt>;
     try { prepared = preparePrompt(text, [...draftAttachments.values()]); }
     catch (error) { void vscode.window.showErrorMessage((error as Error).message); return; }
+    view.tokenUsage = undefined;
     append({ kind: 'user', label: 'You', text: text.trim() || 'Review the attached context.' });
     attachmentEpoch++;
     view.running = true;
