@@ -55,6 +55,8 @@ test('workflow parses as YAML with valid job steps', { skip: !python && 'No inst
   assert.equal(triggers.workflow_dispatch.inputs.macos_arch.default, 'both');
   assert.equal(document.permissions.contents, 'read');
   assert.equal(Object.keys(document.jobs).length, 5);
+  assert.equal(document.jobs['macos-arm64'].env?.MODERADO_BUILD_HEAP_MB, undefined,
+    'arm64 must use the macOS build script heap default instead of a smaller workflow override');
   assert.equal(document.jobs.publish.if, '${{ false }}');
   for (const [name, job] of Object.entries(document.jobs)) {
     if (name !== 'publish') {

@@ -39,6 +39,12 @@ channel still left the Spectre component absent. Windows failed at prerequisite 
 macOS and Linux were still building when this handoff was updated. The channel
 ID correction is covered by the workflow test and needs a fresh all-platform
 run before any artifact is called release-ready.
+Run [37857820215](https://github.com/marcuz-apl/moderado-ide/actions/runs/37857820215)
+later passed Linux but failed macOS arm64 with a V8 heap OOM at approximately
+4 GiB. The arm64 job had explicitly overridden the macOS build script's
+12 GiB heap default with `MODERADO_BUILD_HEAP_MB=4096`; that override is removed,
+and the workflow regression test now prevents its reintroduction. A fresh
+arm64 run is required to verify the fix; no artifact is yet release-ready.
 Host and attachment test fixtures canonicalize their temporary roots with
 `realpathSync`, preserving production symlink checks. The restored-image limit
 test keeps its over-limit coverage with smaller fixtures and a 30-second

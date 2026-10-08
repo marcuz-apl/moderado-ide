@@ -279,7 +279,6 @@ jobs:
     runs-on: macos-14
     timeout-minutes: 180
     env:
-      MODERADO_BUILD_HEAP_MB: '4096'
       MODERADO_TSGO_CONCURRENCY: '2'
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
