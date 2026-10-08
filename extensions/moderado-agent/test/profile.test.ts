@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, statSync as fsStatSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, statSync as fsStatSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -526,5 +526,17 @@ describe('skills', () => {
 
   it('returns nothing when no skills exist', () => {
     expect(discoverSkills(tempDir('moderado-home-')).skills).toEqual([]);
+  });
+});
+
+describe('safe profile parse diagnostics', () => {
+  it('does not expose malformed file contents in the error', () => {
+    const root = mkdtempSync(join(tmpdir(), 'moderado-profile-diagnostic-'));
+    mkdirSync(join(root, '.moderado'));
+    writeFileSync(join(root, '.moderado/config.json'), 'private-fixture-key');
+    const result = readConfig(root);
+    expect(result.kind).toBe('invalid');
+    expect(JSON.stringify(result)).not.toContain('private-fixture-key');
+    rmSync(root, { recursive: true, force: true });
   });
 });

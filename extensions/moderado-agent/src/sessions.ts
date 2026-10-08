@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import { z } from 'zod';
 import { ChatMessageSchema, ChatMessage, ChatUsage } from '@moderado/contracts';
 import { canonicalWorkspaceRoot, moderadoHome } from './profile.js';
+import { imageContextDirectory } from './attachments.js';
 
 /**
  * Mirrors the CLI's `StoredSessionSchema` exactly. Desktop must be able to read
@@ -159,8 +160,7 @@ export class SessionStore {
 
     // IDE image snapshots use the same canonical workspace and hashed session id.
     // Only the known flat snapshot files may be removed; never recursively follow entries.
-    const hash = (value: string) => crypto.createHash('sha256').update(value).digest('hex');
-    const sidecar = path.join(moderadoHome(this.home), 'desktop', 'attachments', hash(canonical), hash(id));
+    const sidecar = imageContextDirectory({ workspaceRoot, sessionId: id, home: this.home });
     const files: string[] = [];
     if (checkedPath(sidecar, true)) {
       for (const entry of fs.readdirSync(sidecar)) {

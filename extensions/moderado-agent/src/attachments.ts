@@ -168,6 +168,12 @@ export function preparePrompt(task: string, attachments: readonly DraftAttachmen
 
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
 
+/** Exact IDE-only image scope, shared by snapshot reads/writes and chat deletion. */
+export function imageContextDirectory(scope: AttachmentScope): string {
+  return path.join(path.resolve(moderadoHome(scope.home)), 'desktop', 'attachments',
+    hash(canonicalizeRoot(scope.workspaceRoot)), hash(scope.sessionId));
+}
+
 function stateDir(scope: AttachmentScope, create: boolean): string {
   const base = path.resolve(moderadoHome(scope.home));
   const workspaceHash = hash(canonicalizeRoot(scope.workspaceRoot));
@@ -176,7 +182,7 @@ function stateDir(scope: AttachmentScope, create: boolean): string {
     path.join(base, 'desktop'),
     path.join(base, 'desktop', 'attachments'),
     path.join(base, 'desktop', 'attachments', workspaceHash),
-    path.join(base, 'desktop', 'attachments', workspaceHash, hash(scope.sessionId)),
+    imageContextDirectory(scope),
   ];
   for (const dir of segments) {
     try {
@@ -260,11 +266,16 @@ export function loadImageContext(messages: readonly ChatMessage[], scope: Attach
       continue;
     try {
       const file = path.join(stateDir(scope, false), hash(message.content) + '.json');
-      const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+      const before = fs.lstatSync(file);
+      if (before.isSymbolicLink() || !before.isFile()) throw new Error('Unsafe snapshot file');
+      // Windows may expose no usable O_NOFOLLOW. The explicit lstat and opened
+      // file identity check therefore enforce the boundary on every platform.
+      const noFollow = process.platform === 'win32' ? 0 : fs.constants.O_NOFOLLOW ?? 0;
+      const fd = fs.openSync(file, fs.constants.O_RDONLY | noFollow);
       let raw: string;
       try {
         const stat = fs.fstatSync(fd);
-        if (!stat.isFile() || stat.size > 24 * 1024 * 1024)
+        if (!stat.isFile() || stat.dev !== before.dev || stat.ino !== before.ino || stat.size > 24 * 1024 * 1024)
           throw new Error('Invalid snapshot size');
         raw = fs.readFileSync(fd, 'utf8');
       } finally {

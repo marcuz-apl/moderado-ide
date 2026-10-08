@@ -1,4 +1,4 @@
-// Native macOS development installers; no signing, notarization, or publication.
+// Native macOS development installers; ad-hoc signing only, no notarization or publication.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -38,6 +38,12 @@ export function macEditorBuildCommands(arch) {
     ['node', ['build/lib/policies/policyGenerator.ts', 'build/lib/policies/policyData.jsonc', 'darwin']],
     ['npm', ['run', 'gulp', `vscode-darwin-${arch}-min-packing`]],
   ];
+}
+export function adHocSignMacApp(app, execute = run) {
+  // Apple Silicon requires signed native code. '-' is an unauthenticated local
+  // measurement, not an owner identity or a distribution certificate.
+  execute('codesign', ['--force', '--deep', '--sign', '-', app]);
+  execute('codesign', ['--verify', '--deep', '--strict', app]);
 }
 function run(command, args, cwd = root, env = process.env) {
   console.log(`Build: ${command} ${args.join(' ')} (${cwd})`);
@@ -94,7 +100,7 @@ function main() {
   checkoutPinned(checkout, lock.sources.vscodium); checkoutPinned(editor, lock.sources.codeOss);
   assert.equal(process.version.slice(1), readFileSync(join(editor, '.nvmrc'), 'utf8').trim(), 'Use the pinned editor Node version');
   const env = macBuildEnvironment(lock, arch);
-  for (const tool of ['jq', 'gsed', 'python3', 'clang', 'sips', 'iconutil', 'hdiutil', 'ditto']) output('which', [tool]);
+  for (const tool of ['jq', 'gsed', 'python3', 'clang', 'sips', 'iconutil', 'hdiutil', 'ditto', 'codesign']) output('which', [tool]);
   const tools = join(checkout, '.moderado-tools'); mkdirSync(tools, { recursive: true });
   if (!existsSync(join(tools, 'sed'))) symlinkSync(output('which', ['gsed']), join(tools, 'sed'));
   env.PATH = `${tools}:${env.PATH}`;
@@ -132,6 +138,7 @@ function main() {
   const executable = join(app, 'Contents/MacOS', product.nameShort);
   assert.ok(existsSync(executable), 'Packaged editor executable missing');
   assert.equal(output('plutil', ['-extract', 'CFBundleIdentifier', 'raw', '-o', '-', join(app, 'Contents/Info.plist')]), product.darwinBundleIdentifier);
+  adHocSignMacApp(app);
   run(executable, ['-e', `const {createRequire}=require('node:module'); const r=createRequire(${JSON.stringify(join(resources, 'app/package.json'))}); for(const name of ['@vscodium/native-keymap/build/Release/keymapping.node','@vscode/spdlog','@vscode/sqlite3','@parcel/watcher','node-pty']) r(name);`], root, { ...env, ELECTRON_RUN_AS_NODE: '1', NODE_PATH: join(resources, 'app/node_modules.asar') });
   const sourceVersion = readFileSync(join(root, 'VERSION'), 'utf8').trim();
   assert.match(sourceVersion, /^v\d+\.\d+\.\d+\+\d{6}[0-9a-z]+$/);
@@ -144,9 +151,9 @@ function main() {
   run('hdiutil', ['create', '-volname', 'Moderado IDE', '-srcfolder', stage, '-format', 'UDZO', '-ov', join(directory, names[0])]);
   run('hdiutil', ['verify', join(directory, names[0])]);
   run('ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', app, join(directory, names[1])]);
-  const manifest = { ...macArtifactManifest(directory, names, lock, sourceVersion, arch), builtFromCommit: output('git', ['rev-parse', 'HEAD']), purpose: 'unsigned-development' };
+  const manifest = { ...macArtifactManifest(directory, names, lock, sourceVersion, arch), builtFromCommit: output('git', ['rev-parse', 'HEAD']), purpose: 'unsigned-development', distributionSigned: false, adHocSigned: true, notarized: false };
   write(join(directory, 'build-manifest.json'), JSON.stringify(manifest, null, 2));
   write(join(directory, 'SHA256SUMS'), manifest.artifacts.map(artifact => `${artifact.sha256}  ${artifact.name}\n`).join(''));
-  console.log(`Verified unsigned macOS artifacts: ${directory}`);
+  console.log(`Verified macOS development artifacts (ad-hoc signature only): ${directory}`);
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();

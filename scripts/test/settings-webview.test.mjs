@@ -37,7 +37,6 @@ test('Settings refreshes models and provider controls, preserves drafts, and clo
     page.on('pageerror', error => errors.push(error.message));
     await page.setContent(chatHtml(state, () => ''), { waitUntil: 'load' });
     const update = async () => page.evaluate(snapshot => window.dispatchEvent(new MessageEvent('message', { data: { type: 'update', ...snapshot } })), viewSnapshot(state, () => ''));
-    await page.locator('#settings-model-search').fill('local-model');
     await page.locator('#settings-base-url').fill('http://localhost:5999/v1');
     await page.locator('#settings-api-key').fill('draft-browser-key');
     await page.waitForFunction(() => window.messages.some(message => message.type === 'refreshModels' && message.apiKey === 'draft-browser-key'));
@@ -51,8 +50,8 @@ test('Settings refreshes models and provider controls, preserves drafts, and clo
     assert.equal(await page.locator('#settings-model-select option').count(), 2, 'discovery must refresh the open pane');
     assert.equal(await page.locator('#settings-base-url').inputValue(), 'http://localhost:5999/v1', 'discovery must retain a typed endpoint');
     assert.equal(await page.locator('#settings-api-key').inputValue(), 'draft-browser-key');
-    assert.equal(await page.locator('#settings-model-search').inputValue(), 'local-model');
-    assert.equal(await page.locator('.model-card:not([hidden])').count(), 1);
+    assert.equal(await page.locator('.model-card').count(), 0);
+    assert.equal(await page.locator('#settings-model-search').count(), 0);
     assert.deepEqual(await page.evaluate(() => ({ id: document.activeElement.id, start: document.activeElement.selectionStart, end: document.activeElement.selectionEnd })), { id: 'settings-base-url', start: 8, end: 12 });
     await page.locator('#settings-model-select').selectOption('local-model');
     const chosen = await page.evaluate(() => window.messages.at(-1));

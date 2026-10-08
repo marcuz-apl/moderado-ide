@@ -74,8 +74,8 @@ export function readConfig(customHome?: string): ConfigState {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
-  } catch (error) {
-    return { kind: 'invalid', error: `config.json is not valid JSON: ${(error as Error).message}` };
+  } catch {
+    return { kind: 'invalid', error: 'config.json is not valid JSON.' };
   }
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
     return { kind: 'invalid', error: 'config.json is not a JSON object.' };

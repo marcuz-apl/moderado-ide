@@ -1211,3 +1211,15 @@ Verification:
 - git diff --check and IDE-local hook shell syntax checks: exit 0; core.hooksPath=.githooks verified. git fetch origin and git rev-list --left-right --count master...origin/master: 0 0 before commit.
 
 Owner explicitly authorized committing/pushing all changes. Source only; ignored build artifacts and keyring fixtures remain local. Linux packages will be rebuilt from the committed version; no public installers, signing, or release publication authorized. Native Windows/macOS credential behavior is not claimed verified by these Linux checks.
+
+## Windows handoff and pending source push (2026-10-08 UTC)
+
+Owner requested pushing all changes before switching to Windows for functional testing. Completed pending fixes: cross-platform snapshot symlink/identity checks, shared image-sidecar path derivation, safe profile parse diagnostics, macOS ad-hoc signing/verification, recursive macOS artifact upload paths, and browser regression updates for the compact model dropdown.
+
+Verification:
+- npm test --prefix extensions/moderado-agent: exit 0, 395 passed, 4 skipped, 19 files passed.
+- npm run typecheck --prefix extensions/moderado-agent: exit 0.
+- MODERADO_PLAYWRIGHT_PATH=/mnt/d/projects/moderado-ide/.cache/vscodium/vscode/node_modules/playwright/index.mjs PATH="$PWD/build/toolchain/bin:$PATH" node --test scripts/test/*.test.mjs: exit 0, 21 passed, 0 skipped. Includes real offline browser interaction, macOS command/signing plans and YAML workflow parse.
+- git diff --check: exit 0. git fetch origin and git rev-list --left-right --count master...origin/master: 0 0 before commit.
+
+Windows CI previously failed three snapshot/deletion security tests; those cases were corrected and verified locally, but native Windows CI still requires rerunning. macOS/Windows installers have not yet been produced by the new manual workflow. The reported Ubuntu profile problem cannot be confirmed on the offline VM; missing/corrupt/unreadable diagnostics are now distinct and do not reveal config contents. No public release, signing certificate, or notarization is claimed.

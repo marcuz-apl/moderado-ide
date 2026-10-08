@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { macBuildEnvironment, assertSourcePin, createMacIcon, macArtifactManifest, parseMacArgs, macEditorBuildCommands } from '../build-macos.mjs';
+import { macBuildEnvironment, assertSourcePin, createMacIcon, macArtifactManifest, parseMacArgs, macEditorBuildCommands, adHocSignMacApp } from '../build-macos.mjs';
 
 const lock = { sources: { vscodium: { commit: 'a'.repeat(40), version: '1.135.06055' }, codeOss: { commit: 'b'.repeat(40) }, moderado: { commit: 'c'.repeat(40) } } };
 test('mac target and upstream commands remain native and pinned', () => {
@@ -57,4 +57,13 @@ test('mac editor packing commands match pinned upstream and avoid signing', () =
     ['npm', ['run', 'gulp', 'vscode-darwin-arm64-min-packing']],
   ]);
   assert.throws(() => macEditorBuildCommands('universal'), /arch/);
+});
+
+test('development app is ad-hoc signed then verified with native codesign', () => {
+  const calls = [];
+  adHocSignMacApp('/tmp/Moderado IDE.app', (command, args) => calls.push([command, args]));
+  assert.deepEqual(calls, [
+    ['codesign', ['--force', '--deep', '--sign', '-', '/tmp/Moderado IDE.app']],
+    ['codesign', ['--verify', '--deep', '--strict', '/tmp/Moderado IDE.app']],
+  ]);
 });

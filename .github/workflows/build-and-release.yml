@@ -204,10 +204,10 @@ jobs:
           if-no-files-found: error
           retention-days: 30
           path: |
-            build/installers/*.dmg
-            build/installers/*.zip
-            build/installers/*.json
-            build/installers/SHA256SUMS*
+            build/installers/**/*.dmg
+            build/installers/**/*.zip
+            build/installers/**/*.json
+            build/installers/**/SHA256SUMS*
 
   macos-x64:
     name: Build and verify (macOS x64)
@@ -236,10 +236,10 @@ jobs:
           if-no-files-found: error
           retention-days: 30
           path: |
-            build/installers/*.dmg
-            build/installers/*.zip
-            build/installers/*.json
-            build/installers/SHA256SUMS*
+            build/installers/**/*.dmg
+            build/installers/**/*.zip
+            build/installers/**/*.json
+            build/installers/**/SHA256SUMS*
 
   publish:
     name: Publishing disabled
