@@ -961,4 +961,57 @@ Final artifacts under `D:\projects\moderado-desktop\.cache\vscodium\assets`:
 Unsigned and unpublished. No fresh clean-account install/uninstall, visual
 Gateway/settings inspection, or live inference is claimed for these artifacts.
 The portable traversal test correction and this handoff remain uncommitted
+## Version history rewrite (2026-10-07, approved by owner)
+
+Rewrote all 56 VERSION stamps from `f8c131f` through `20ab95b` so that the 22
+`feat:` commits advance `p` 1..22 (v0.1.1+2610016 .. v0.1.22+261007a), while
+all `fix:`/`docs:`/`build:`/`ci:`/`test:`/`chore:` commits keep the running
+`p` and only the build counter moves. Build suffixes (+26100DD letters) were
+kept verbatim from the original commits.
+
+- Method: `cherry-pick -n` replay of the 56 pick list onto a clean base at
+  `32a9cd4`, with VERSION rewritten per commit, metadata preserved, and a
+  revert branch `backup-pre-rewrite` left intact. Two reconciliation commits
+  (`cf16aff`, `4ff6cf2`, `52d077c`) were dropped as meaningless post-rewrite;
+  `2bbf9e1` (hook wiring) was reworded into the final p=22 commit.
+- Verified: 56/56 stamps matched the map exactly; author dates and authors
+  preserved (e.g. original `f8c131f` 2026-10-01T17:26:01-06:00 -> new
+  `01e3799` same stamp/auth); `git log --reverse` order unchanged.
+- Tests: `npx tsc --noEmit` exit 0; `npx vitest run`: 333 passed, 4 skipped
+  (16 test files), exit 0.
+- Pushed: `git push --force-with-lease origin rewrite-replay:master` ->
+  `52d077c...25ea5a8` (forced update). Remote `origin/master` now at
+  `25ea5a809f5a6e38836ece14fa354585ddf72e05` (= v0.1.22+261007a).
+
+Local backup branches left: `backup-pre-rewrite` (old master tip), and the
+rewritten lineage on `rewrite-replay` until remote sync is confirmed.
 in the Linux checkout; the verified Windows build uses the recorded clean commit.
+## Linux packaging (.deb / .rpm)
+
+New packaging scripts (`scripts/build-deb.sh`, `scripts/build-rpm.sh`) build
+Debian and RedHat packages from the already-built editor tree (`.cache/vscodium/VSCode-linux-x64`).
+
+- `.deb` (verified locally): `moderado-ide_0.1.22~261007a_amd64.deb`
+  (214,467,058 bytes; SHA-256 `293c6242a39a5297f704179fa20c25dd7092fcfa5e00ef91fa308abda577a562`).
+  Installs `moderado-ide` into `/opt/moderado-ide/`, `/usr/bin/moderado-ide`
+  symlink, desktop entry, vector icon, and `%doc`.
+- `.rpm` (build-ready; `rpmbuild` is missing on this host so it could not run):
+  `packaging/rpm/moderado-ide.spec` + `scripts/build-rpm.sh`. Requires
+  `sudo dnf install -y rpm-build` (or `yum install -y rpm-build`).
+
+Files:
+- `packaging/deb/DEBIAN/control` — Debian control metadata (depends on the
+  VSCodium/Code-OSS runtime libraries).
+- `packaging/rpm/moderado-ide.spec` — RPM spec (Requires + %files list).
+- `packaging/common/{moderado-ide.desktop,moderado-ide.svg,moderado-ide.appdata.xml,copyright}` — shared metadata.
+- `scripts/build-deb.sh` — Debian builder (uses `dpkg-deb --root-owner-group`).
+- `scripts/build-rpm.sh` — RedHat builder (`rpmbuild -bb --target=x86_64`).
+
+Notes:
+- The Linux build produced by `scripts/build-linux.mjs` is a *portable tar.gz
+  only* (`Moderado IDE-linux-x64-*.tar.gz`); system `.deb`/`.rpm` packaging is
+  a separate step implemented here.
+- The `.deb` artifact is a local, unsigned development build
+  (`signed: false`, `published: false`); publishing is disabled in CI pending
+  a code signature.
+

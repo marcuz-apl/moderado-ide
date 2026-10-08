@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Moderado IDE
+GenericName=IDE
+Comment=Provider-independent agent hosted in an IDE
+Exec=moderado-ide %U
+Icon=moderado-ide
+Terminal=false
+Categories=Development;IDE;Science;
+StartupWMClass=moderado-ide
+MimeType=x-scheme-handler/moderado-ide;x-scheme-handler/moderado-ide-server;

@@ -1,0 +1,26 @@
+Package: moderado-ide
+Version: 0.1.22~261007a
+Section: Editors
+Priority: optional
+Architecture: amd64
+Essential: no
+Depends: ca-certificates, libc6 (>= 2.14), libgcc1 | libgcc-s1,
+         libglib2.0-0, libnss3, libpcre2-8-0, libstdc++6,
+         libx11-xcb1, libxcomposite1, libxcursor1, libxdamage1,
+         libxext6, libxfixes3, libxkbcommon0, libxrandr2, libpango-1.0-0,
+         libcairo2, libasound2, libatspi2.0-0, libcups2, libdrm2,
+         libgbm1, libgl1, libgles2, libgtk-3-0, libxshmfence1,
+         libdbus-1-3, libsecret-1-0, fonts-dejavu-core
+Breaks: vscodium (<< 1.0)
+Conflicts: vscodium
+Replaces: vscodium
+Installed-Size: 120000
+Homepage: https://moderado.dev
+Maintainer: Moderado <maintainers@moderado.dev>
+Description: Moderado IDE — provider-independent agent hosted in an IDE.
+ Moderado IDE is a provider-independent agent that lives inside an IDE,
+ with Gateway access, model routing, and policy tooling.
+ .
+ This package ships a locally-packaged, portable Linux build of the
+ Moderado editor. The graphical client is built from the pinned VSCodium
+ (open-vscode) source tree; no telemetry, no Microsoft branding.

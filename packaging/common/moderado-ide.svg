@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Vector icon for the Moderado IDE desktop entry (hicolor, scalable). -->
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <rect width="256" height="256" rx="24" fill="#242424"/>
+  <path d="M64 120h40v40H64zM112 120h40v40h-40zM160 120h40v40h-40z" fill="#f5e05a"/>
+  <rect x="56" y="140" width="144" height="16" rx="4" fill="#ffb454"/>
+  <rect x="56" y="172" width="116" height="16" rx="4" fill="#ffb454"/>
+  <rect x="56" y="204" width="80" height="16" rx="4" fill="#ffb454"/>
+  <circle cx="200" cy="56" r="20" fill="#242424"/>
+  <path d="M186 42l6 12 6-12" fill="none" stroke="#242424" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

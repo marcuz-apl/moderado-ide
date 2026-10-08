@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright (c) 2026 Moderado contributors. -->
+<application>
+  <id type="desktop">moderado-ide</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>Moderado IDE</name>
+  <summary>Provider-independent agent in an IDE</summary>
+  <description>
+    <p>Moderado IDE is a provider-independent agent that lives inside an IDE,
+    with Gateway access, model routing, and policy tooling.</p>
+  </description>
+  <url type="homepage">https://moderado.dev</url>
+  <releases>
+    <release version="0.1.22~261007a" date="2026-10-07">
+      <description>
+        <p>Initial Linux packaging.</p>
+      </description>
+    </release>
+  </releases>
+</application>
