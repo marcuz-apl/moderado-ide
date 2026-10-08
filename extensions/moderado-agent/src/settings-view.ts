@@ -1,4 +1,4 @@
-import { defaultSettingsPreferences, settingsFeaturesHtml, settingsGeneralHtml, type SettingsPreferences } from './settings-preferences.js';
+import { defaultSettingsPreferences, settingsFeaturesHtml, type SettingsPreferences } from './settings-preferences.js';
 import { settingsAboutHtml } from './settings-about.js';
 import { escapeHtml } from './html.js';
 import { validateProviderBaseUrl } from './provider-setup.js';
@@ -174,7 +174,6 @@ function tabModels(state: SettingsState): SettingsModel[] {
 const SETTINGS_PAGES = [
   { id: 'api', label: 'API Config' },
   { id: 'features', label: 'Features' },
-  { id: 'general', label: 'General' },
   { id: 'about', label: 'About' },
 ] as const;
 
@@ -213,10 +212,10 @@ function selectedModelDetails(state: SettingsState): string {
 export function settingsPaneHtml(state: SettingsState): string {
   // A corrupt profile must stop the user here. Rendering an empty form would
   // invite saving defaults over data that was never successfully read.
-  if (state.page === 'about' || state.page === 'features' || state.page === 'general') {
+  if (state.page === 'about' || state.page === 'features') {
     const preferences = state.preferences ?? { ...defaultSettingsPreferences };
     const content = state.page === 'about' ? settingsAboutHtml(state.ideVersion ?? 'Development', state.editorVersion)
-      : state.page === 'features' ? settingsFeaturesHtml(preferences) : settingsGeneralHtml(preferences);
+      : settingsFeaturesHtml(preferences);
     return `<section id="settings-pane" class="settings" aria-label="Moderado settings">
       <div class="set-head"><h2>Settings</h2><button id="close-settings" type="button" class="done">Done</button></div>
       <div class="set-body"><nav class="set-nav" aria-label="Settings sections">${settingsNav(state.page)}</nav>

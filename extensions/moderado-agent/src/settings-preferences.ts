@@ -68,22 +68,15 @@ export function settingsFeaturesHtml(preferences: SettingsPreferences): string {
   </section>
   <section class="settings-card"><h3>Editor</h3>
     ${toggle(preferences, 'showHistoryOnStartup', 'Show chat history on startup', 'Open the history list when Moderado starts.')}
+    <label for="preference-preferredLanguage">Preferred reply language</label>
+    <select id="preference-preferredLanguage" data-preference="preferredLanguage">
+      ${PREFERRED_LANGUAGES.map(language => `<option value="${escapeHtml(language)}"${language === preferences.preferredLanguage ? ' selected' : ''}>${escapeHtml(language)}</option>`).join('')}
+    </select>
+    <p class="note">The agent uses this language for replies.</p>
   </section>
   <section class="settings-card"><h3>Advanced</h3>
     <label for="preference-approvalTimeoutSeconds">Approval timeout (seconds)</label>
     <input id="preference-approvalTimeoutSeconds" type="number" data-preference="approvalTimeoutSeconds" min="1" max="600" step="1" value="${escapeHtml(preferences.approvalTimeoutSeconds)}" />
     <p class="note">Unanswered approval requests are denied when this time expires. Applies to new tasks.</p>
   </section>`;
-}
-
-export function settingsGeneralHtml(preferences: SettingsPreferences): string {
-  return `<h2>General</h2>
-  <section class="settings-card">
-    <label for="preference-preferredLanguage">Preferred language</label>
-    <select id="preference-preferredLanguage" data-preference="preferredLanguage">
-      ${PREFERRED_LANGUAGES.map(language => `<option value="${escapeHtml(language)}"${language === preferences.preferredLanguage ? ' selected' : ''}>${escapeHtml(language)}</option>`).join('')}
-    </select>
-    <p class="note">The agent uses this language for replies.</p>
-  </section>
-  <p class="note">Moderado Agent does not send usage or error reports.</p>`;
 }

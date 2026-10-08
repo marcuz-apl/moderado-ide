@@ -41,6 +41,27 @@ These corrections still require a new `platform=all`, `macos_arch=both` run
 from the latest source. The previous run's Linux status/artifact result remains
 unconfirmed. No release was published.
 
+## Settings navigation and discovery cleanup (2026-10-08 UTC)
+
+Removed the General tab. Preferred reply language remains configurable under
+Features, and existing editor preference values continue to be read and saved.
+Successful model discovery now fills the model selector without rendering a
+redundant model-count status on API Config, Features, About, or the Free/Paid
+model tabs; provider errors and empty catalogs still report their status.
+
+Verification:
+- The new discovery, navigation, feature-preference, and host tests failed
+  before implementation and passed afterward:
+  `npm --prefix extensions/moderado-agent test -- test/model-discovery.test.ts
+  test/settings-preferences.test.ts test/settings-view.test.ts
+  test/settings-host.test.ts test/chat-view.test.ts` — 135 passed.
+- `npm --prefix extensions/moderado-agent run typecheck`: passed.
+- `npm --prefix extensions/moderado-agent run compile`: passed; 560 KiB bundle.
+- `node --test scripts/test/settings-webview.test.mjs` with
+  `MODERADO_PLAYWRIGHT_PATH` set to the pinned editor Playwright: 1 passed.
+  It checks the empty success status, absent General tab, and retained language
+  preference interaction in a real webview browser.
+
 ## Auto-Approve defaults (2026-10-07 UTC)
 
 - Enabled Read files, Edit files, Fetch web content, and Use MCP servers on

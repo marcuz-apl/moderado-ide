@@ -50,9 +50,10 @@ test('Webview preserves settings drafts, browses prompt history, and exposes cha
     await page.locator('#settings-base-url').focus();
     await page.locator('#settings-base-url').evaluate(field => field.setSelectionRange(8, 12));
     settings.models = [ { id: 'auto', isFree: true, accessTier: 'local' }, { id: 'local-model', isFree: true, accessTier: 'local' } ];
-    settings.status = '2 model(s) available.';
+    settings.status = '';
     await update();
     assert.equal(await page.locator('#settings-model-select option').count(), 2, 'discovery must refresh the open pane');
+    assert.equal(await page.locator('#settings-status').textContent(), '', 'successful discovery must not show a model count');
     assert.equal(await page.locator('#settings-base-url').inputValue(), 'http://localhost:5999/v1', 'discovery must retain a typed endpoint');
     assert.equal(await page.locator('#settings-api-key').inputValue(), 'draft-browser-key');
     assert.equal(await page.locator('.model-card').count(), 0);
@@ -82,10 +83,9 @@ test('Webview preserves settings drafts, browses prompt history, and exposes cha
     await update();
     await page.locator('[data-preference="allowPaidModels"]').check();
     assert.deepEqual(await page.evaluate(() => window.messages.at(-1)), {type: 'setPreference', key: 'allowPaidModels', value: true});
-    settings.page = 'general';
-    await update();
     await page.locator('[data-preference="preferredLanguage"]').selectOption('French');
     assert.deepEqual(await page.evaluate(() => window.messages.at(-1)), {type: 'setPreference', key: 'preferredLanguage', value: 'French'});
+    assert.equal(await page.locator('[data-page="general"]').count(), 0, 'the General settings tab must be absent');
     settings.page = 'api';
     await update();
     await page.locator('#close-settings').click();

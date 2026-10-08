@@ -27,8 +27,8 @@ export interface DiscoveryResult {
  * bound: a provider that accepted the connection and never answered left the
  * panel spinning indefinitely.
  *
- * This returns a settled result — a count, a reason, or a timeout — so the pane
- * always leaves the loading state.
+ * This returns the discovered inventory and any failure reason, so the pane
+ * always leaves the loading state without a redundant success count.
  */
 export async function discoverModelOptions(
   discover: () => Promise<DiscoveredModelLike[]>,
@@ -71,7 +71,7 @@ export async function discoverModelOptions(
     return {
       models,
       status: models.length
-        ? `${models.length} model(s) available.`
+        ? ''
         : 'The provider returned no models.',
     };
   } finally {

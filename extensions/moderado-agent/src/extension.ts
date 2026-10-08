@@ -793,7 +793,7 @@ async function openDiffTab(requestId: string): Promise<void> {
       render();
       return;
     }
-    if (msg.type === 'setSettingsPage' && ['api', 'features', 'general', 'about'].includes(String(msg.page))) {
+    if (msg.type === 'setSettingsPage' && ['api', 'features', 'about'].includes(String(msg.page))) {
       const parsed = parseSettingsForm(msg);
       if (parsed.ok) applySettingsForm(parsed.value);
       settings.page = String(msg.page);

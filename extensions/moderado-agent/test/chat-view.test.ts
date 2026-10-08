@@ -512,9 +512,10 @@ describe('moderado settings pane', () => {
 
   it('has a left settings nav with the reference sections', () => {
     const pane = settingsPaneHtml(settings({ page: 'api' }));
-    for (const label of ['API Config', 'Features', 'General', 'About']) {
+    for (const label of ['API Config', 'Features', 'About']) {
       expect(pane).toContain(label);
     }
+    expect(pane).not.toContain('data-page="general"');
     expect(pane).toContain('class="set-nav"');
     expect(pane).toContain('data-page="api"');
     expect(pane).toContain('>Done</button>');

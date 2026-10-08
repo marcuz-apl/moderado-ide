@@ -9,16 +9,13 @@ describe('model discovery for the settings pane', () => {
       provider: 'nvidia', ownedBy: 'owner', capabilities: ['tools'], dataNote: '<note>' });
     expect(JSON.stringify(result)).not.toContain('never-forward');
   });
-  it('reports a definite result instead of leaving the placeholder', () => {
-    // The regression: the pane re-assigned its in-flight placeholder text after a
-    // successful load, so the UI stayed on "Loading models…" forever.
+  it('returns models without a redundant count status', () => {
     return discoverModelOptions(async () => [
       { id: 'a', accessTier: 'free_trial', toolSupport: 'supported', isFree: true },
       { id: 'b', accessTier: 'paid', toolSupport: 'supported', isFree: false },
     ], 1000).then((result) => {
       expect(result.models.map((m) => m.id)).toEqual(['a', 'b']);
-      expect(result.status).not.toMatch(/loading/i);
-      expect(result.status).toMatch(/2/);
+      expect(result.status).toBe('');
     });
   });
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultSettingsPreferences, parsePreferenceChange, settingsFeaturesHtml, settingsGeneralHtml } from '../src/settings-preferences.js';
+import { defaultSettingsPreferences, parsePreferenceChange, settingsFeaturesHtml } from '../src/settings-preferences.js';
 
 describe('Settings preferences', () => {
   it('defaults to free models, web search, English, and a bounded approval wait', () => {
@@ -38,11 +38,10 @@ describe('Settings preferences', () => {
     expect(html).toContain('min="1" max="600" step="1" value="60"');
   });
 
-  it('renders language selection and explicit reporting status', () => {
-    const html = settingsGeneralHtml({ ...defaultSettingsPreferences, preferredLanguage: 'French' });
+  it('renders language selection on Features', () => {
+    const html = settingsFeaturesHtml({ ...defaultSettingsPreferences, preferredLanguage: 'French' });
     expect(html).toContain('data-preference="preferredLanguage"');
     expect(html).toContain('<option value="French" selected>French</option>');
-    expect(html).toContain('Moderado Agent does not send usage or error reports.');
-    expect(html).not.toContain('type="checkbox"');
+    expect(html).toContain('The agent uses this language for replies.');
   });
 });

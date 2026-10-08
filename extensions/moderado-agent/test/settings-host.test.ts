@@ -425,7 +425,7 @@ describe('immutable credential saves', () => {
 });
 
 
-describe('Features and General editor preferences', () => {
+describe('Features editor preferences', () => {
   it('saves only validated preferences to editor configuration and supplies them to new runs', async () => {
     send('setPreference', { key: 'preferredLanguage', value: 'French' });
     await vi.waitFor(() => expect(harness.configUpdate).toHaveBeenCalledWith('preferredLanguage', 'French', 1));
@@ -441,18 +441,34 @@ describe('Features and General editor preferences', () => {
     expect(harness.configUpdate).not.toHaveBeenCalled();
     expect(harness.write).not.toHaveBeenCalled();
   });
-  it('switches to separate Features, General, and About content', async () => {
+  it('switches to Features and About content without a General tab', async () => {
     send('openSettings');
     await vi.waitFor(() => expect(html()).toContain('id="settings-provider"'));
+    expect(html()).not.toContain('data-page="general"');
     send('setSettingsPage', { page: 'features' });
     expect(html()).toContain('data-preference="webSearchEnabled"');
+    expect(html()).toContain('data-preference="preferredLanguage"');
     expect(html()).not.toContain('id="settings-provider"');
     send('setSettingsPage', { page: 'general' });
     expect(html()).toContain('data-preference="preferredLanguage"');
-    expect(html()).not.toContain('id="settings-provider"');
+    expect(html()).not.toContain('data-page="general"');
     send('setSettingsPage', { page: 'about' });
     expect(html()).toContain('IDE version');
     expect(html()).not.toContain('id="settings-provider"');
+  });
+
+  it('does not show model counts on any Settings page or model tab after discovery', async () => {
+    send('setProviderKey', form);
+    await vi.waitFor(() => expect(html()).toContain('<option value="Exact/Route"'));
+    for (const page of ['api', 'features', 'about']) {
+      send('setSettingsPage', { page });
+      expect(html()).not.toContain('model(s) available');
+    }
+    send('setSettingsPage', { page: 'api' });
+    for (const tab of ['free', 'paid']) {
+      send('setModelTab', { tab });
+      expect(html()).not.toContain('model(s) available');
+    }
   });
 
   it('opens API Config from the current model even after viewing About', async () => {
@@ -481,7 +497,7 @@ describe('simple answer presentation', () => {
 describe('Gateway credential reference reuse', () => {
   it('retains the immutable stored reference when saving an existing browser login', async () => {
     send('gatewayBrowserLogin', { ...form, loginMethod: 'browser' });
-    await vi.waitFor(() => expect(html()).toContain('model(s) available'));
+    await vi.waitFor(() => expect(html()).toContain('<option value="Exact/Route"'));
     const originalReference = (harness.profile.connections as Record<string, Record<string, string>>)['moderado-cloud'].credentialReference;
     expect(originalReference).toMatch(/^moderado\/provider\/moderado-cloud-/);
     send('saveSettings', { ...form, loginMethod: 'browser' });
@@ -503,7 +519,7 @@ describe('legacy credential preservation', () => {
   });
   it('saving an existing manual Gateway login keeps its exact credential reference', async () => {
     send('setProviderKey', form);
-    await vi.waitFor(() => expect(html()).toContain('model(s) available'));
+    await vi.waitFor(() => expect(html()).toContain('<option value="Exact/Route"'));
     const reference = (harness.profile.connections as Record<string, Record<string, string>>)['moderado-cloud'].credentialReference;
     send('saveSettings', form);
     await vi.waitFor(() => expect(harness.write).toHaveBeenCalledTimes(2));
