@@ -59,7 +59,19 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-m1.ps1
 
 ### macOS
 
-macOS is a target platform, but this repository does not yet include a macOS build workflow.
+The manually dispatched GitHub Actions workflow builds macOS arm64 and x64
+packages from the pinned sources. These artifacts use ad-hoc signing only and
+are not notarized or published.
+
+### Build all platform artifacts in GitHub Actions
+
+From the repository's Actions tab, run **build-and-release** with platform
+**all** and macOS architectures **both**. The workflow builds Linux x64
+(portable `.tar.gz`, `.deb`, and `.rpm`), Windows x64 (portable `.zip` and both
+`.exe` installers), and macOS arm64/x64 (`.dmg` and `.zip`) as separate
+artifacts retained in Actions for 30 days. It does not create a GitHub Release
+or publish packages. Windows and macOS outputs are unsigned; macOS outputs are
+ad-hoc signed only and are not notarized.
 
 ## License
 

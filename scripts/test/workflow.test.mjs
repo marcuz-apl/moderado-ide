@@ -7,9 +7,15 @@ const workflow = readFileSync(new URL('../../.github/workflows/build-and-release
 
 test('installer builds run only by explicit platform and architecture dispatch', () => {
   assert.doesNotMatch(workflow, /^  (push|pull_request):/m);
-  assert.match(workflow, /platform:[\s\S]*options: \[both, windows, macos\]/);
+  assert.match(workflow, /platform:[\s\S]*options: \[all, both, linux, windows, macos\]/);
   assert.match(workflow, /macos_arch:[\s\S]*options: \[both, arm64, x64\]/);
+  assert.match(workflow, /default: all/);
   assert.match(workflow, /timeout-minutes: 180/);
+  assert.match(workflow, /runs-on: ubuntu-24\.04/);
+  assert.match(workflow, /node scripts\/build-linux\.mjs/);
+  assert.match(workflow, /scripts\/build-deb\.sh/);
+  assert.match(workflow, /scripts\/build-rpm\.sh/);
+  assert.match(workflow, /if: \$\{\{ inputs\.platform == 'all' \|\| inputs\.platform == 'linux' \}\}/);
   assert.match(workflow, /node scripts\/build-macos\.mjs --arch arm64/);
   assert.match(workflow, /node scripts\/build-macos\.mjs --arch x64/);
   assert.match(workflow, /runs-on: macos-14/);
@@ -34,10 +40,10 @@ test('workflow parses as YAML with valid job steps', { skip: !python && 'No inst
   // PyYAML uses YAML 1.1, where GitHub's `on` key is parsed as boolean true.
   const triggers = document.on ?? document.true;
   assert.deepEqual(Object.keys(triggers), ['workflow_dispatch']);
-  assert.equal(triggers.workflow_dispatch.inputs.platform.default, 'both');
+  assert.equal(triggers.workflow_dispatch.inputs.platform.default, 'all');
   assert.equal(triggers.workflow_dispatch.inputs.macos_arch.default, 'both');
   assert.equal(document.permissions.contents, 'read');
-  assert.equal(Object.keys(document.jobs).length, 4);
+  assert.equal(Object.keys(document.jobs).length, 5);
   assert.equal(document.jobs.publish.if, '${{ false }}');
   for (const [name, job] of Object.entries(document.jobs)) {
     if (name !== 'publish') {
@@ -45,7 +51,13 @@ test('workflow parses as YAML with valid job steps', { skip: !python && 'No inst
       assert.match(job.if, /inputs\.platform/);
       const upload = job.steps.find(step => step.uses?.startsWith('actions/upload-artifact@'));
       assert.equal(upload.with['if-no-files-found'], 'error');
-      assert.equal(upload.with.name, `moderado-ide-${name === 'windows' ? 'windows-x64' : name}`);
+      const artifact = {
+        linux: 'moderado-ide-linux-x64',
+        windows: 'moderado-ide-windows-x64',
+        'macos-arm64': 'moderado-ide-macos-arm64',
+        'macos-x64': 'moderado-ide-macos-x64',
+      }[name];
+      assert.equal(upload.with.name, artifact);
     }
   }
   for (const job of Object.values(document.jobs)) {

@@ -9,13 +9,13 @@
 
 | | |
 | --- | --- |
-| Targets | Linux, macOS, and Windows; Linux packaging is currently paused |
-| Existing artifact evidence | Windows x64; Linux and macOS require separate build and host verification |
+| Targets | Linux x64, macOS x64/arm64, and Windows x64 |
+| Existing artifact evidence | Earlier Windows x64 builds; current pinned-source artifacts must be verified from the latest Actions run |
 | Editor base | Code OSS `1.135.0`, built through VSCodium `1.135.06055` |
 | Agent packages | Moderado CLI `v0.4.8` (`d5e263ed…`, `v0.4.8+261006d`) |
-| Architectures | x64 only; arm64 is not built or tested |
+| Architectures | Linux and Windows x64; macOS x64 and arm64 |
 
-For Linux development, follow the [Linux build instructions](../README.md#build-the-linux-editor-locally). A completed Linux or macOS build is not claimed here. Existing Windows evidence predates the IDE rename and CLI `v0.4.8` source update; it does not verify these new artifacts. Windows/Linux cross-home profile sharing is outside this milestone: the two environments have different home directories and do not automatically share a `~/.moderado` profile.
+Use the manually dispatched [build-and-release workflow](../.github/workflows/build-and-release.yml) with platform `all` and macOS architectures `both` to build current pinned-source artifacts. It stores unsigned artifacts in GitHub Actions for 30 days; it does not publish them. A successful workflow run is required before claiming its artifacts exist. For a local Linux build, follow the [Linux build instructions](../README.md#build-the-linux-editor-locally). Windows/Linux cross-home profile sharing is outside this milestone: the two environments have different home directories and do not automatically share a `~/.moderado` profile.
 
 ## Local Debian installer and WSLg window checks
 
