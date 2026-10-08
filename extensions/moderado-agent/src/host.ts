@@ -265,6 +265,14 @@ export class AgentHost implements IApprovalHandler {
     this.current = session;
   }
 
+  /** Remove one recorded chat after the editor has confirmed the user's request. */
+  deleteSession(id: string): boolean {
+    if (this.controller || this.running) throw new Error('Chat history cannot be deleted while a run is active.');
+    const deleted = this.sessions.deleteSession(this.options.workspaceRoot, id);
+    if (this.current?.id === id) this.current = null;
+    return deleted;
+  }
+
   /** Denies pending approvals, e.g. when the chat view is disposed. */
   dispose(): void {
     this.cancel('The Moderado view was closed.');

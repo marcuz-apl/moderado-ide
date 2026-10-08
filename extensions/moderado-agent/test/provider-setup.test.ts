@@ -191,6 +191,27 @@ describe('provider setup parity with the CLI', () => {
 });
 
 describe('discovery connections', () => {
+  it('honours edited endpoints for every preset while retaining ids and kinds', () => {
+    for (const choice of buildProviderChoices()) {
+      const endpoint = 'https://edited.example.com/v1/';
+      const discovery = buildDiscoveryConnection({ preset: choice.value, storedBaseUrl: endpoint, apiKey: 'key' });
+      const saved = buildProviderConnection({ preset: choice.value, baseUrl: endpoint, apiKey: 'key', defaultModel: 'model' });
+      expect(discovery.baseUrl).toBe('https://edited.example.com/v1');
+      expect(saved.baseUrl).toBe(discovery.baseUrl);
+      expect(discovery.id).toBe(presetConnectionId(choice.value));
+      expect(saved.id).toBe(discovery.id);
+      expect(discovery.kind).toBe(choice.kind);
+      expect(saved.kind).toBe(choice.kind);
+    }
+  });
+
+  it('rejects unsafe edited NVIDIA endpoints for discovery and saving', () => {
+    for (const endpoint of ['http://remote.example.com/v1', 'ftp://localhost/v1', 'https://user:secret@example.com/v1', 'https://example.com/v1?token=secret', 'https://example.com/v1#key', 'not-a-url']) {
+      expect(() => buildDiscoveryConnection({ preset: 'nvidia-nim', storedBaseUrl: endpoint, apiKey: 'key' })).toThrow();
+      expect(() => buildProviderConnection({ preset: 'nvidia-nim', baseUrl: endpoint, apiKey: 'key' })).toThrow();
+    }
+  });
+
   it('validates discovery endpoints before sending credentials', () => {
     for (const storedBaseUrl of ['http://evil.example.com/v1', 'ftp://localhost/v1', 'https://user:secret@example.com/v1', 'not-a-url']) {
       expect(() => buildDiscoveryConnection({ preset: 'moderado-cloud', storedBaseUrl })).toThrow();

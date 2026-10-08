@@ -33,6 +33,7 @@ export interface DiscoveryResult {
 export async function discoverModelOptions(
   discover: () => Promise<DiscoveredModelLike[]>,
   timeoutMs: number,
+  sensitiveValues: readonly string[] = [],
 ): Promise<DiscoveryResult> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<'timeout'>((resolve) => {
@@ -52,7 +53,7 @@ export async function discoverModelOptions(
       };
     }
     if ('error' in outcome) {
-      return { models: [], status: `Could not list models: ${safeMessage(outcome.error)}` };
+      return { models: [], status: `Could not list models: ${safeMessage(outcome.error, sensitiveValues)}` };
     }
     const models = outcome.models.map((model) => ({
       id: model.id,
@@ -80,9 +81,10 @@ export async function discoverModelOptions(
  * Anything that looks like a credential is replaced before the message reaches
  * the UI or the output channel.
  */
-export function safeMessage(error: unknown): string {
-  const text = error instanceof Error ? error.message : String(error ?? 'Unknown error');
+export function safeMessage(error: unknown, sensitiveValues: readonly string[] = []): string {
+  let text = error instanceof Error ? error.message : String(error ?? 'Unknown error');
+  for (const secret of sensitiveValues) if (secret) text = text.replaceAll(secret, '[redacted]');
   return text
-    .replace(/\bsk-[A-Za-z0-9_-]{4,}/g, '[redacted]')
-    .replace(/\b( Bearer |api[-_ ]?key[=: ]+)\S+/gi, '$1[redacted]');
+    .replace(/\b(?:sk-|mrd_)[A-Za-z0-9_-]{4,}/g, '[redacted]')
+    .replace(/\b(Bearer\s+|api[-_ ]?key[=: ]+)\S+/gi, '$1[redacted]');
 }

@@ -164,26 +164,26 @@ export function buildDiscoveryConnection(
   if (!choice) throw new Error('That provider is no longer available in the shared profile.');
 
   const apiKey = input.apiKey?.trim() || undefined;
-  const baseUrl = (input.storedBaseUrl?.trim() || choice.baseUrl || '').replace(/\/+$/, '');
+  const rawBaseUrl = input.storedBaseUrl?.trim() || choice.baseUrl;
+  if (!rawBaseUrl) throw new Error('A base URL is required before models can be listed.');
+  const baseUrl = validateProviderBaseUrl(rawBaseUrl);
 
   if (choice.kind === 'nvidia-nim') {
     return {
       id: 'nvidia-nim',
       displayName: choice.label,
       kind: 'nvidia-nim',
-      baseUrl: choice.baseUrl!,
+      baseUrl,
       ...(apiKey ? { apiKey } : {}),
     };
   }
-
-  if (!baseUrl) throw new Error('A base URL is required before models can be listed.');
 
   const displayName = input.displayName?.trim() || choice.displayName || choice.label;
   return {
     id: choice.value === 'openai-compatible' ? connectionIdFor(displayName) : presetConnectionId(choice.value),
     displayName,
     kind: 'openai-compatible',
-    baseUrl: validateProviderBaseUrl(baseUrl),
+    baseUrl,
     ...(apiKey ? { apiKey } : {}),
     ...(input.defaultModel?.trim() || choice.defaultModel
       ? { defaultModel: (input.defaultModel?.trim() || choice.defaultModel) as string }
@@ -228,12 +228,12 @@ export function buildProviderConnection(
   }
 
   if (choice.kind === 'nvidia-nim') {
-    // Fixed id, fixed endpoint: the free-tier policy resolves on 'nvidia-nim'.
+    // Keep the fixed id/kind so the free-tier policy still resolves after edits.
     return {
       id: 'nvidia-nim',
       displayName: choice.label,
       kind: 'nvidia-nim',
-      baseUrl: choice.baseUrl!,
+      baseUrl: validateProviderBaseUrl(input.baseUrl?.trim() || choice.baseUrl || ''),
       ...(apiKey ? { apiKey } : {}),
     };
   }

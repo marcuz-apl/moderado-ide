@@ -9,7 +9,7 @@ import { MemoryCredentialStore } from '../src/credentials.js';
 import { readConfig } from '../src/profile.js';
 import { DesktopOpenAIAdapter } from '../src/provider-transport.js';
 import { preparePrompt } from '../src/attachments.js';
-import { SessionStore } from '../src/sessions.js';
+import { createSession, SessionStore } from '../src/sessions.js';
 
 function workspace(): string {
   return mkdtempSync(join(tmpdir(), 'moderado-m2-'));
@@ -36,6 +36,36 @@ function fakeHTTP(data: unknown[]) {
 }
 
 describe('Desktop provider host integration', () => {
+  it('deletes a recorded chat and resets only the matching resumed session', () => {
+    const workspaceRoot = workspace();
+    const home = configuredHome('unused', {});
+    const store = new SessionStore(home);
+    const first = store.save(createSession(workspaceRoot));
+    const second = store.save(createSession(workspaceRoot));
+    const host = new AgentHost({ workspaceRoot, moderadoHome: home, onEvent: () => {}, promptForApproval: async () => undefined });
+    host.resumeRecordedSession(first);
+    expect(host.deleteSession(second.id)).toBe(true);
+    expect(host.session?.id).toBe(first.id);
+    expect(host.deleteSession(first.id)).toBe(true);
+    expect(host.session).toBeNull();
+    expect(host.listSessions().sessions).toHaveLength(0);
+  });
+
+  it('refuses chat deletion during an active run even after cancellation', async () => {
+    const workspaceRoot = workspace();
+    const home = configuredHome('moderado-cloud', { baseUrl: 'http://127.0.0.1:4788/v1' });
+    let finish!: (response: Response) => void;
+    const fetchImpl = vi.fn<typeof fetch>(() => new Promise(resolve => { finish = resolve; }));
+    const host = new AgentHost({ workspaceRoot, moderadoHome: home, fetchImpl, onEvent: () => {}, promptForApproval: async () => undefined });
+    const pending = host.startRun({ task: 'hello', modelId: 'auto' }).catch(() => undefined);
+    expect(() => host.deleteSession('11111111-1111-4111-8111-111111111111')).toThrow(/active|running|progress/i);
+    host.cancel();
+    expect(() => host.deleteSession('11111111-1111-4111-8111-111111111111')).toThrow(/active|running|progress/i);
+    await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+    finish(Response.json({ object: 'list', data: [] }));
+    await pending;
+  });
+
   const route = { id: 'moonshotai/kimi-k3', provider: 'nvidia-nim', owned_by: 'moonshotai', capabilities: ['chat', 'tools'], data_note: 'Gateway route' };
   const gateway = { baseUrl: 'http://127.0.0.1:4788/v1' };
 

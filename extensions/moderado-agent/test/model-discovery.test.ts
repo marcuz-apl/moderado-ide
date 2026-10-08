@@ -55,4 +55,9 @@ describe('model discovery for the settings pane', () => {
         expect(result.status).not.toContain('sk-live-secret');
       });
   });
+  it('redacts an arbitrary typed key even when a provider echoes it unlabeled', async () => {
+    const result = await discoverModelOptions(async () => { throw new Error('failed: custom-private-key'); }, 1000, ['custom-private-key']);
+    expect(result.status).not.toContain('custom-private-key');
+  });
+
 });

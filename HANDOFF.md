@@ -1137,3 +1137,57 @@ previously preserved pre-commit hook edit. Fresh pre-commit verification:
 
 Ignored build directories and installers stay local; this source push is not
 an installer publication or a claim that WSLg window issues are fixed.
+
+## Linux installer rebuild (2026-10-08 UTC)
+
+Owner requested rebuilding both Linux installers. This fresh clone has no cached editor sources. Reused the installed Linux editor at `/opt/moderado-ide`, whose product commit matches pinned Code OSS `08d4889f9ec4a1685d257b9b95de036c8e1ce1e5`, and rebuilt the vendored engine and current agent. This is a package rebuild, not a new editor-source compilation. Restored the copied sandbox to mode 4755 before final packaging.
+
+RPM corrections: derive Version/Release from VERSION, use RPM dependency generation rather than invalid Debian syntax, exclude unused foreign-architecture utilities and private library provides/requires, preserve native binaries, fix the CLI symlink and license/doc file declarations. No new application runtime dependencies. `rpmbuild` and its libraries were downloaded with apt-get download and extracted under build/toolchain; no system installation performed.
+
+Commands and outcomes:
+- npm ci --prefix vendor/moderado; npm ci --prefix extensions/moderado-agent: exit 0.
+- npm run build --prefix vendor/moderado: exit 0.
+- npm test --prefix extensions/moderado-agent: 333 passed, 4 skipped, 16 files passed.
+- npm run typecheck --prefix extensions/moderado-agent; npm run compile --prefix extensions/moderado-agent: exit 0.
+- PATH="$PWD/build/toolchain/bin:$PATH" node --test scripts/test/rpm-package.test.mjs: failed first on invalid dependency syntax; foreign-utility test also failed without the exclusion, then passed with it.
+- PATH="$PWD/build/toolchain/bin:$PATH" node --test scripts/test/*.test.mjs: 11 passed.
+- node scripts/smoke-linux.mjs: exit 0; isolated editor host activated the agent and completed a fake turn.
+- ELECTRON_RUN_AS_NODE=1 native-module check: keymapping, spdlog, sqlite3, watcher, node-pty loaded successfully.
+- DONT_PROMPT_WSL_INSTALL=1 extracted Debian bin/moderado-ide --version: exit 0; 1.135.06055, pinned editor commit, x64.
+
+Build logs are under build/logs. No public release, installer publication, or system installation was performed. RPM target-distro installation remains unverified on this Ubuntu host.
+
+Final results:
+- ./scripts/build-deb.sh > build/logs/deb-build-final.log 2>&1: exit 0.
+- PATH="$PWD/build/toolchain/bin:$PATH" ./scripts/build-rpm.sh > build/logs/rpm-build-verified.log 2>&1: exit 0. RPM emitted expected missing-build-id and absolute-symlink warnings for the preserved upstream payload.
+- dpkg-deb --extract plus Python hash/mode/symlink comparisons: passed; editor and agent match the staged tree, sandbox 4755, CLI symlink correct.
+- python3 build/verify-installers.py: exit 0; streamed final RPM archive matches editor and agent hashes, sandbox 4755, CLI symlink correct, version 0.1.22+2610083 x86_64, no foreign-architecture or private-library package dependencies.
+- cd build/installers && sha256sum --check SHA256SUMS: both OK.
+- git diff --check; sh -n scripts/build-rpm.sh; bash -n scripts/build-deb.sh: exit 0.
+
+Artifacts: build/installers/moderado-ide_0.1.22+2610083_amd64.deb and build/installers/moderado-ide-0.1.22-2610083.x86_64.rpm. Checksums and provenance: build/installers/SHA256SUMS and build-manifest.json. Packaging fixes and this handoff remain uncommitted.
+
+## Settings provider/model refresh repair (2026-10-08 UTC)
+
+Owner reports the installed Debian application gets stuck while configuring provider/models and cannot close or shut down. Confirmed renderer defects: open Settings ignored updated HTML while reporting discovery status, leaving models and provider controls stale; visible model select had no change listener, and save used a different hidden control. Whole-window freeze on the owner's machine was not reproduced.
+
+Renderer now compares host-rendered content while Settings is open, refreshes changed controls, preserves same-provider nonsecret input drafts/search/focus/caret, and synchronizes visible model selection through the validated host choice handler. Identical snapshots do not recreate the form; empty status clears correctly. No credential persistence or approval boundary changes. Advanced VERSION build counter to v0.1.22+2610084 for distinguishable installers. Prior uncommitted RPM changes retained.
+
+Verification:
+- MODERADO_PLAYWRIGHT_PATH=/mnt/d/projects/moderado-ide/.cache/vscodium/vscode/node_modules/playwright/index.mjs node --test scripts/test/settings-webview.test.mjs: failed before fix, 0 options instead of 2; passed after fix. Uses existing pinned editor Playwright, not a new dependency; explicit env enables browser check.
+- MODERADO_PLAYWRIGHT_PATH=... PATH="$PWD/build/toolchain/bin:$PATH" node --test scripts/test/*.test.mjs: 12 passed, 0 skipped. Browser test covers live discovery updates, retained endpoint/search/caret, model selection/save, provider controls, and closing during loading.
+- npm test --prefix extensions/moderado-agent: 333 passed, 4 skipped, 16 files passed. Profile/security suites included.
+- npm run typecheck --prefix extensions/moderado-agent; npm run compile --prefix extensions/moderado-agent: exit 0.
+- xvfb-run -a node build/gui-settings-check.mjs: exit 0. Real packaged Linux editor used an isolated mock HTTP Gateway catalog and isolated profile/editor state; models loaded, model selected, Settings closed, and BrowserWindow close completed. Result build/settings-gui-38nuVU/result.json.
+- node scripts/smoke-linux.mjs: exit 0; isolated fake-provider turn completed.
+- Focused independent review of renderer/test: no blocking issues identified.
+
+These tests do not establish that the owner's particular desktop/window-manager freeze has been resolved. No real user profile writes, live model calls, system installation, or publication.
+
+Updated artifacts and final checks:
+- ./scripts/build-deb.sh > build/logs/settings-deb-build.log 2>&1: exit 0, build/installers/moderado-ide_0.1.22+2610084_amd64.deb.
+- PATH="$PWD/build/toolchain/bin:$PATH" ./scripts/build-rpm.sh > build/logs/settings-rpm-build.log 2>&1: exit 0, build/installers/moderado-ide-0.1.22-2610084.x86_64.rpm.
+- Extracted updated Debian payload hashes, launcher target and sandbox mode checks: passed.
+- python3 build/verify-installers.py: exit 0, updated RPM payload hashes/metadata/mode/dependencies verified; manifest and checksums updated for build 4.
+- cd build/installers && sha256sum --check SHA256SUMS: both OK.
+- git diff --check: exit 0. Source changes remain uncommitted; no remote update performed.

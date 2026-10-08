@@ -13,6 +13,67 @@ export interface CredentialStore {
   delete(reference: string): Promise<void>;
 }
 
+/** Structural editor API, injected by the host without a runtime vscode import. */
+export interface EditorSecretStorage {
+  get(key: string): PromiseLike<string | undefined>;
+  store(key: string, value: string): PromiseLike<void>;
+  delete(key: string): PromiseLike<void>;
+}
+
+/** IDE-only encrypted editor secret storage on Linux/macOS. */
+export class EditorCredentialStore implements CredentialStore {
+  constructor(
+    private readonly secrets: EditorSecretStorage,
+    private readonly timeoutMs = 5_000,
+  ) {
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > 5_000) {
+      throw new Error('Invalid editor secret storage timeout.');
+    }
+  }
+
+  async get(reference: string): Promise<string | undefined> {
+    return this.invoke(reference, async () => {
+      const secret = await this.secrets.get(reference);
+      if (secret !== undefined && (typeof secret !== 'string' || Buffer.byteLength(secret, 'utf8') > 65_536)) {
+        throw new Error('Invalid stored credential.');
+      }
+      return secret;
+    });
+  }
+
+  async set(reference: string, secret: string): Promise<void> {
+    return this.invoke(reference, async () => {
+      if (typeof secret !== 'string' || !secret.trim() || Buffer.byteLength(secret, 'utf8') > 65_536) {
+        throw new Error('Invalid credential.');
+      }
+      await this.secrets.store(reference, secret);
+    });
+  }
+
+  async delete(reference: string): Promise<void> {
+    return this.invoke(reference, async () => { await this.secrets.delete(reference); });
+  }
+
+  private async invoke<T>(reference: string, operation: () => Promise<T>): Promise<T> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      if (typeof reference !== 'string' || reference.length > 256 || !/^moderado\/provider\/[a-z0-9_-]+$/.test(reference)) {
+        throw new Error('Invalid credential reference.');
+      }
+      return await Promise.race([
+        operation(),
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(() => reject(new Error('Timeout.')), this.timeoutMs);
+        }),
+      ]);
+    } catch {
+      throw new Error('Editor secret storage operation failed.');
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
+  }
+}
+
 /** In-memory store for tests; never touches the real keychain. */
 export class MemoryCredentialStore implements CredentialStore {
   private readonly values = new Map<string, string>();

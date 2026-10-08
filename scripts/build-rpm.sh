@@ -43,6 +43,7 @@ mkdir -p "$OUT_DIR"
 
 VERSION_RAW=$(cat "$REPO_DIR/VERSION" 2>/dev/null || true)
 VERSION=${VERSION_RAW#v}                     # 0.1.22+261007a
+RPM_RELEASE=${VERSION#*+}
 RPM_VERSION=${VERSION%%+*}                   # 0.1.22+261007a -> 0.1.22
 
 TOPDIR=$(mktemp -d "$REPO_DIR/build-rpm.XXXXXX") || exit 1
@@ -52,6 +53,7 @@ mkdir -p "$TOPDIR/SPECS" "$TOPDIR/SOURCES" "$TOPDIR/BUILD" \
          "$TOPDIR/BUILDROOT" "$TOPDIR/SRPMS" "$TOPDIR/RPMS"
 
 cp "$REPO_DIR/packaging/rpm/moderado-ide.spec" "$TOPDIR/SPECS/moderado-ide.spec"
+sed -i "s/^Version:.*/Version: $RPM_VERSION/; s/^Release:.*/Release: $RPM_RELEASE/" "$TOPDIR/SPECS/moderado-ide.spec"
 cp "$REPO_DIR/packaging/common/moderado-ide.desktop" "$TOPDIR/SOURCES/"
 cp "$REPO_DIR/packaging/common/moderado-ide.appdata.xml" "$TOPDIR/SOURCES/"
 cp "$REPO_DIR/packaging/common/moderado-ide.svg" "$TOPDIR/SOURCES/"

@@ -40,10 +40,18 @@ Environment variables take precedence
 in the existing CLI resolution path. A IDE UI must never send the secret
 to a renderer, store it in an editor setting, or print it in logs.
 
+On Linux and macOS, IDE stores newly entered provider keys in the editor's
+encrypted SecretStorage, separate from the shared profile. Only the credential
+reference enters `config.json`; new plaintext secrets never do. Storage errors
+and timeouts fail the operation instead of falling back to plaintext storage.
+Windows continues to use the shared Credential Manager targets above.
+
 On non-Windows platforms the current CLI uses an in-memory credential store
-plus environment or legacy config values; sharing a folder does not magically
-share an OS keychain. Cross-platform secret persistence needs a separate
-review before those IDE builds are offered.
+plus environment or legacy config values. The CLI cannot retrieve keys from
+the IDE's editor secret storage simply by sharing `~/.moderado`; configure its
+environment independently. This adapter does not establish a non-Windows
+CLI/IDE credential-sharing gate. Native encrypted storage must still be
+verified on each supported platform before release.
 
 ## Writes and migrations
 

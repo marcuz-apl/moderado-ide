@@ -1,3 +1,4 @@
+import { settingsAboutHtml } from './settings-about.js';
 import { escapeHtml } from './html.js';
 import { validateProviderBaseUrl } from './provider-setup.js';
 import type { GatewayLoginMethod } from './gateway-login.js';
@@ -83,6 +84,8 @@ export interface SettingsState {
   page?: string;
   /** 'free' shows cost-free models (default); 'paid' shows paid models. */
   modelTab?: string;
+  ideVersion?: string;
+  editorVersion?: string;
 }
 
 export function emptySettings(): SettingsState {
@@ -209,6 +212,13 @@ function modelCards(state: SettingsState): string {
 export function settingsPaneHtml(state: SettingsState): string {
   // A corrupt profile must stop the user here. Rendering an empty form would
   // invite saving defaults over data that was never successfully read.
+  if (state.page === 'about') {
+    return `<section id="settings-pane" class="settings" aria-label="Moderado settings">
+      <div class="set-head"><h2>Settings</h2><button id="close-settings" type="button" class="done">Done</button></div>
+      <div class="set-body"><nav class="set-nav" aria-label="Settings sections">${settingsNav('about')}</nav>
+      <div class="set-content">${settingsAboutHtml(state.ideVersion ?? 'Development', state.editorVersion)}</div></div>
+    </section>`;
+  }
   const blocked = Boolean(state.profileError);
   const disabled = blocked ? ' disabled' : '';
 
@@ -238,23 +248,20 @@ export function settingsPaneHtml(state: SettingsState): string {
     <select id="settings-login-method"${disabled}>
       ${(['public', 'browser', 'manual'] as const).map(method => `<option value="${method}"${method === loginMethod ? ' selected' : ''}>${{ public: 'Public access · no key', browser: 'Browser sign-in', manual: 'Manual Gateway key' }[method]}</option>`).join('')}
     </select>` : '';
-  const keyField = !needsKey
-    ? `<p class="note">${gateway ? 'Public access uses the Gateway without a key.' : 'This local runtime needs no API key.'}</p>`
-    : `<p class="note">${keyStored ? 'Credential stored. A key is already stored for this provider.' : 'No credential stored.'}</p>
-      ${gateway && loginMethod === 'browser'
-        ? `<button id="settings-browser-login" type="button"${disabled}>Sign in with browser</button>`
-        : `<button id="settings-set-key" type="button"${disabled}>Set or update key</button><p class="note">Enter the key in the secure editor prompt.</p>`}`;
+  const keyField = `<label for="settings-api-key">API Key${needsKey ? '' : ' (optional)'}</label>
+    <input id="settings-api-key" type="password" autocomplete="off" spellcheck="false" maxlength="8192"
+           placeholder="${keyStored ? 'Key stored · paste to replace' : 'Paste API key'}" value=""${disabled} />
+    <p class="note">${keyStored ? 'Credential stored. A key is already stored for this provider.' : 'No credential stored. Keys are stored securely when you save.'}</p>
+    ${!needsKey ? `<p class="note">${gateway ? 'Public access uses the Gateway without a key.' : 'This local runtime needs no API key.'}</p>` : ''}
+    ${gateway && loginMethod === 'browser' ? `<button id="settings-browser-login" type="button"${disabled}>Sign in with browser</button>` : ''}`;
 
-  // Only the generic endpoint has no preset-supplied values to fall back on.
-  const extra = generic || gateway
-    ? `${generic ? `<label for="settings-display-name">Provider name</label>
+  const extra = `${generic ? `<label for="settings-display-name">Provider name</label>
     <input id="settings-display-name" type="text" spellcheck="false"
-           placeholder="OpenRouter" value="${escapeHtml(state.displayName)}"${disabled} />` : ''}
+           placeholder="My provider" value="${escapeHtml(state.displayName)}"${disabled} />` : ''}
     <label for="settings-base-url">Base URL</label>
     <input id="settings-base-url" type="text" spellcheck="false"
-           placeholder="${gateway ? 'http://127.0.0.1:4788/v1' : 'https://api.example.com/v1'}" value="${escapeHtml(state.baseUrl || choice?.storedBaseUrl || choice?.baseUrl || '')}"${disabled} />
-    <p class="note">HTTPS only. HTTP is accepted for localhost endpoints.</p>`
-    : '';
+           placeholder="https://api.example.com/v1" value="${escapeHtml(state.baseUrl || choice?.storedBaseUrl || choice?.baseUrl || '')}"${disabled} />
+    <p class="note">${state.baseUrl || choice?.storedBaseUrl || choice?.baseUrl ? 'HTTPS only. HTTP is accepted for localhost endpoints.' : 'No Base URL is known for this provider. Enter a Base URL to continue.'}</p>`;
 
   const modelField = `<h3>Model</h3>
     <div class="tab-row">
@@ -294,7 +301,7 @@ export function settingsPaneHtml(state: SettingsState): string {
         ${keyField}
         ${modelField}
         <div class="row">
-          <button id="settings-save" type="button"${disabled}>Save and connect</button>
+          <button id="settings-save" type="button"${disabled}>Save settings</button>
           <button id="settings-refresh" type="button"${disabled}>Reload models</button>
         </div>
         <p id="settings-status" class="status" role="status">${escapeHtml(state.status ?? '')}</p>
@@ -381,4 +388,20 @@ export function parseSettingsForm(message: unknown): ParsedSettings {
 
   if (modelId && /[\u0000-\u001f\u007f]/.test(modelId)) return { ok: false, error: 'Malformed model id.' };
   return { ok: true, value: { preset, displayName, baseUrl, loginMethod, modelId } };
+}
+
+
+/** User-entered keys are accepted only by the explicit discovery/save boundary. */
+export function parseSettingsSubmission(message: unknown):
+  | { ok: true; value: SettingsFormValues & { apiKey?: string } }
+  | { ok: false; error: string } {
+  if (!message || typeof message !== 'object' || Array.isArray(message)) return { ok: false, error: 'Malformed settings message.' };
+  const { apiKey, ...nonsecret } = message as Record<string, unknown>;
+  const parsed = parseSettingsForm(nonsecret);
+  if (!parsed.ok) return parsed;
+  if (apiKey !== undefined && (typeof apiKey !== 'string' || apiKey.length > 8192 || /[\x00-\x1f\x7f]/.test(apiKey))) {
+    return { ok: false, error: 'Enter a valid API key (at most 8192 characters, without control characters).' };
+  }
+  const key = typeof apiKey === 'string' ? apiKey.trim() : '';
+  return { ok: true, value: { ...parsed.value, ...(key ? { apiKey: key } : {}) } };
 }

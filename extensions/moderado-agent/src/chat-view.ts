@@ -126,15 +126,14 @@ function recentsHtml(state: ChatViewState): string {
   const recents = state.recents ?? [];
   if (!recents.length) return '';
   const rows = recents
-    .slice(0, 8)
     .map(
-      (session) => `<button class="recent-row" type="button" data-session="${escapeHtml(session.id)}">
+      (session) => `<div class="recent-item"><button class="recent-row" type="button" data-session="${escapeHtml(session.id)}">
         <span class="recent-title">${escapeHtml(session.title)}</span>
         <span class="recent-meta">
           ${session.costLabel ? `<span class="recent-cost">${escapeHtml(session.costLabel)}</span>` : ''}
           <span class="recent-date">${escapeHtml(session.updatedAt)}</span>
         </span>
-      </button>`,
+      </button><button type="button" class="delete-session" data-delete-session="${escapeHtml(session.id)}" aria-label="Delete chat: ${escapeHtml(session.title)}" title="Delete chat">Delete</button></div>`,
     )
     .join('');
   return `<section class="recents">
@@ -228,6 +227,9 @@ body { font-family: var(--vscode-font-family); font-size: 13px; color: var(--vsc
   .section-head { display: flex; align-items: center; justify-content: space-between; font-size: 0.72rem; letter-spacing: 0.06em; opacity: 0.7; margin: 0.6rem 0 0.3rem; }
   .section-head button { font-size: 0.72rem; opacity: 0.8; padding: 0.1rem 0.2rem; }
   .section-head button:hover { color: var(--vscode-textLink-foreground); }
+  .recent-item { display: flex; align-items: center; gap: 0.4rem; }
+  .recent-item .recent-row { flex: 1; min-width: 0; }
+  .delete-session { flex: 0 0 auto; }
   .recent-row { display: flex; flex-direction: column; align-items: flex-start; gap: 0.15rem; width: 100%; text-align: left; padding: 0.45rem 0.55rem; margin-bottom: 0.3rem; border: 1px solid var(--vscode-panel-border); border-radius: 4px; background: var(--vscode-editorWidget-background, transparent); }
   .recent-row:hover { background: var(--vscode-list-hoverBackground); }
   .recent-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
@@ -374,12 +376,13 @@ ${toolbarHtml(snapshot.historyOpen)}
     if (full) full.addEventListener('click', () => vscode.postMessage({ type: 'preview', requestId: pendingId }));
   }
 
-  // The settings pane collects a provider key, so it is a separate host element
-  // that is only written when the host actually sends a pane. The key is read
-  // from the DOM only at the moment of saving and is never stored in the
-  // webview, echoed back, or sent anywhere except the one save message.
+  // User-pasted keys stay in a transient password input; stored keys never return.
+  // Keep the pane mounted until its host-rendered content actually changes.
   const settingsHost = document.getElementById('settings-host');
   let settingsOpen = ${JSON.stringify(snapshot.settingsOpen)};
+  let renderedSettings = ${JSON.stringify(snapshot.settings)};
+  let discoveryTimer;
+  let renderedPreset = ${JSON.stringify(state.settings?.preset ?? '')};
   // While the pane is open the chat surface is hidden, so settings owns the
   // sidebar instead of sharing it with a half-height transcript.
   function applySettingsVisibility() {
@@ -411,6 +414,22 @@ ${toolbarHtml(snapshot.historyOpen)}
     };
   }
 
+  function readSettingsSubmission() {
+    const key = document.getElementById('settings-api-key');
+    return { ...readSettings(), ...(key && key.value ? { apiKey: key.value } : {}) };
+  }
+
+  function reloadModels() {
+    clearTimeout(discoveryTimer);
+    say('Loading free models…');
+    vscode.postMessage({ type: 'refreshModels', ...readSettingsSubmission() });
+  }
+
+  function scheduleModels() {
+    clearTimeout(discoveryTimer);
+    discoveryTimer = setTimeout(reloadModels, 400);
+  }
+
   function bindSettings() {
     const close = document.getElementById('close-settings');
     const save = document.getElementById('settings-save');
@@ -420,20 +439,33 @@ ${toolbarHtml(snapshot.historyOpen)}
     const browserLogin = document.getElementById('settings-browser-login');
     const loginMethod = document.getElementById('settings-login-method');
     const search = document.getElementById('settings-model-search');
-    if (close) close.addEventListener('click', () => vscode.postMessage({ type: 'closeSettings' }));
+    const modelSelect = document.getElementById('settings-model-select');
+    const apiKey = document.getElementById('settings-api-key');
+    const baseUrl = document.getElementById('settings-base-url');
+    if (modelSelect) modelSelect.addEventListener('change', () => {
+      const model = document.getElementById('settings-model');
+      if (model) model.value = modelSelect.value;
+      vscode.postMessage({ type: 'chooseModel', ...readSettings(), id: modelSelect.value });
+    });
+    if (close) close.addEventListener('click', () => { clearTimeout(discoveryTimer); vscode.postMessage({ type: 'closeSettings' }); });
     if (save) save.addEventListener('click', () => {
       say('Saving…');
-      vscode.postMessage({ type: 'saveSettings', ...readSettings() });
+      clearTimeout(discoveryTimer);
+      vscode.postMessage({ type: 'saveSettings', ...readSettingsSubmission() });
     });
     // Reload must use what is currently in the form, not only what was last
     // saved, or it would list the previous provider's models.
-    if (refresh) refresh.addEventListener('click', () => {
-      say('Loading models…');
-      vscode.postMessage({ type: 'refreshModels', ...readSettings() });
+    if (refresh) refresh.addEventListener('click', reloadModels);
+    if (baseUrl) baseUrl.addEventListener('input', scheduleModels);
+    if (apiKey) apiKey.addEventListener('input', () => {
+      if (apiKey.value && loginMethod && loginMethod.value === 'public') loginMethod.value = 'manual';
+      scheduleModels();
     });
-    // Changing the preset switches provider, so the host reloads that provider's
-    // key state and model list rather than leaving the previous one's on screen.
-    if (provider) provider.addEventListener('change', () => vscode.postMessage({ type: 'selectPreset', preset: provider.value }));
+    if (provider) provider.addEventListener('change', () => {
+      clearTimeout(discoveryTimer);
+      if (apiKey) apiKey.value = '';
+      vscode.postMessage({ type: 'selectPreset', preset: provider.value });
+    });
     if (setKey) setKey.addEventListener('click', () => vscode.postMessage({ type: 'setProviderKey', ...readSettings() }));
     if (browserLogin) browserLogin.addEventListener('click', () => vscode.postMessage({ type: 'gatewayBrowserLogin', ...readSettings() }));
     if (loginMethod) loginMethod.addEventListener('change', () => vscode.postMessage({ type: 'setGatewayLoginMethod', ...readSettings() }));
@@ -449,7 +481,7 @@ ${toolbarHtml(snapshot.historyOpen)}
       tab.addEventListener('click', () => vscode.postMessage({ type: 'setModelTab', ...readSettings(), tab: tab.getAttribute('data-tab') }));
     }
     for (const nav of document.querySelectorAll('.set-nav button')) {
-      nav.addEventListener('click', () => vscode.postMessage({ type: 'setSettingsPage', page: nav.getAttribute('data-page') }));
+      nav.addEventListener('click', () => vscode.postMessage({ type: 'setSettingsPage', ...readSettings(), page: nav.getAttribute('data-page') }));
     }
   }
 
@@ -507,6 +539,9 @@ ${toolbarHtml(snapshot.historyOpen)}
   let renderedContext = ${JSON.stringify(snapshot.activeContext)};
 
   function bindRecents() {
+    for (const button of document.querySelectorAll('[data-delete-session]')) {
+      button.addEventListener('click', () => vscode.postMessage({ type: 'deleteSession', id: button.getAttribute('data-delete-session') }));
+    }
     for (const row of document.querySelectorAll('.recent-row')) {
       row.addEventListener('click', () => vscode.postMessage({ type: 'openSession', id: row.getAttribute('data-session') }));
     }
@@ -564,16 +599,47 @@ ${toolbarHtml(snapshot.historyOpen)}
       const ctx = document.getElementById('active-ctx');
       if (ctx) ctx.innerHTML = update.activeContext;
     }
-    // The pane is replaced only when the host sends one. Rewriting it on every
-    // streamed token would discard a half-typed API key mid-entry.
-    if (update.settingsOpen !== undefined && update.settingsOpen !== settingsOpen) {
+    // Discovery and provider/model changes must refresh an already-open pane.
+    // Identical snapshots leave the form intact during unrelated chat updates.
+    if (update.settingsOpen !== undefined
+      && (update.settingsOpen !== settingsOpen || update.settings !== renderedSettings)) {
+      const drafts = [];
+      for (const id of ['settings-display-name', 'settings-base-url', 'settings-model-search', 'settings-api-key']) {
+        const field = document.getElementById(id);
+        if (field && field.value !== field.defaultValue) drafts.push([id, field.value]);
+      }
+      const focused = document.activeElement;
+      const focusedId = focused && focused.id;
+      const selectionStart = focused && focused.selectionStart;
+      const selectionEnd = focused && focused.selectionEnd;
       settingsOpen = update.settingsOpen;
-      settingsHost.innerHTML = update.settings || '';
+      if (!settingsOpen) clearTimeout(discoveryTimer);
+      renderedSettings = update.settings || '';
+      settingsHost.innerHTML = renderedSettings;
+      const provider = document.getElementById('settings-provider');
+      const nextPreset = provider ? provider.value : '';
+      if (settingsOpen && nextPreset === renderedPreset) {
+        for (const [id, value] of drafts) {
+          const field = document.getElementById(id);
+          if (field) field.value = value;
+        }
+        const field = focusedId && document.getElementById(focusedId);
+        if (field) {
+          field.focus();
+          if (selectionStart !== null && selectionStart !== undefined && field.setSelectionRange) {
+            field.setSelectionRange(selectionStart, selectionEnd);
+          }
+        }
+      }
+      renderedPreset = nextPreset;
       applySettingsVisibility();
-      if (settingsOpen) bindSettings();
-    } else if (update.settingsStatus) {
-      say(update.settingsStatus);
+      if (settingsOpen) {
+        bindSettings();
+        const search = document.getElementById('settings-model-search');
+        if (search && search.value) search.dispatchEvent(new Event('input'));
+      }
     }
+    if (update.settingsStatus !== undefined) say(update.settingsStatus);
     for (const [id, on] of [['mode-plan', update.planMode], ['mode-act', !update.planMode]]) {
       const node = document.getElementById(id);
       if (node) node.classList.toggle('on', Boolean(on));

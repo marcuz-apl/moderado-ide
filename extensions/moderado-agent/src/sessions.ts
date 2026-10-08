@@ -59,6 +59,28 @@ export type SessionLoad =
   | { kind: 'ok'; session: StoredSession }
   | { kind: 'invalid'; file: string; error: string };
 
+/** Refuse symlinked ancestors instead of resolving a deletion outside its scope. */
+function checkedPath(target: string, directory: boolean): fs.Stats | undefined {
+  const absolute = path.resolve(target);
+  const root = path.parse(absolute).root;
+  const segments = absolute.slice(root.length).split(path.sep).filter(Boolean);
+  let current = root;
+  for (let index = 0; index < segments.length; index++) {
+    current = path.join(current, segments[index]);
+    let stat: fs.Stats;
+    try { stat = fs.lstatSync(current); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+      throw new Error('The chat history path could not be checked.');
+    }
+    const expectDirectory = index < segments.length - 1 || directory;
+    if (stat.isSymbolicLink() || (expectDirectory ? !stat.isDirectory() : !stat.isFile()))
+      throw new Error('Unsafe chat history path.');
+    if (index === segments.length - 1) return stat;
+  }
+  return undefined;
+}
+
 /**
  * Session storage under the shared `~/.moderado/sessions/` tree.
  *
@@ -120,6 +142,41 @@ export class SessionStore {
 
   loadLatestSession(workspaceRoot: string): StoredSession | undefined {
     return this.listSessions(workspaceRoot).sessions[0];
+  }
+
+  /** Delete one validated workspace record; renderer-supplied paths are never accepted. */
+  deleteSession(workspaceRoot: string, id: string): boolean {
+    if (!z.string().uuid().safeParse(id).success) throw new Error('Invalid chat history id.');
+    const canonical = canonicalWorkspaceRoot(workspaceRoot);
+    const target = path.join(this.getDirectory(canonical), `${id}.json`);
+    const stat = checkedPath(target, false);
+    if (!stat) return false;
+    let session: StoredSession;
+    try { session = StoredSessionSchema.parse(JSON.parse(fs.readFileSync(target, 'utf8'))); }
+    catch { throw new Error('The chat history record is invalid and cannot be deleted.'); }
+    if (session.id !== id || session.workspaceRoot !== canonical)
+      throw new Error('The chat history record does not match this workspace.');
+
+    // IDE image snapshots use the same canonical workspace and hashed session id.
+    // Only the known flat snapshot files may be removed; never recursively follow entries.
+    const hash = (value: string) => crypto.createHash('sha256').update(value).digest('hex');
+    const sidecar = path.join(moderadoHome(this.home), 'desktop', 'attachments', hash(canonical), hash(id));
+    const files: string[] = [];
+    if (checkedPath(sidecar, true)) {
+      for (const entry of fs.readdirSync(sidecar)) {
+        if (!/^[a-f0-9]{64}\.json$/.test(entry)) throw new Error('Unsafe chat image history entry.');
+        const file = path.join(sidecar, entry);
+        if (!checkedPath(file, false)) throw new Error('The chat image history changed during deletion.');
+        files.push(file);
+      }
+    }
+    const latest = checkedPath(target, false);
+    if (!latest || latest.ino !== stat.ino || latest.dev !== stat.dev || latest.mtimeMs !== stat.mtimeMs || latest.size !== stat.size)
+      throw new Error('The chat history changed during deletion. Reload history and try again.');
+    for (const file of files) fs.unlinkSync(file);
+    if (checkedPath(sidecar, true)) fs.rmdirSync(sidecar);
+    fs.unlinkSync(target);
+    return true;
   }
 
   /** Accumulates usage across turns, keeping the CLI's estimate semantics. */

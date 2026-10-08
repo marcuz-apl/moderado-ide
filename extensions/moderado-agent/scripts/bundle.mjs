@@ -54,6 +54,7 @@ await build({
   sourcemap: true,
   // The host provides these; bundling them would break activation.
   external: ['vscode'],
+  define: { __MODERADO_IDE_VERSION__: JSON.stringify(fs.readFileSync(path.join(repoRoot, 'VERSION'), 'utf8').trim()) },
   alias,
   logLevel: 'info',
   mainFields: ['module', 'main'],

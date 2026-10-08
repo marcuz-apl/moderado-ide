@@ -5,6 +5,7 @@ import {
   settingsPaneHtml,
   settingsSnapshot,
   parseSettingsForm,
+  parseSettingsSubmission,
   SettingsState,
   emptySettings,
 } from '../src/settings-view.js';
@@ -397,8 +398,8 @@ describe('moderado settings pane', () => {
     }));
     expect(pane).toContain('already stored for this provider');
     // The secret is collected by a native host prompt, not an editable field.
-    expect(pane).toContain('Set or update key');
-    expect(pane).not.toContain('type="password"');
+    expect(pane).toContain('id="settings-api-key"');
+    expect(pane).toContain('type="password"');
   });
 
   it('badges free models and summarises the counts', () => {
@@ -477,17 +478,17 @@ describe('moderado settings pane', () => {
       { value: 'nvidia-nim', label: 'NVIDIA NIM', description: 'Free-first routing.', requiresApiKey: true },
     ] }));
     expect(pane).toContain('id="settings-provider"');
-    expect(pane).toContain('id="settings-set-key"');
+    expect(pane).toContain('id="settings-api-key"');
     expect(pane).toContain('id="settings-model"');
   });
 
-  it('hides the base URL field for a known provider', () => {
+  it('shows an editable base URL for a known provider', () => {
     // The preset already knows its endpoint. Asking for it would invite a user
     // to break a working provider by editing a value that is not theirs.
     const pane = settingsPaneHtml(settings({ preset: 'openrouter', providers: [
       { value: 'openrouter', label: 'OpenRouter', description: 'Free tier.', requiresApiKey: true },
     ] }));
-    expect(pane).not.toContain('id="settings-base-url"');
+    expect(pane).toContain('id="settings-base-url"');
     expect(pane).not.toContain('id="settings-display-name"');
   });
 
@@ -499,13 +500,13 @@ describe('moderado settings pane', () => {
     expect(pane).toContain('id="settings-display-name"');
   });
 
-  it('omits the key field for a local runtime', () => {
+  it('offers an optional key field for a local runtime', () => {
     // Ollama and LM Studio authenticate with no key; asking for one implies a
     // requirement that does not exist.
     const pane = settingsPaneHtml(settings({ preset: 'ollama', providers: [
       { value: 'ollama', label: 'Ollama', description: 'Local.', requiresApiKey: false },
     ] }));
-    expect(pane).not.toContain('id="settings-api-key"');
+    expect(pane).toContain('id="settings-api-key"');
     expect(pane).toContain('needs no API key');
   });
 
@@ -518,14 +519,14 @@ describe('moderado settings pane', () => {
     expect(pane).toContain('Ollama · Local');
   });
 
-  it('opens key entry in the host rather than rendering a secret input', () => {
+  it('offers a masked write-only key input', () => {
     // A visible key field would put a provider secret on screen and in shoulder
     // surfing. The value is write-only: it is sent out and never sent back.
     const pane = settingsPaneHtml(settings({ preset: 'nvidia-nim', providers: [
       { value: 'nvidia-nim', label: 'NVIDIA NIM', description: 'd', requiresApiKey: true },
     ] }));
-    expect(pane).not.toContain('type="password"');
-    expect(pane).toContain('id="settings-set-key"');
+    expect(pane).toContain('type="password"');
+    expect(pane).toContain('id="settings-api-key"');
   });
 
   it('never echoes a stored API key back into the pane', () => {
@@ -537,8 +538,8 @@ describe('moderado settings pane', () => {
     }));
     expect(pane).not.toContain('sk-live-secret');
     expect(pane).toContain('already stored for this provider');
-    expect(pane).not.toContain('type="password"');
-    expect(pane).toContain('id="settings-set-key"');
+    expect(pane).toContain('type="password"');
+    expect(pane).toContain('id="settings-api-key"');
   });
 
   it('marks the selected provider and model', () => {
@@ -653,5 +654,19 @@ describe('moderado settings pane', () => {
     expect(snap.settingsOpen).toBe(true);
     expect(snap.settings).toContain('id="settings-provider"');
     expect(settingsSnapshot(emptySettings()).settings).toBe('');
+  });
+});
+
+describe('provider settings submissions', () => {
+  it('accepts a bounded user-pasted key only in an explicit submission', () => {
+    const result = parseSettingsSubmission({ preset: 'openrouter', baseUrl: 'https://openrouter.ai/api/v1', apiKey: ' pasted-key ' });
+    expect(result).toMatchObject({ ok: true, value: { apiKey: 'pasted-key' } });
+    expect(parseSettingsForm({ preset: 'openrouter', apiKey: 'pasted-key' }).ok).toBe(false);
+  });
+  it.each([42, 'x'.repeat(8193), 'key\nheader'])('rejects malformed or oversized key drafts', apiKey => {
+    expect(parseSettingsSubmission({ preset: 'openrouter', apiKey }).ok).toBe(false);
+  });
+  it('does not accept injected stored credential references', () => {
+    expect(parseSettingsSubmission({ preset: 'openrouter', apiKey: 'key', credentialReference: 'other' }).ok).toBe(false);
   });
 });

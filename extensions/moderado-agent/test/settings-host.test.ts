@@ -7,17 +7,18 @@ const harness = vi.hoisted(() => ({
   profile: {} as Record<string, unknown>, invalid: false,
   messages: [] as Record<string, unknown>[], keys: new Map<string, string>(),
   provider: undefined as any, receive: undefined as any,
-  agentOptions: undefined as any,
+  agentOptions: undefined as any, histories: [] as StoredSession[], currentId: '', deleted: vi.fn(), confirm: vi.fn(),
   runs: [] as Record<string, unknown>[],
-  workspaceRoot: '', fileDialog: vi.fn(), contextPicker: vi.fn(), findFiles: vi.fn(), errors: vi.fn(),
+  workspaceRoot: '', windows: true, fileDialog: vi.fn(), contextPicker: vi.fn(), findFiles: vi.fn(), errors: vi.fn(),
   prompt: vi.fn(), browser: vi.fn(), write: vi.fn(), openExternal: vi.fn(),
 }));
 vi.mock('vscode', () => ({
+  version: '1.135.0',
   window: {
     createOutputChannel: () => ({ appendLine: vi.fn(), dispose: vi.fn() }),
     registerWebviewViewProvider: (_id: string, provider: unknown) => { harness.provider = provider; return { dispose: vi.fn() }; },
     showInputBox: harness.prompt, showOpenDialog: harness.fileDialog, showQuickPick: harness.contextPicker,
-    showErrorMessage: harness.errors,
+    showErrorMessage: harness.errors, showWarningMessage: harness.confirm,
   },
   workspace: { get workspaceFolders() { return [{ uri: { fsPath: harness.workspaceRoot } }]; }, findFiles: harness.findFiles,
     getConfiguration: () => ({ get: (_key: string, fallback: unknown) => fallback }) },
@@ -25,11 +26,15 @@ vi.mock('vscode', () => ({
   env: { openExternal: harness.openExternal }, Uri: { parse: (url: string) => url, file: (fsPath: string) => ({ fsPath, scheme: 'file' }) },
   RelativePattern: class { constructor(public base: unknown, public pattern: string) {} },
 }));
-vi.mock('../src/profile.js', () => ({ configPath: () => 'isolated/config.json',
+vi.mock('../src/profile.js', async original => ({ ...await original<typeof import('../src/profile.js')>(), configPath: () => 'isolated/config.json',
   readConfig: () => harness.invalid ? { kind: 'invalid', error: 'corrupt profile' } : { kind: 'ok', config: harness.profile } }));
 vi.mock('../src/host.js', () => ({ AgentHost: class {
   constructor(options: unknown) { harness.agentOptions = options; }
-  listSessions() { return { sessions: [], invalid: [] }; }
+  listSessions() { return { sessions: harness.histories, invalid: [] }; }
+  get session() { return harness.histories.find(session => session.id === harness.currentId) ?? null; }
+  get isRunning() { return false; }
+  deleteSession(id: string) { harness.deleted(id); harness.histories = harness.histories.filter(session => session.id !== id); return true; }
+  startNewSession() { harness.currentId = ''; }
   async discoverModels() { return []; }
   async startRun(input: Record<string, unknown>) {
     harness.runs.push(input);
@@ -39,7 +44,7 @@ vi.mock('../src/host.js', () => ({ AgentHost: class {
 } }));
 vi.mock('../src/credentials.js', async (original) => {
   const actual = await original<typeof import('../src/credentials.js')>();
-  return { ...actual, credentialManagerAvailable: () => true, WindowsCredentialStore: class {
+  return { ...actual, credentialManagerAvailable: () => harness.windows, WindowsCredentialStore: class {
     async get(ref: string) { return harness.keys.get(ref); }
     async set(ref: string, secret: string) { harness.keys.set(ref, secret); }
     async delete(ref: string) { harness.keys.delete(ref); }
@@ -51,6 +56,7 @@ vi.mock('../src/gateway-login.js', async (original) => {
 });
 vi.mock('../src/coordination.js', () => ({ updateConfigCoordinated: harness.write }));
 import { activate } from '../src/extension.js';
+import { createSession, type StoredSession } from '../src/sessions.js';
 
 const form = { preset: 'moderado-cloud', displayName: '', baseUrl: 'http://127.0.0.1:4788/v1', modelId: 'Exact/Route', loginMethod: 'manual' };
 function send(type: string, values: Record<string, unknown> = {}) { harness.receive({ type, ...values }); }
@@ -59,6 +65,7 @@ const html = () => String(harness.messages.at(-1)?.settings ?? '');
 beforeEach(() => {
   harness.workspaceRoot = mkdtempSync(join(tmpdir(), 'moderado-composer-workspace-'));
   harness.fileDialog.mockResolvedValue(undefined); harness.contextPicker.mockResolvedValue(undefined); harness.findFiles.mockResolvedValue([]);
+  harness.windows = true; harness.histories = []; harness.currentId = ''; harness.confirm.mockResolvedValue('Delete');
   vi.clearAllMocks(); harness.messages = []; harness.keys.clear(); harness.profile = {}; harness.invalid = false; harness.runs = [];
   harness.prompt.mockResolvedValue('mrd_native-secret');
   harness.browser.mockResolvedValue({ accessToken: 'mrd_browser-secret', expiresAt: Date.now() + 60_000 });
@@ -69,7 +76,7 @@ beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ object: 'list', data: [
     { id: 'Exact/Route', provider: 'owner', owned_by: 'owner', capabilities: ['tools'], data_note: '<note>' },
   ] }))));
-  activate({ subscriptions: [] } as any);
+  activate({ subscriptions: [], secrets: { get: async (key: string) => harness.keys.get(key), store: async (key: string, value: string) => { harness.keys.set(key, value); }, delete: async (key: string) => { harness.keys.delete(key); } } } as any);
   harness.provider.resolveWebviewView({
     webview: { options: {}, html: '', onDidReceiveMessage: (receive: unknown) => { harness.receive = receive; },
       postMessage: (message: Record<string, unknown>) => { harness.messages.push(message); return Promise.resolve(true); } },
@@ -268,5 +275,71 @@ describe('host-owned composer attachments', () => {
     expect(String(harness.messages.at(-1)?.attachments)).toBe(chips);
     send('removeAttachment', { id });
     expect(String(harness.messages.at(-1)?.attachments)).toBe('');
+  });
+});
+
+
+describe('API Config paste, discover, then save', () => {
+  it('uses an unsaved key and editable endpoint for discovery, then saves only the reference', async () => {
+    const values = { preset: 'nvidia-nim', baseUrl: 'https://provider.example/v1', displayName: '', modelId: 'auto', apiKey: 'draft-private-key' };
+    send('refreshModels', values);
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledWith('https://provider.example/v1/models', expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer draft-private-key' }) })));
+    expect(harness.write).not.toHaveBeenCalled();
+    expect(harness.keys.size).toBe(0);
+    expect(JSON.stringify(harness.messages)).not.toContain('draft-private-key');
+    send('saveSettings', values);
+    await vi.waitFor(() => expect(harness.write).toHaveBeenCalled());
+    expect(harness.keys.get('moderado/provider/nvidia-nim')).toBe('draft-private-key');
+    expect(harness.prompt).not.toHaveBeenCalled();
+    expect(harness.profile).toMatchObject({ connections: { 'nvidia-nim': { baseUrl: 'https://provider.example/v1', credentialReference: 'moderado/provider/nvidia-nim' } } });
+    expect(JSON.stringify(harness.profile)).not.toContain('draft-private-key');
+  });
+  it('explains an unknown URL without making a request', async () => {
+    send('selectPreset', { preset: 'openai-compatible' });
+    await vi.waitFor(() => expect(html()).toContain('Enter a Base URL'));
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  it('rejects unsafe URL/key submissions before discovery and storage', async () => {
+    send('refreshModels', { preset: 'nvidia-nim', baseUrl: 'http://external.example/v1', apiKey: 'private-key' });
+    await vi.waitFor(() => expect(html()).toContain('HTTPS'));
+    expect(fetch).not.toHaveBeenCalled();
+    expect(harness.keys.size).toBe(0);
+  });
+});
+
+
+describe('saved provider and history workflows', () => {
+  it('reloads a saved custom endpoint with its stored key', async () => {
+    send('saveSettings', { preset: 'openai-compatible', displayName: 'Example provider', baseUrl: 'https://example.test/v1', apiKey: 'custom-key', modelId: 'auto' });
+    await vi.waitFor(() => expect(harness.profile.activeConnectionId).toBe('example-provider'));
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledWith('https://example.test/v1/models', expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer custom-key' }) })));
+    expect(html()).toContain('custom:example-provider');
+    expect(JSON.stringify(harness.messages)).not.toContain('custom-key');
+  });
+  it('does not send a saved key to an edited endpoint', async () => {
+    harness.profile = { connections: { 'nvidia-nim': { id: 'nvidia-nim', baseUrl: 'https://original.test/v1', credentialReference: 'moderado/provider/nvidia-nim' } } };
+    harness.keys.set('moderado/provider/nvidia-nim', 'stored-private-key');
+    send('openSettings');
+    await vi.waitFor(() => expect(html()).toContain('settings-provider'));
+    vi.mocked(fetch).mockClear();
+    send('refreshModels', { preset: 'nvidia-nim', baseUrl: 'https://changed.test/v1', modelId: 'auto' });
+    await vi.waitFor(() => expect(html()).toContain('Paste an API key'));
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  it('deletes only a known chat after native confirmation', async () => {
+    const session = createSession(harness.workspaceRoot); harness.histories = [session];
+    send('deleteSession', { id: session.id });
+    await vi.waitFor(() => expect(harness.deleted).toHaveBeenCalledWith(session.id));
+    expect(harness.confirm).toHaveBeenCalledWith(expect.stringContaining('Delete chat'), expect.objectContaining({ modal: true }), 'Delete');
+  });
+  it('cancellation and malformed delete requests do not delete history', async () => {
+    const session = createSession(harness.workspaceRoot); harness.histories = [session]; harness.confirm.mockResolvedValue(undefined);
+    send('deleteSession', { id: session.id });
+    await vi.waitFor(() => expect(harness.confirm).toHaveBeenCalled());
+    expect(harness.deleted).not.toHaveBeenCalled();
+    harness.confirm.mockClear();
+    send('deleteSession', { id: '../outside' });
+    send('deleteSession', { id: session.id, path: '/outside' });
+    expect(harness.confirm).not.toHaveBeenCalled(); expect(harness.deleted).not.toHaveBeenCalled();
   });
 });

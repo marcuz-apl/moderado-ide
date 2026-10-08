@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { createContextAttachment, createFileAttachment, preparePrompt, type DraftAttachment } from './attachments.js';
 import * as vscode from 'vscode';
+import { IDE_VERSION } from './ide-version.js';
 import { AgentEvent, ApprovalRequest } from '@moderado/contracts';
 import { AgentHost, RunOutcome } from './host.js';
 import { RawDecision } from './approval.js';
@@ -8,7 +9,7 @@ import { configPath, readConfig } from './profile.js';
 import { updateConfigCoordinated } from './coordination.js';
 import {
   WindowsCredentialStore,
-  MemoryCredentialStore,
+  EditorCredentialStore,
   credentialManagerAvailable,
   credentialReference,
   resolveCredential,
@@ -20,6 +21,7 @@ import {
   SettingsConnectionView,
   emptySettings,
   parseSettingsForm,
+  parseSettingsSubmission,
   SettingsFormValues,
 } from './settings-view.js';
 import {
@@ -80,9 +82,10 @@ export function activate(context: vscode.ExtensionContext): ModeradoApi {
    * read-only preview and can never authorize anything on its own.
    */
   const pendingApprovalRequests = new Map<string, ApprovalRequest>();
-  const settings: SettingsState = emptySettings();
-  const credentialStore = credentialManagerAvailable() ? new WindowsCredentialStore() : new MemoryCredentialStore();
+  const settings: SettingsState = { ...emptySettings(), ideVersion: IDE_VERSION, editorVersion: vscode.version };
+  const credentialStore = credentialManagerAvailable() ? new WindowsCredentialStore() : new EditorCredentialStore(context.secrets);
   let discoveryRequest = 0;
+  let discoveryAbort: AbortController | undefined;
   let settingsBusy = false;
   let loginAbort: AbortController | undefined;
   /** Auto-approve categories enabled by default; command execution stays opt-in. */
@@ -337,7 +340,7 @@ async function openDiffTab(requestId: string): Promise<void> {
 
     // Preselect the provider that is already connected, so reopening the pane
     // shows the current state rather than resetting the user to the first entry.
-    settings.preset = settings.activeConnectionId ||
+    settings.preset = settings.providers.find(choice => choice.value === settings.activeConnectionId || choice.value === `custom:${settings.activeConnectionId}`)?.value ||
       settings.providers[0]?.value ||
       '';
 
@@ -378,8 +381,7 @@ async function openDiffTab(requestId: string): Promise<void> {
   function readConnectProviders(state: ReturnType<typeof readConfig>): ConnectProvidersConfig | undefined {
     if (state.kind !== 'ok') return undefined;
     const raw = state.config.connectProviders;
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
-    const record = raw as Record<string, unknown>;
+    const record = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
     const custom = Array.isArray(record.custom)
       ? record.custom.filter(
         (item): item is { id: string; name: string; baseUrl: string; defaultModel?: string } =>
@@ -392,7 +394,12 @@ async function openDiffTab(requestId: string): Promise<void> {
     const enabled = Array.isArray(record.enabled)
       ? (record.enabled.filter((id): id is string => typeof id === 'string'))
       : undefined;
-    return { ...(enabled ? { enabled } : {}), ...(custom ? { custom } : {}) };
+    const known = new Set(buildProviderChoices().map(choice => choice.value));
+    const saved = connectionsFromConfig(state.config).filter(connection =>
+      /^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(connection.id) && !known.has(connection.id)
+      && !custom?.some(item => item.id === connection.id)
+    ).map(connection => ({ id: connection.id, name: connection.displayName, baseUrl: connection.baseUrl, defaultModel: connection.defaultModel }));
+    return { ...(enabled ? { enabled } : {}), custom: [...(custom ?? []), ...saved] };
   }
 
   /** Resolve secrets only in the extension host. */
@@ -421,8 +428,11 @@ async function openDiffTab(requestId: string): Promise<void> {
   }
 
   /** Discover a pending connection without requiring or revealing a new key. */
-  async function loadModelsForPreset(preset: string, pending?: SettingsFormValues): Promise<void> {
+  async function loadModelsForPreset(preset: string, pending?: SettingsFormValues & { apiKey?: string }): Promise<void> {
     const request = ++discoveryRequest;
+    discoveryAbort?.abort();
+    const controller = new AbortController();
+    discoveryAbort = controller;
     settings.open = true;
     const profile = readConfig();
     if (profile.kind === 'invalid') {
@@ -442,20 +452,34 @@ async function openDiffTab(requestId: string): Promise<void> {
     const currentModel = pending?.modelId || (profileConfig.activeConnectionId === presetConnectionId(preset) && typeof profileConfig.defaultModel === 'string' ? profileConfig.defaultModel : undefined)
       || (typeof stored?.defaultModel === 'string' ? stored.defaultModel : 'auto');
     settings.defaultModel = currentModel;
-    settings.status = 'Loading models?';
+    settings.apiKeyStored = Boolean(stored?.credentialReference || stored?.apiKey);
+    if (choice) choice.hasCredential = settings.apiKeyStored;
+    if (!settings.baseUrl) {
+      settings.status = 'Enter a Base URL: no endpoint is known for this provider.';
+      render();
+      return;
+    }
+    settings.status = 'Loading free models…';
     render();
 
+    const discoveryForm = { baseUrl: settings.baseUrl, displayName: settings.displayName, loginMethod: settings.loginMethod };
+    const sensitiveValues: string[] = [];
     const result = await discoverModelOptions(async () => {
-      const apiKey = settings.loginMethod === 'public' && preset === 'moderado-cloud' ? undefined : await storedKey(presetConnectionId(preset), stored);
+      const baseUrl = discoveryForm.baseUrl;
+      const endpointChanged = typeof stored?.baseUrl === 'string' && baseUrl.replace(/\/+$/, '') !== stored.baseUrl.replace(/\/+$/, '');
+      const apiKey = pending?.apiKey || (discoveryForm.loginMethod === 'public' && preset === 'moderado-cloud' || endpointChanged
+        ? undefined : await storedKey(presetConnectionId(preset), stored));
+      if (controller.signal.aborted) return [];
+      if (apiKey) sensitiveValues.push(apiKey);
+      if (choice?.requiresApiKey && !apiKey) throw new Error('Paste an API key to load free models.');
       // A public catalog may work without a stored credential.
-      const connection = buildDiscoveryConnection({ preset, apiKey, storedBaseUrl: settings.baseUrl,
-        displayName: settings.displayName, defaultModel: currentModel }, readConnectProviders(profile));
-      if (choice) { choice.hasCredential = Boolean(apiKey); choice.storedBaseUrl = connection.baseUrl; }
-      if (request === discoveryRequest) settings.apiKeyStored = Boolean(apiKey);
-      const routes = connection.id === 'moderado-cloud' ? await fetchGatewayRoutes(connection.baseUrl) : undefined;
+      const connection = buildDiscoveryConnection({ preset, apiKey, storedBaseUrl: baseUrl,
+        displayName: discoveryForm.displayName, defaultModel: currentModel }, readConnectProviders(profile));
+      if (request === discoveryRequest && choice) { choice.hasCredential = settings.apiKeyStored; choice.storedBaseUrl = connection.baseUrl; }
+      const routes = connection.id === 'moderado-cloud' ? await fetchGatewayRoutes(connection.baseUrl, { signal: controller.signal }) : undefined;
       const inventory = routes ? routes.map(route => ({ id: route.id, object: 'model' as const, owned_by: route.owned_by ?? route.provider ?? 'moderado-cloud',
         ...(route.capabilities.includes('tools') || route.capabilities.includes('tool_calling') ? { supported_parameters: ['tools'] } : {}) }))
-        : await new DesktopOpenAIAdapter({ id: connection.id, name: connection.displayName, baseUrl: connection.baseUrl, apiKey }).discoverModels();
+        : await new DesktopOpenAIAdapter({ id: connection.id, name: connection.displayName, baseUrl: connection.baseUrl, apiKey }).discoverModels(controller.signal);
       const router = new DesktopModelRouter({ providerId: connection.id, inventory, allowPaid: settings.allowPaid ?? false,
         allowUnknown: settings.allowUnknown ?? false, requireTools: true });
       return [{ id: 'auto', accessTier: routes ? 'free_trial' : 'unknown', isFree: Boolean(routes), toolSupport: 'supported' }, ...inventory.map(entry => {
@@ -465,7 +489,7 @@ async function openDiffTab(requestId: string): Promise<void> {
           isFree: classification.accessTier === 'free_trial' || classification.accessTier === 'local',
           ownedBy: entry.owned_by, ...(route ? { provider: route.provider, capabilities: route.capabilities, dataNote: route.data_note } : {}) };
       })];
-    }, MODEL_DISCOVERY_TIMEOUT_MS);
+    }, MODEL_DISCOVERY_TIMEOUT_MS, sensitiveValues);
     if (request !== discoveryRequest || !settings.open) return;
     settings.models = sortFreeFirst(result.models);
     settings.defaultModel = pickDefaultModel(settings.models, currentModel);
@@ -479,7 +503,7 @@ async function openDiffTab(requestId: string): Promise<void> {
   }
 
   async function refreshModelsForPendingForm(message: unknown): Promise<void> {
-    const parsed = parseSettingsForm(message);
+    const parsed = parseSettingsSubmission(message);
     settings.open = true;
     if (!parsed.ok) { settings.status = parsed.error; render(); return; }
     await loadModelsForPreset(parsed.value.preset, parsed.value);
@@ -511,12 +535,13 @@ async function openDiffTab(requestId: string): Promise<void> {
   /** Nonsecret form values are validated before native login or coordinated writes. */
   async function saveSettings(message: unknown, action: 'save' | 'key' | 'browser' = 'save'): Promise<void> {
     settings.open = true;
-    const parsed = parseSettingsForm(message);
+    const parsed = action === 'save' ? parseSettingsSubmission(message) : parseSettingsForm(message);
     if (!parsed.ok) { settings.status = parsed.error; render(); return; }
     if (settingsBusy) return;
     const profile = readConfig();
     if (profile.kind === 'invalid') { settings.profileError = profile.error; settings.status = profile.error; render(); return; }
     const form = parsed.value;
+    if ('apiKey' in form && form.apiKey && form.preset === 'moderado-cloud' && form.loginMethod === 'public') form.loginMethod = 'manual';
     const profileConfig = profile.kind === 'ok' ? profile.config : {};
     const connectConfig = readConnectProviders(profile);
     const choice = buildProviderChoices(connectConfig).find(item => item.value === form.preset);
@@ -532,13 +557,14 @@ async function openDiffTab(requestId: string): Promise<void> {
       const discovery = buildDiscoveryConnection({ preset: form.preset, storedBaseUrl: form.baseUrl,
         displayName: form.displayName, defaultModel: form.modelId || 'auto' }, connectConfig);
       const stored = connectionRecord(profileConfig, discovery.id);
-      let apiKey = await storedKey(discovery.id, stored);
+      const pastedKey = 'apiKey' in form && typeof form.apiKey === 'string' ? form.apiKey : undefined;
+      const endpointChanged = typeof stored?.baseUrl === 'string' && discovery.baseUrl.replace(/\/+$/, '') !== stored.baseUrl.replace(/\/+$/, '');
+      let apiKey = pastedKey || (endpointChanged ? undefined : await storedKey(discovery.id, stored));
       let connection: ProviderConnectionRecord;
       if (discovery.id === 'moderado-cloud') {
         if (form.loginMethod === 'public') {
           connection = buildGatewayConnection('public', { baseUrl: discovery.baseUrl });
         } else {
-          if (!credentialManagerAvailable()) throw new Error('Windows Credential Manager is required to store a Gateway login.');
           if (form.loginMethod === 'browser') {
             const expiry = typeof stored?.credentialExpiresAt === 'number' ? stored.credentialExpiresAt : undefined;
             if (action === 'browser' || !apiKey || !expiry || expiry <= Date.now() || stored?.authMethod !== 'browser') {
@@ -548,17 +574,17 @@ async function openDiffTab(requestId: string): Promise<void> {
               connection = await persistGatewayLogin('browser', { baseUrl: discovery.baseUrl, key: credential.accessToken, expiresAt: credential.expiresAt }, credentialStore);
             } else connection = buildGatewayConnection('browser', { baseUrl: discovery.baseUrl, key: apiKey, expiresAt: expiry });
           } else {
-            if (action === 'key' || !apiKey || stored?.authMethod === 'browser') {
+            if (!pastedKey && (action === 'key' || !apiKey || stored?.authMethod === 'browser')) {
               apiKey = await vscode.window.showInputBox({ prompt: 'Gateway key beginning with mrd_ (stored in Windows Credential Manager)', password: true, ignoreFocusOut: true });
               if (apiKey === undefined || signal.aborted) throw new Error('Gateway key entry cancelled.');
             }
+            if (!apiKey) throw new Error('Paste a Gateway key before saving.');
             connection = await persistGatewayLogin('manual', { baseUrl: discovery.baseUrl, key: apiKey.trim() }, credentialStore);
           }
         }
         connection.defaultModel = form.modelId || 'auto';
       } else {
-        if ((action === 'key' || (choice.requiresApiKey && !apiKey))) {
-          if (!credentialManagerAvailable()) throw new Error('This platform has no Credential Manager. Set the provider environment variable instead.');
+        if (!pastedKey && (action === 'key' || (choice.requiresApiKey && !apiKey))) {
           apiKey = await vscode.window.showInputBox({ prompt: 'API key (stored in Windows Credential Manager)', password: true, ignoreFocusOut: true });
           if (apiKey === undefined || signal.aborted) throw new Error('API key entry cancelled.');
           if (!apiKey.trim()) throw new Error('Enter a nonempty API key.');
@@ -567,11 +593,10 @@ async function openDiffTab(requestId: string): Promise<void> {
           displayName: form.displayName, defaultModel: form.modelId || 'auto' }, connectConfig);
         // NVIDIA's fixed endpoint still needs to persist the chosen model.
         connection.defaultModel = form.modelId || 'auto';
-        if (apiKey && (action === 'key' || !stored?.credentialReference)) {
-          if (!credentialManagerAvailable()) throw new Error('This platform has no Credential Manager. Set the provider environment variable instead.');
+        if (apiKey && (pastedKey || action === 'key' || !stored?.credentialReference)) {
           await credentialStore.set(credentialReference(connection.id), apiKey.trim());
           connection.credentialReference = credentialReference(connection.id);
-        } else if (typeof stored?.credentialReference === 'string') connection.credentialReference = stored.credentialReference;
+        } else connection.credentialReference = !endpointChanged && typeof stored?.credentialReference === 'string' ? stored.credentialReference : undefined;
       }
       if (signal.aborted) throw new Error('Provider connection cancelled.');
       const saved = { ...stored, ...connection, apiKey: undefined,
@@ -584,7 +609,7 @@ async function openDiffTab(requestId: string): Promise<void> {
       }, { expected: { connections: profileConfig.connections, activeConnectionId: profileConfig.activeConnectionId, defaultModel: profileConfig.defaultModel } });
       if (!result.written) { settings.status = result.conflict?.reason ?? result.reason ?? 'Could not save the settings.'; render(); return; }
       await loadSettingsState('Saved.', { skipModels: true });
-      await loadModelsForPreset(form.preset);
+      await loadModelsForPreset(settings.preset);
     } catch {
       // Never expose native input, credential service errors, or OAuth responses.
       settings.status = signal.aborted ? 'Provider connection cancelled.' : 'Provider connection failed or key entry was cancelled. Check the endpoint, key, and login method, then retry.';
@@ -652,7 +677,8 @@ async function openDiffTab(requestId: string): Promise<void> {
   function handleWebviewMessage(message: unknown): void {
     if (!message || typeof message !== 'object') return;
     const msg = message as Record<string, unknown>;
-    if (['apiKey', 'token', 'authorizationCode', 'credentialReference'].some(field => field in msg)) {
+    if (['token', 'authorizationCode', 'credentialReference'].some(field => field in msg)
+      || ('apiKey' in msg && msg.type !== 'saveSettings' && msg.type !== 'refreshModels')) {
       settings.open = true;
       settings.status = 'Provider credentials must be entered in the secure editor prompt.';
       render();
@@ -694,8 +720,10 @@ async function openDiffTab(requestId: string): Promise<void> {
       render();
       return;
     }
-    if (msg.type === 'setSettingsPage' && typeof msg.page === 'string') {
-      settings.page = msg.page;
+    if (msg.type === 'setSettingsPage' && ['api', 'features', 'general', 'about'].includes(String(msg.page))) {
+      const parsed = parseSettingsForm(msg);
+      if (parsed.ok) applySettingsForm(parsed.value);
+      settings.page = String(msg.page);
       render();
       return;
     }
@@ -737,6 +765,12 @@ async function openDiffTab(requestId: string): Promise<void> {
       render();
       return;
     }
+    if (msg.type === 'deleteSession') {
+      if (Object.keys(msg).every(key => key === 'type' || key === 'id') && z.string().uuid().safeParse(msg.id).success) {
+        void deleteRecordedSession(String(msg.id));
+      }
+      return;
+    }
     if (msg.type === 'openSession' && typeof msg.id === 'string') {
       // Chat History resume: validate the id, load that session's transcript,
       // and resume it for the next run. Invalid ids are reported, not opened.
@@ -750,6 +784,7 @@ async function openDiffTab(requestId: string): Promise<void> {
     if (msg.type === 'closeSettings') {
       loginAbort?.abort();
       discoveryRequest++;
+      discoveryAbort?.abort();
       settings.open = false;
       render();
       return;
@@ -833,6 +868,7 @@ async function openDiffTab(requestId: string): Promise<void> {
         draftAttachments.clear();
         loginAbort?.abort();
         discoveryRequest++;
+        discoveryAbort?.abort();
         chatView = undefined;
         documentRendered = false;
         // Losing the view must deny anything still awaiting a decision.
@@ -890,70 +926,7 @@ async function openDiffTab(requestId: string): Promise<void> {
       }
       vscode.window.showErrorMessage(result.reason ?? 'Could not save the choice.');
     }),
-    vscode.commands.registerCommand('moderado.configureProvider', async () => {
-      // Provider secrets are never typed into an editor setting or sent to a
-      // renderer; only the non-secret connection fields are collected here.
-      const baseUrl = await vscode.window.showInputBox({
-        prompt: 'Provider base URL (leave empty to skip)',
-        placeHolder: 'https://integrate.api.nvidia.com/v1',
-      });
-      if (baseUrl === undefined) return;
-      const id = await vscode.window.showInputBox({ prompt: 'Connection id', value: 'openai-compatible' });
-      if (!id?.trim()) return;
-      const displayName = await vscode.window.showInputBox({ prompt: 'Display name', value: id.trim() });
-      if (!displayName?.trim()) return;
-
-      // The key is written straight to Credential Manager and only the
-      // *reference* is stored in config.json. It is never echoed, never put in
-      // an editor setting, and never sent to the renderer.
-      const apiKey = await vscode.window.showInputBox({
-        prompt: 'API key (stored in Windows Credential Manager, never in config.json)',
-        password: true,
-        ignoreFocusOut: true,
-      });
-      if (apiKey === undefined) return;
-
-      let credentialRef: string | undefined;
-      if (apiKey.trim()) {
-        if (!credentialManagerAvailable()) {
-          vscode.window.showWarningMessage(
-            'This platform has no Credential Manager. Set the provider environment variable instead.',
-          );
-          return;
-        }
-        try {
-          credentialRef = credentialReference(id.trim());
-          await new WindowsCredentialStore().set(credentialRef, apiKey.trim());
-        } catch {
-          vscode.window.showErrorMessage(
-            'Could not store the API key in Windows Credential Manager. Nothing was written to config.json.',
-          );
-          return;
-        }
-      }
-
-      const result = updateConfigCoordinated(configPath(), {
-        connections: {
-          [id.trim()]: {
-            id: id.trim(),
-            displayName: displayName.trim(),
-            kind: 'openai-compatible',
-            baseUrl: baseUrl.trim(),
-            ...(credentialRef ? { credentialReference: credentialRef } : {}),
-          },
-        },
-        activeConnectionId: id.trim(),
-      });
-      if (result.written) {
-        vscode.window.showInformationMessage(`Saved connection '${displayName.trim()}'.`);
-        return;
-      }
-      if (result.conflict) {
-        vscode.window.showWarningMessage(result.conflict.reason);
-        return;
-      }
-      vscode.window.showErrorMessage(result.reason ?? 'Could not save the connection.');
-    }),
+    vscode.commands.registerCommand('moderado.configureProvider', () => openSettingsPane()),
     vscode.commands.registerCommand('moderado.showSessions', async () => {
       const { sessions, invalid } = host.listSessions();
       if (invalid.length) {
@@ -983,7 +956,7 @@ async function openDiffTab(requestId: string): Promise<void> {
   /** Rebuilds the RECENT list from the shared session store. */
   function refreshRecents(): void {
     const { sessions } = host.listSessions();
-    view.recents = sessions.slice(0, 8).map((session) => ({
+    view.recents = sessions.map((session) => ({
       id: session.id,
       // The first user message is the session's title in every practical sense;
       // it is user text, so it is escaped like any other transcript content.
@@ -991,6 +964,34 @@ async function openDiffTab(requestId: string): Promise<void> {
       updatedAt: formatWhen(session.updatedAt),
       costLabel: costLabelOf(session.usage),
     }));
+  }
+
+  async function deleteRecordedSession(id: string): Promise<void> {
+    if (view.running || host.isRunning) {
+      void vscode.window.showWarningMessage('Stop the active run before deleting chat history.');
+      return;
+    }
+    const session = host.listSessions().sessions.find(item => item.id === id);
+    if (!session) return;
+    const choice = await vscode.window.showWarningMessage(
+      `Delete chat "${firstLineOf(session).slice(0, 80) || 'Untitled session'}"?`,
+      { modal: true, detail: 'This permanently removes the saved chat and its attachments from this workspace’s shared Moderado history.' },
+      'Delete',
+    );
+    if (choice !== 'Delete') return;
+    try {
+      const current = host.session?.id === id;
+      host.deleteSession(id);
+      if (current) {
+        attachmentEpoch++;
+        draftAttachments.clear();
+        view.transcript = [];
+        view.pendingApproval = null;
+      }
+      render();
+    } catch {
+      void vscode.window.showErrorMessage('Could not delete this chat. Stop any active run and check the history files.');
+    }
   }
 
   /** Resumes a recorded session in the panel: transcript + next-run session. */

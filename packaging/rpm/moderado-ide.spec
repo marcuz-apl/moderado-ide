@@ -8,13 +8,17 @@ Packager:       Moderado <maintainers@moderado.dev>
 BuildArch:      x86_64
 ExclusiveArch:  x86_64
 
-Requires:       ca-certificates, libc6 (>= 2.14), libgcc1 | libgcc-s1,
-                libglib2.0-0, libnss3, libpcre2-8-0, libstdc++6,
-                libx11-xcb1, libxcomposite1, libxcursor1, libxdamage1,
-                libxext6, libxfixes3, libxkbcommon0, libxrandr2, libpango-1.0-0,
-                libcairo2, libasound2, libatspi2.0-0, libcups2, libdrm2,
-                libgbm1, libgl1, libgles2, libgtk-3-0, libxshmfence1,
-                libdbus-1-3, libsecret-1-0, fonts-dejavu-core
+Requires:       ca-certificates, xdg-utils, dejavu-sans-fonts
+
+# Electron and its native modules are already built for the pinned ABI.
+# Preserve them and the sandbox permissions during system packaging.
+%global __os_install_post %{nil}
+%global debug_package %{nil}
+# Upstream bundles cross-platform utilities which are unused on Linux x64.
+%global __requires_exclude_from /(linux-(arm|arm64|ppc64|s390x|riscv64)/|bin/arm64/)
+# Private Electron libraries must not satisfy other system packages.
+%global __provides_exclude_from ^/opt/moderado-ide/
+%global __requires_exclude ^lib(ffmpeg|msalruntime)[.]so
 
 %description
 Moderado IDE is a provider-independent agent that lives inside an IDE,
@@ -34,7 +38,7 @@ rm -rf $RPM_BUILD_ROOT
 mkdir -p $RPM_BUILD_ROOT/opt/moderado-ide
 cp -a ./VSCode-linux-x64/. $RPM_BUILD_ROOT/opt/moderado-ide/
 mkdir -p $RPM_BUILD_ROOT/usr/bin
-ln -sf /opt/moderado-ide/moderado-ide $RPM_BUILD_ROOT/usr/bin/moderado-ide
+ln -sf /opt/moderado-ide/bin/moderado-ide $RPM_BUILD_ROOT/usr/bin/moderado-ide
 mkdir -p $RPM_BUILD_ROOT/usr/share/applications
 cp %{_builddir}/moderado-ide.desktop $RPM_BUILD_ROOT/usr/share/applications/
 mkdir -p $RPM_BUILD_ROOT/usr/share/metainfo
@@ -52,9 +56,10 @@ cp README.md $RPM_BUILD_ROOT/usr/share/doc/moderado-ide/README.md
 /usr/share/applications/moderado-ide.desktop
 /usr/share/metainfo/moderado-ide.appdata.xml
 /usr/share/icons/hicolor/scalable/apps/moderado-ide.svg
-%doc /usr/share/doc/moderado-ide/LICENSE /usr/share/doc/moderado-ide/README.md
+%license /usr/share/doc/moderado-ide/LICENSE
+%doc /usr/share/doc/moderado-ide/README.md
 
 
 %changelog
-* Tue Oct 07 2026 Moderado <maintainers@moderado.dev> - 0.1.22-261007a
+* Wed Oct 07 2026 Moderado <maintainers@moderado.dev> - 0.1.22-261007a
 - Initial Linux packaging.
