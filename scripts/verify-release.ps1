@@ -51,7 +51,8 @@ if ($built) {
   & git -C $root merge-base --is-ancestor $built $head 2>$null
   Add-Result 'manifest:builtFromAncestor' ($LASTEXITCODE -eq 0) "built=$($built.Substring(0,8)) head=$($head.Substring(0,8))"
   $dirty = @(git -C $root status --porcelain --untracked-files=no)
-  Add-Result 'manifest:noUncommittedSourceChanges' ($dirty.Count -eq 0) "changed files=$($dirty.Count)"
+  $dirtyDetail = if ($dirty.Count -eq 0) { 'none' } else { $dirty -join '; ' }
+  Add-Result 'manifest:noUncommittedSourceChanges' ($dirty.Count -eq 0) "changed files=$($dirty.Count): $dirtyDetail"
 } else {
   # Manifest predates builtFromCommit. Fall back to the strict version check.
   Add-Result 'manifest:builtFromAncestor' ($manifest.desktopVersion -eq $version) "manifest=$($manifest.desktopVersion) VERSION=$version (no builtFromCommit recorded)"

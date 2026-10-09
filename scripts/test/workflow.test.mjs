@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 
 const workflow = readFileSync(new URL('../../.github/workflows/build-and-release.yml', import.meta.url), 'utf8');
 const windowsBuildTools = readFileSync(new URL('../ensure-windows-build-tools.ps1', import.meta.url), 'utf8');
+const releaseVerifier = readFileSync(new URL('../verify-release.ps1', import.meta.url), 'utf8');
 const windowsScripts = ['../prepare-m1.ps1', '../build-m1.ps1']
   .map(path => readFileSync(new URL(path, import.meta.url), 'utf8'));
 
@@ -49,6 +50,8 @@ test('publishing stays disabled and external actions are immutable', () => {
     'the editor gulp script reads MAX_OLD_SPACE_SIZE while NODE_OPTIONS alone does not set it');
   assert.match(windowsScripts[0], /\$env:MAX_OLD_SPACE_SIZE = \$heapMb/,
     'pinned editor preparation writes the heap size into its gulp command');
+  assert.match(releaseVerifier, /changed files=\$\(\$dirty\.Count\): \$dirtyDetail/,
+    'dirty source file names are included in release verification evidence');
   for (const script of windowsScripts) {
     assert.match(script, /ensure-windows-build-tools\.ps1/);
     assert.match(script, /\$env:npm_config_msvs_version = '2022'/);
