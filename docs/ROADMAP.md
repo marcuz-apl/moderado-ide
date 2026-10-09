@@ -1,11 +1,11 @@
 # Moderado IDE roadmap
 
 This roadmap is the original delivery sequence and a record of milestone
-intent. v0.1.28 is the latest published stable release. The v0.1.29 release
-was withdrawn after a webview startup error; a fixed v0.1.30 full build is in
-progress. Current caveats are in [INSTALL.md](INSTALL.md).
+intent. v0.1.30 is the latest published stable release. The v0.1.29 release
+was withdrawn after a webview startup error. Current caveats are in
+[INSTALL.md](INSTALL.md).
 
-Moderado IDE targets Linux, macOS, and Windows. The v0.1.28 release includes Windows x64, Linux x64, and macOS Apple Silicon packages. The planned v0.1.30 release adds macOS Intel x64; each platform's manifest records the source revisions used. Some verification remains incomplete, including native Linux runtime installation and profile coordination with the CLI.
+Moderado IDE targets Linux, macOS, and Windows. The v0.1.30 release includes Windows x64, Linux x64, macOS Apple Silicon arm64, and macOS Intel x64 packages; each platform's manifest records the source revisions used. Some verification remains incomplete, including native Linux runtime installation and profile coordination with the CLI.
 
 ## M0 — Independent project foundation (documentation scaffold)
 

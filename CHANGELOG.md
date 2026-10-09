@@ -1,10 +1,10 @@
 # Moderado IDE changelog
 
-## Unreleased: v0.1.30 target
+## [v0.1.30] — 2026-10-09
 
 **Fix: Restore Moderado webview interactions**
 - **Type**: `fix` / `webview` / `patch`
-- **Scope**: Moderado chat and API Config webview; Windows, Linux, and macOS release builds
+- **Scope**: Moderado chat and API Config webview; Windows x64, Linux x64, macOS Apple Silicon arm64, and macOS Intel x64
 - **Key deliverables**:
   - Remove TypeScript-only annotations from the JavaScript emitted into the webview. The invalid syntax stopped the script from parsing and prevented its controls from responding.
   - Include Gateway endpoint selection, provider catalog refinements, and the refreshed About page.
