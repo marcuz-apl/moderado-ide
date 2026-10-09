@@ -1,7 +1,9 @@
 # Installing Moderado IDE
 
-> **Status: v0.1.29 is the current official release.** Download it from the
-> [GitHub release page](https://github.com/marcuz-apl/moderado-ide/releases/tag/v0.1.29%2B261009j).
+> **Status: v0.1.28 is the latest published stable release.** The v0.1.29
+> release was withdrawn; the fixed v0.1.30 full build is being prepared.
+> Download the current release from the
+> [GitHub release page](https://github.com/marcuz-apl/moderado-ide/releases/latest).
 > Windows installers are unsigned; macOS images are ad-hoc signed but not
 > notarized. There is no update channel.
 
@@ -10,7 +12,7 @@
 | | |
 | --- | --- |
 | Targets | Linux x64, macOS x64/arm64, and Windows x64 |
-| Existing artifact evidence | Official v0.1.29 release includes Windows x64, Linux x64, and macOS arm64/x64 assets |
+| Existing artifact evidence | Official v0.1.28 release includes Windows x64, Linux x64, and macOS Apple Silicon assets |
 | Editor base | Code OSS `1.135.0`, built through VSCodium `1.135.06055` |
 | Agent packages | Moderado CLI `v0.4.8` (`d5e263ed…`, `v0.4.8+261006d`) |
 | Architectures | Linux and Windows x64; macOS x64 and arm64 |
@@ -113,7 +115,7 @@ Windows installers are **unsigned**; Windows SmartScreen may warn and there is
 no Authenticode signature to validate. macOS images use ad-hoc signing only;
 they are not Developer ID signed or notarized, so Gatekeeper may prevent them
 from opening without local approval. Linux packages are unsigned. These are
-the published v0.1.29 artifacts; no update channel is provided.
+the published v0.1.28 artifacts; no update channel is provided.
 
 ## Provenance and notices
 
@@ -150,8 +152,8 @@ That command **refuses** and explains why. It only proceeds with
 mutation and runs no commands, and it never writes or logs the API key.
 
 **Still open:** platform code signing and notarization, an update channel, and
-native Linux runtime installation verification. The v0.1.29 artifacts are
-published on the [GitHub Release page](https://github.com/marcuz-apl/moderado-ide/releases/tag/v0.1.29%2B261009j).
+native Linux runtime installation verification. The current v0.1.28 artifacts
+are published on the [GitHub Release page](https://github.com/marcuz-apl/moderado-ide/releases/latest).
 
 ## What works, and what does not
 

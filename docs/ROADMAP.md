@@ -1,11 +1,11 @@
 # Moderado IDE roadmap
 
 This roadmap is the original delivery sequence and a record of milestone
-intent. Moderado IDE v0.1.29 has since been published for Windows x64, Linux
-x64, and macOS arm64/x64. That release does not mean every readiness gate
-below is complete; current caveats are in [INSTALL.md](INSTALL.md).
+intent. v0.1.28 is the latest published stable release. The v0.1.29 release
+was withdrawn after a webview startup error; a fixed v0.1.30 full build is in
+progress. Current caveats are in [INSTALL.md](INSTALL.md).
 
-Moderado IDE targets Linux, macOS, and Windows. The v0.1.29 release includes packages for all three platforms, and its platform-specific manifests record the source revisions used. Some verification is still platform-specific or incomplete, including native Linux runtime installation and profile coordination with the CLI.
+Moderado IDE targets Linux, macOS, and Windows. The v0.1.28 release includes Windows x64, Linux x64, and macOS Apple Silicon packages. The planned v0.1.30 release adds macOS Intel x64; each platform's manifest records the source revisions used. Some verification remains incomplete, including native Linux runtime installation and profile coordination with the CLI.
 
 ## M0 — Independent project foundation (documentation scaffold)
 
@@ -100,9 +100,9 @@ which this project must not make.
 - Document installation and supported platform/profile combinations.
 - Publish only after explicit owner authorization.
 
-Linux, macOS, and Windows packages are included in v0.1.29. Each platform still has its own evidence requirements; Windows/Linux cross-home profile sharing remains a separate compatibility decision.
+Linux, macOS, and Windows packages are included in v0.1.28. The full v0.1.30 build is planned; Windows/Linux cross-home profile sharing remains a separate compatibility decision.
 
-## M4 status (v0.1.29 published; readiness work remains)
+## M4 status (v0.1.28 published; v0.1.30 planned)
 
 Release evidence is produced by `scripts/verify-release.ps1`, which checks
 artifact checksums, manifest provenance against `sources.lock.json`, packaged
@@ -116,7 +116,7 @@ produce an editor with no agent that still passed every other check.
 Installation, supported platform combinations, data locations, and known
 limitations are documented in [INSTALL.md](docs/INSTALL.md).
 
-The v0.1.29 release is published with platform-specific manifests, provenance,
+The v0.1.28 release is published with platform-specific manifests, provenance,
 verification results, checksums, and third-party notices. Remaining gaps
 include platform signing/notarization, an update channel, native Linux runtime
 installation verification, refreshed compatibility evidence for the current

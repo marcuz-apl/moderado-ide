@@ -1,22 +1,19 @@
 # Project Handoff
 
-Updated: 2026-10-09 17:57 UTC
+Updated: 2026-10-09
 Branch: master
-Commit: see `git log`
-Status: v0.1.29 is the current stable release. The workflow publishes only after a successful full default-source build; this change is committed and pushed.
+Commit: release preparation based on `37f494c`
+Status: v0.1.28 is the latest published stable release after the owner withdrew v0.1.29. The full v0.1.30 release is being prepared.
 
 ## Summary
 
-Moderado IDE v0.1.29 is published at [GitHub Releases](https://github.com/marcuz-apl/moderado-ide/releases/tag/v0.1.29%2B261009j). The release includes Windows x64, Linux x64, macOS arm64, and macOS x64 packages. Build run [37961060432](https://github.com/marcuz-apl/moderado-ide/actions/runs/37961060432) passed all four platform jobs from source commit `dad8515123e5d411a9805781661f50f5a99cd6ea` (`v0.1.29+261009j`).
+The user tested the Windows v0.1.29 portable build from fix commit `37f494c` and confirmed the UI works. The fix removes TypeScript-only syntax from the plain JavaScript emitted into the shared Moderado webview. The owner manually deleted the v0.1.29 GitHub Release because that release was not runnable; its source tag remains on origin. Current official release is therefore v0.1.28. The 0.1.30 release-preparation changes are in the working tree and must be committed before dispatching the full release workflow.
 
 ## Completed
 
-- Published stable release `v0.1.29+261009j` with 19 documented-name assets; tag target is `dad8515123e5d411a9805781661f50f5a99cd6ea`.
-- Verified all platform build manifests and recorded artifact hashes in their manifests/checksum files. The publisher checked uploaded asset names, sizes, and GitHub SHA-256 digests where available.
-- Updated README Mac download links for Apple Silicon and Intel, the quickstart, and release workflow instructions.
-- Updated PRD, installation guide, upstream policy, and roadmap to identify v0.1.29 as current.
-- Enabled full-build publishing in `.github/workflows/build-and-release.yml`; partial-platform and custom-source builds do not publish.
-- Moved release audit notes into `docs/planning/release-audit/` with undated filenames.
+- The shared fix was tested on Windows from the `moderado-ide-windows-x64` artifact of run `37971334294`.
+- Canceled obsolete partial 0.1.29 macOS run `37980860696` and Linux run `37980869742` after the owner selected a new 0.1.30 release.
+- Full release workflow publishes only after a successful all-platform default-source build; partial-platform builds remain build-only.
 
 ## Release limits
 
@@ -24,14 +21,14 @@ Moderado IDE v0.1.29 is published at [GitHub Releases](https://github.com/marcuz
 - Linux packages are unsigned; native Linux installation was not verified.
 - macOS packages are ad-hoc signed, not Developer ID signed or notarized.
 - There is no automatic update channel. No live provider request was used as release evidence.
-- Keep v0.1.28 available until the owner tests v0.1.29 and explicitly requests any retirement.
+- The owner removed v0.1.29 and asked for a new 0.1.30 release; do not recreate the 0.1.29 release or remove its source tag.
 
 ## Verification
 
-- All four build jobs in run `37961060432` completed successfully.
-- The publisher's prepare-only pass matched all platform manifest hashes and produced 19 assets; the publishing pass verified the resulting stable release.
-- `node --check scripts/publish-release.mjs` passed. The focused workflow tests were not run during this post-build change.
+- Windows fix build run `37971334294` completed successfully; user confirmed that app was responsive.
+- `node --check scripts/publish-release.mjs`, hook syntax, connected patch-version prediction, and `git diff --check` passed for the preparation changes.
+- No 0.1.30 platform jobs have run yet.
 
 ## Next action
 
-Install and test the v0.1.29 Windows x64 installer or portable ZIP from the release page, then report any issues. The locally downloaded Windows artifact bundle is in `build/release-v0.1.29/windows/`.
+Commit and push the 0.1.30 release preparation, then dispatch the full `all` build. The publisher will create the stable release after all four platform jobs and release evidence checks succeed.

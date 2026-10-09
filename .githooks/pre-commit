@@ -5,19 +5,13 @@ HOOKDIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 old=$(read_version)
 validate_identifier "$old"
 
-msgfile=${1:-}
+msgfile=${1:-$(git rev-parse --git-path COMMIT_EDITMSG)}
 msg=""
 if [ -n "$msgfile" ] && [ -f "$msgfile" ]; then
   msg=$(cat "$msgfile")
 fi
 
-case "$msg" in
-  *BREAKING\ CHANGE*|*!:\ *)     bump=major ;;
-  release\(minor\):*)             bump=minor ;;
-  release\(patch\):*)             bump=patch ;;
-  feat:*|feat\(*\):*)             bump=patch ;;
-  *)                              bump=build ;;
-esac
+bump=$(detect_bump_type "$msg") || exit 1
 
 new=$(next_identifier "$old" "$(utc_yymmdd)" "$bump") || exit 1
 

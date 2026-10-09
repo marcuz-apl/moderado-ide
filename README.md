@@ -65,12 +65,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-m1.ps1
 
 ### macOS (Apple Silicon and Intel)
 
-The v0.1.29 release includes builds for both Mac processor families. Choose
-**arm64** for Apple Silicon Macs (M-series) and **x64** for Intel Macs. Each
-architecture has a DMG installer and a ZIP archive:
-
-- [Apple Silicon arm64 DMG](https://github.com/marcuz-apl/moderado-ide/releases/download/v0.1.29%2B261009j/moderado-ide-0.1.29%2B261009j-macos-arm64.dmg) · [ZIP](https://github.com/marcuz-apl/moderado-ide/releases/download/v0.1.29%2B261009j/moderado-ide-0.1.29%2B261009j-macos-arm64.zip)
-- [Intel x64 DMG](https://github.com/marcuz-apl/moderado-ide/releases/download/v0.1.29%2B261009j/moderado-ide-0.1.29%2B261009j-macos-x64.dmg) · [ZIP](https://github.com/marcuz-apl/moderado-ide/releases/download/v0.1.29%2B261009j/moderado-ide-0.1.29%2B261009j-macos-x64.zip)
+Find available Mac builds on the
+[latest stable release page](https://github.com/marcuz-apl/moderado-ide/releases/latest).
+Choose **arm64** for Apple Silicon Macs (M-series) or **x64** for Intel Macs;
+the release notes list the architectures included in each release.
 
 Both builds use ad-hoc signing only; they are not Developer ID signed or
 notarized, so Gatekeeper may require local approval before opening them.

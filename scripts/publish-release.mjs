@@ -131,9 +131,10 @@ addChecksums([debName, rpmName], 'SHA256SUMS-linux-x64');
 
 const releaseNotes = join(outputRoot, 'release-notes.md');
 writeFileSync(releaseNotes, [
-  `Moderado IDE ${productVersion} is the first release with the Gateway Dev/Prod endpoint selector, provider catalog refinements, and a refreshed About page.`,
+  `Moderado IDE ${productVersion} fixes a webview startup error that could leave the Moderado chat and settings controls unresponsive. It also includes Gateway endpoint selection, provider catalog refinements, and a refreshed About page.`,
   '',
   '### Included',
+  '- Fix the webview JavaScript startup error so Moderado controls respond normally.',
   '- Switch the Moderado Gateway between its development and production endpoints in API Config.',
   '- Improve provider labels and OrcaRouter free-model identification.',
   '- Add a clearer About card with product information and copyright.',
