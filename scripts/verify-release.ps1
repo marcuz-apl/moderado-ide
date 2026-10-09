@@ -17,6 +17,10 @@ $root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $assetsPath = (Resolve-Path -LiteralPath $Assets).Path
 $lock = Get-Content -Raw -LiteralPath (Join-Path $root 'sources.lock.json') | ConvertFrom-Json
 $version = (Get-Content -Raw -LiteralPath (Join-Path $root 'VERSION')).Trim()
+if ($version -notmatch '^v(?<semver>\d+\.\d+\.\d+)\+\d{6}[0-9A-Za-z]$') {
+  throw "Invalid Moderado IDE version: $version"
+}
+$displayVersion = $Matches['semver']
 
 $results = [System.Collections.Generic.List[object]]::new()
 function Add-Result($name, $ok, $detail) {
@@ -104,7 +108,7 @@ if (!$SkipExtension) {
   # The staged checkout is not evidence. Confirm the shipped archive actually
   # contains the agent, because a packaging-only rebuild can silently ship an
   # editor without it (the non-native extension task is skipped).
-  $zipPath = Join-Path $assetsPath "Moderado IDE-win32-x64-$($lock.sources.vscodium.version).zip"
+  $zipPath = Join-Path $assetsPath "Moderado IDE-win32-x64-$displayVersion.zip"
   if (Test-Path -LiteralPath $zipPath) {
     Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
     $archive = [System.IO.Compression.ZipFile]::OpenRead($zipPath)

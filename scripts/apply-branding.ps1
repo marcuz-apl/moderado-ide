@@ -30,6 +30,15 @@ $installerText = Get-Content -Raw -LiteralPath $installer
 $installerText = $installerText.Replace('AppPublisher=VSCodium', 'AppPublisher=Moderado IDE')
 $installerText = $installerText.Replace('https://vscodium.com/', 'https://github.com/marcuz-apl/moderado-ide')
 [System.IO.File]::WriteAllText($installer, $installerText, $utf8)
+$windowsGulp = Join-Path $editor 'build\gulpfile.vscode.win32.ts'
+$windowsGulpText = Get-Content -Raw -LiteralPath $windowsGulp
+$moderadoVersionText = [regex]::Replace($windowsGulpText, '(?m)^(\s*)Version: pkg\.version,$', '$1Version: process.env.MODERADO_VERSION || pkg.version,')
+$moderadoFileVersionText = [regex]::Replace($moderadoVersionText, '(?m)^(\s*)RawVersion: pkg\.version\.replace', '$1RawVersion: process.env.MODERADO_FILE_VERSION || pkg.version.replace')
+if ($moderadoVersionText -notmatch '(?m)^\s*Version: process\.env\.MODERADO_VERSION \|\| pkg\.version,' -or
+    $moderadoFileVersionText -notmatch '(?m)^\s*RawVersion: process\.env\.MODERADO_FILE_VERSION \|\|') {
+  throw 'Unable to apply Moderado version to Windows installer resources.'
+}
+[System.IO.File]::WriteAllText($windowsGulp, $moderadoFileVersionText, $utf8)
 $electronText = Get-Content -Raw -LiteralPath $electronBuild
 $electronText = $electronText.Replace("companyName: 'VSCodium'", "companyName: 'Moderado IDE'")
 [System.IO.File]::WriteAllText($electronBuild, $electronText, $utf8)

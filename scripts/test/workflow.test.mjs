@@ -77,6 +77,20 @@ test('release builds keep generated branding and vendor metadata out of tracked 
   assert.match(vendorScript, /\$metadataPath = if \(\$MetadataPath\)/);
 });
 
+test('Windows download names use the Moderado IDE version, not the upstream editor version', () => {
+  const windowsBuild = windowsScripts[1];
+  assert.match(windowsBuild, /desktopVersion.*Get-Content.*VERSION/);
+  assert.match(windowsBuild, /displayVersion.*Matches\['semver'\]/);
+  assert.match(windowsBuild, /\$env:MODERADO_VERSION = \$displayVersion/);
+  assert.match(windowsBuild, /\$env:MODERADO_FILE_VERSION = "\$displayVersion\.0"/);
+  assert.match(windowsBuild, /Moderado IDE-win32-x64-\$displayVersion\.zip/);
+  assert.match(windowsBuild, /Moderado IDESetup-x64-\$displayVersion\.exe/);
+  assert.match(windowsBuild, /Moderado IDEUserSetup-x64-\$displayVersion\.exe/);
+  assert.match(brandingScript, /Version: process\.env\.MODERADO_VERSION \|\| pkg\.version/);
+  assert.match(brandingScript, /RawVersion: process\.env\.MODERADO_FILE_VERSION \|\|/);
+  assert.match(releaseVerifier, /Moderado IDE-win32-x64-\$displayVersion\.zip/);
+});
+
 const python = ['python3', 'python'].find(command => spawnSync(command, ['-c', 'import yaml'], { encoding: 'utf8', shell: false }).status === 0);
 test('workflow parses as YAML with valid job steps', { skip: !python && 'No installed PyYAML parser' }, () => {
   const parsed = spawnSync(python, ['-c', 'import sys,json,yaml; print(json.dumps(yaml.safe_load(sys.stdin.read())))'], { input: workflow, encoding: 'utf8', shell: false });

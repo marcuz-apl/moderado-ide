@@ -28,6 +28,13 @@ if (!$checkout.StartsWith($root + [System.IO.Path]::DirectorySeparatorChar, [Sys
   throw 'Checkout must be inside the IDE workspace.'
 }
 $lock = Get-Content -Raw -LiteralPath (Join-Path $root 'sources.lock.json') | ConvertFrom-Json
+$desktopVersion = (Get-Content -Raw -LiteralPath (Join-Path $root 'VERSION')).Trim()
+if ($desktopVersion -notmatch '^v(?<semver>\d+\.\d+\.\d+)\+\d{6}[0-9A-Za-z]$') {
+  throw "Invalid Moderado IDE version: $desktopVersion"
+}
+$displayVersion = $Matches['semver']
+$env:MODERADO_VERSION = $displayVersion
+$env:MODERADO_FILE_VERSION = "$displayVersion.0"
 $outerRevision = (& git -C $checkout rev-parse HEAD).Trim()
 $innerRevision = (& git -C (Join-Path $checkout 'vscode') rev-parse HEAD).Trim()
 if ($outerRevision -ne $lock.sources.vscodium.commit -or $innerRevision -ne $lock.sources.codeOss.commit) {
@@ -127,15 +134,27 @@ if (!$AssetsOnly) {
 $assetDir = Join-Path $checkout 'assets'
 [System.IO.Directory]::CreateDirectory($assetDir) | Out-Null
 $expected = @(
+  "Moderado IDE-win32-x64-$displayVersion.zip",
+  "Moderado IDESetup-x64-$displayVersion.exe",
+  "Moderado IDEUserSetup-x64-$displayVersion.exe"
+)
+$upstreamExpected = @(
   "Moderado IDE-win32-x64-$($lock.sources.vscodium.version).zip",
   "Moderado IDESetup-x64-$($lock.sources.vscodium.version).exe",
   "Moderado IDEUserSetup-x64-$($lock.sources.vscodium.version).exe"
 )
-$zip = Join-Path $assetDir $expected[0]
+$previous = Join-Path $assetDir 'previous'
+foreach ($name in $expected) {
+  $prior = Join-Path $assetDir $name
+  if (Test-Path -LiteralPath $prior) {
+    [System.IO.Directory]::CreateDirectory($previous) | Out-Null
+    Move-Item -LiteralPath $prior -Destination (Join-Path $previous ((Get-Date -Format 'yyyyMMddHHmmssfff') + '-' + $name))
+  }
+}
+$zip = Join-Path $assetDir $upstreamExpected[0]
 if (Test-Path -LiteralPath $zip) {
-  $archive = Join-Path $assetDir 'previous'
-  [System.IO.Directory]::CreateDirectory($archive) | Out-Null
-  Move-Item -LiteralPath $zip -Destination (Join-Path $archive ((Get-Date -Format 'yyyyMMddHHmmss') + '.zip'))
+  [System.IO.Directory]::CreateDirectory($previous) | Out-Null
+  Move-Item -LiteralPath $zip -Destination (Join-Path $previous ((Get-Date -Format 'yyyyMMddHHmmssfff') + '-' + $upstreamExpected[0]))
 }
 # Ship the MIT license texts in the portable editor.
 #
@@ -151,6 +170,12 @@ if (Test-Path -LiteralPath $portable) {
 }
 $assetStart = [System.DateTime]::UtcNow
 Invoke-CheckedNativeCommand { & $bash -c "cd '$posixCheckout' && . ./prepare_assets.sh" } 'Windows asset packaging failed.'
+
+for ($i = 0; $i -lt $expected.Count; $i++) {
+  $built = Join-Path $assetDir $upstreamExpected[$i]
+  if (!(Test-Path -LiteralPath $built)) { throw "Upstream asset missing: $($upstreamExpected[$i])" }
+  Move-Item -LiteralPath $built -Destination (Join-Path $assetDir $expected[$i]) -Force
+}
 
 $artifacts = foreach ($name in $expected) {
   $file = Get-Item -LiteralPath (Join-Path $assetDir $name) -ErrorAction Stop
