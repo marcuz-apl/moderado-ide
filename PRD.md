@@ -1,7 +1,7 @@
 # Moderado IDE Product Requirements
 
-**Project version:** see [VERSION](VERSION) (development version; the public v0.1.28 release is tracked separately)
-**Release status:** v0.1.28 is the first public release, with Windows x64, Linux x64, and macOS arm64/x64 packages. This release does not satisfy every long-term delivery gate below; see [installation and release limitations](docs/INSTALL.md) and the [roadmap](docs/ROADMAP.md).
+**Project version:** see [VERSION](VERSION) (development version; the public v0.1.29 release is tracked separately)
+**Release status:** v0.1.29 is the current public release, with Windows x64, Linux x64, and macOS arm64/x64 packages. It does not satisfy every long-term delivery gate below; see [installation and release limitations](docs/INSTALL.md) and the [roadmap](docs/ROADMAP.md).
 **Target platforms:** Linux, macOS, and Windows. Public artifacts exist for all three platforms, but native Linux installation, Windows signing, and macOS Developer ID signing/notarization remain open.
 **Reference agent baseline:** Moderado CLI `v0.4.8` pinned contracts, core, and
 tools source; IDE-owned provider behavior adapts CLI `v0.4.8` fixtures and
@@ -137,7 +137,7 @@ See [the detailed profile contract](docs/PROFILE.md).
 4. **Release readiness:** Real-editor tests, clean-account install/uninstall,
    provenance, license notices, update channel, and user documentation.
 
-These gates describe the intended product bar; publishing v0.1.28 did not mark
+These gates describe the intended product bar; publishing v0.1.29 did not mark
 all of them complete. The current evidence and remaining gaps are tracked in
 the roadmap and installation notes.
 

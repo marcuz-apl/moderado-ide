@@ -1,12 +1,12 @@
 name: build-and-release
 
-# Installer builds are owner-triggered. Artifacts stay in Actions; release
-# publishing is hard-disabled and carries no write permission or signing secrets.
+# Installer builds are owner-triggered. Only a complete four-platform build
+# from the dispatched commit can publish a stable GitHub release.
 on:
   workflow_dispatch:
     inputs:
       platform:
-        description: 'Platforms to build; artifacts remain in Actions and are not published'
+        description: 'Platforms to build; only all publishes a release'
         type: choice
         options: [all, both, linux, windows, macos, macos-intel]
         default: all
@@ -314,8 +314,35 @@ jobs:
             build/installers/**/SHA256SUMS*
 
   publish:
-    name: Publishing disabled
-    if: ${{ false }}
+    name: Publish stable GitHub release
+    needs: [linux, windows, macos-arm64, macos-x64]
+    if: ${{ inputs.platform == 'all' && inputs.source_ref == '' }}
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
     steps:
-      - run: echo 'Publishing requires a separate owner-authorized release.'
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: moderado-ide-linux-x64
+          path: build/release-input/linux
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: moderado-ide-windows-x64
+          path: build/release-input/windows
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: moderado-ide-macos-arm64
+          path: build/release-input/macos-arm64
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: moderado-ide-macos-x64
+          path: build/release-input/macos-x64
+      - name: Verify artifacts, apply public names, and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+          RELEASE_SOURCE_COMMIT: ${{ github.sha }}
+          RELEASE_RUN_ID: ${{ github.run_id }}
+        run: node scripts/publish-release.mjs

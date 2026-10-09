@@ -1,6 +1,6 @@
 # Upstream source and distribution policy
 
-IDE targets Linux, macOS, and Windows. The public v0.1.28 release contains
+IDE targets Linux, macOS, and Windows. The public v0.1.29 release contains
 Linux x64, macOS arm64/x64, and Windows x64 packages built from pinned source
 revisions. Platform limitations and verification gaps are recorded in
 [INSTALL.md](INSTALL.md); the release does not imply that every PRD gate is
@@ -39,7 +39,7 @@ assume its npm package exposes the internal workspaces as separate
 installable packages. IDE-owned Gateway/provider behavior instead
 adapts CLI `v0.4.8` fixtures and behavior without using CLI provider code
 at runtime. Updating the agent snapshot does not transfer provider ownership
-to the CLI. The v0.1.28 release manifests record the source revisions used for
+to the CLI. The v0.1.29 release manifests record the source revisions used for
 each platform package. Build Moderado's internal packages from the pinned source revision and bundle
 them with IDE. A build must record source revisions and IDE `VERSION`.
 
@@ -62,6 +62,7 @@ without checking its license and redistribution rights.
 
 IDE owns its own signing, checksums, artifact manifest, installer and
 update channel. A successful CLI or VSCodium release does not certify an
-IDE release. The v0.1.28 assets were published with explicit owner
-authorization. Future releases still require explicit owner authorization;
-the PRD gates remain the target for continued release readiness.
+IDE release. A manually dispatched full-platform build publishes only when it
+uses the default source commit; partial builds and custom-source builds do not
+publish. Starting that full release build is the owner's explicit release
+authorization. The PRD gates remain the target for continued release readiness.

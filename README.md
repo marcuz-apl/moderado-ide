@@ -65,29 +65,26 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-m1.ps1
 
 ### macOS (Apple Silicon and Intel)
 
-The v0.1.28 release includes builds for both Mac processor families. Choose
+The v0.1.29 release includes builds for both Mac processor families. Choose
 **arm64** for Apple Silicon Macs (M-series) and **x64** for Intel Macs. Each
 architecture has a DMG installer and a ZIP archive:
 
-- [Apple Silicon arm64 DMG](https://github.com/marcuz-apl/moderado-ide/releases/download/v0.1.28%2B261009d/moderado-ide-0.1.28%2B261009d-macos-arm64.dmg) · [ZIP](https://github.com/marcuz-apl/moderado-ide/releases/download/v0.1.28%2B261009d/moderado-ide-0.1.28%2B261009d-macos-arm64.zip)
-- [Intel x64 DMG](https://github.com/marcuz-apl/moderado-ide/releases/download/v0.1.28%2B261009d/moderado-ide-0.1.28%2B261009d-macos-x64.dmg) · [ZIP](https://github.com/marcuz-apl/moderado-ide/releases/download/v0.1.28%2B261009d/moderado-ide-0.1.28%2B261009d-macos-x64.zip)
+- [Apple Silicon arm64 DMG](https://github.com/marcuz-apl/moderado-ide/releases/download/v0.1.29%2B261009j/moderado-ide-0.1.29%2B261009j-macos-arm64.dmg) · [ZIP](https://github.com/marcuz-apl/moderado-ide/releases/download/v0.1.29%2B261009j/moderado-ide-0.1.29%2B261009j-macos-arm64.zip)
+- [Intel x64 DMG](https://github.com/marcuz-apl/moderado-ide/releases/download/v0.1.29%2B261009j/moderado-ide-0.1.29%2B261009j-macos-x64.dmg) · [ZIP](https://github.com/marcuz-apl/moderado-ide/releases/download/v0.1.29%2B261009j/moderado-ide-0.1.29%2B261009j-macos-x64.zip)
 
 Both builds use ad-hoc signing only; they are not Developer ID signed or
-notarized, so Gatekeeper may require local approval before opening them. The
-manual GitHub Actions workflow builds both architectures from the pinned
-sources; its artifacts are reviewed and attached to the GitHub Release
-separately.
+notarized, so Gatekeeper may require local approval before opening them.
 
 ### Build all platform artifacts in GitHub Actions
 
 From the repository's Actions tab, run **build-and-release** with platform
-**all** and macOS architectures **both**. The workflow builds Linux x64
+**all**. The workflow builds Linux x64
 (portable `.tar.gz`, `.deb`, and `.rpm`), Windows x64 (portable `.zip` and both
 `.exe` installers), and macOS arm64/x64 (`.dmg` and `.zip`) as separate
-artifacts retained in Actions for 30 days. The workflow does not create or
-update a GitHub Release; release assets are attached separately after their
-names, checksums, manifests, and notes are reviewed. Windows outputs are
-unsigned. macOS outputs are ad-hoc signed only and are not notarized. See
+artifacts. A successful full build publishes a stable GitHub Release with
+the documented public asset names, manifests, checksums, and release notes.
+Partial-platform and custom-source builds remain build-only. Windows outputs
+are unsigned. macOS outputs are ad-hoc signed only and are not notarized. See
 [release asset naming conventions](docs/INSTALL.md#public-release-asset-naming-conventions)
 when preparing future releases.
 

@@ -1,7 +1,7 @@
 # Installing Moderado IDE
 
-> **Status: v0.1.28 is the current official release.** Download it from the
-> [GitHub release page](https://github.com/marcuz-apl/moderado-ide/releases/tag/v0.1.28%2B261009d).
+> **Status: v0.1.29 is the current official release.** Download it from the
+> [GitHub release page](https://github.com/marcuz-apl/moderado-ide/releases/tag/v0.1.29%2B261009j).
 > Windows installers are unsigned; macOS images are ad-hoc signed but not
 > notarized. There is no update channel.
 
@@ -10,12 +10,12 @@
 | | |
 | --- | --- |
 | Targets | Linux x64, macOS x64/arm64, and Windows x64 |
-| Existing artifact evidence | Official v0.1.28 release includes Windows x64, Linux x64, and macOS arm64/x64 assets |
+| Existing artifact evidence | Official v0.1.29 release includes Windows x64, Linux x64, and macOS arm64/x64 assets |
 | Editor base | Code OSS `1.135.0`, built through VSCodium `1.135.06055` |
 | Agent packages | Moderado CLI `v0.4.8` (`d5e263ed…`, `v0.4.8+261006d`) |
 | Architectures | Linux and Windows x64; macOS x64 and arm64 |
 
-Use the manually dispatched [build-and-release workflow](../.github/workflows/build-and-release.yml) with platform `all` and macOS architectures `both` to build current pinned-source artifacts. It stores workflow artifacts in GitHub Actions for 30 days; it does not publish or update a GitHub Release. A successful workflow run is required before claiming its artifacts exist. For a local Linux build, follow the [Linux build instructions](../README.md#build-the-linux-editor-locally). Windows/Linux cross-home profile sharing is outside this milestone: the two environments have different home directories and do not automatically share a `~/.moderado` profile.
+Use the manually dispatched [build-and-release workflow](../.github/workflows/build-and-release.yml) with platform `all` to build and publish all four platform targets from the pinned sources. Only the default full build publishes; partial-platform and custom-source builds remain in Actions for review. For a local Linux build, follow the [Linux build instructions](../README.md#build-the-linux-editor-locally). Windows/Linux cross-home profile sharing is outside this milestone: the two environments have different home directories and do not automatically share a `~/.moderado` profile.
 
 ## Local Debian installer and WSLg window checks
 
@@ -89,7 +89,8 @@ Windows build's intermediate `build-manifest.json` is published as
 
 Current checksum assets are `SHA256SUMS` for macOS arm64,
 `SHA256SUMS-macos-x64` for macOS Intel, and `SHA256SUMS-linux-x64` for Linux.
-Use `SHA256SUMS-<platform>` for additional platform-specific checksum files.
+Windows artifact hashes are recorded in the Windows manifest. Use
+`SHA256SUMS-<platform>` for any additional platform-specific checksum files.
 
 The build script verifies both editor revisions against `sources.lock.json`
 before packaging and refuses to record a stale artifact.
@@ -112,7 +113,7 @@ Windows installers are **unsigned**; Windows SmartScreen may warn and there is
 no Authenticode signature to validate. macOS images use ad-hoc signing only;
 they are not Developer ID signed or notarized, so Gatekeeper may prevent them
 from opening without local approval. Linux packages are unsigned. These are
-the published v0.1.28 artifacts; no update channel is provided.
+the published v0.1.29 artifacts; no update channel is provided.
 
 ## Provenance and notices
 
@@ -149,8 +150,8 @@ That command **refuses** and explains why. It only proceeds with
 mutation and runs no commands, and it never writes or logs the API key.
 
 **Still open:** platform code signing and notarization, an update channel, and
-native Linux runtime installation verification. The v0.1.28 artifacts are
-published on the [GitHub Release page](https://github.com/marcuz-apl/moderado-ide/releases/tag/v0.1.28%2B261009d).
+native Linux runtime installation verification. The v0.1.29 artifacts are
+published on the [GitHub Release page](https://github.com/marcuz-apl/moderado-ide/releases/tag/v0.1.29%2B261009j).
 
 ## What works, and what does not
 

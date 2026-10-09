@@ -31,9 +31,13 @@ test('installer builds run only by explicit platform and architecture dispatch',
   assert.equal((workflow.match(/brew install gnu-sed jq/g) ?? []).length, 2);
 });
 
-test('publishing stays disabled and external actions are immutable', () => {
-  assert.match(workflow, /publish:[\s\S]*if: \$\{\{ false \}\}/);
-  assert.doesNotMatch(workflow, /contents: write|\$\{\{\s*secrets\.|gh release|softprops/);
+test('publishing requires a complete default build and external actions are immutable', () => {
+  assert.match(workflow, /publish:[\s\S]*needs: \[linux, windows, macos-arm64, macos-x64\]/);
+  assert.match(workflow, /publish:[\s\S]*if: \$\{\{ inputs\.platform == 'all' && inputs\.source_ref == '' \}\}/);
+  assert.match(workflow, /publish:[\s\S]*actions: read[\s\S]*contents: write/);
+  assert.match(workflow, /actions\/download-artifact@[a-f0-9]{40}/);
+  assert.match(workflow, /scripts\/publish-release\.mjs/);
+  assert.doesNotMatch(workflow, /\$\{\{\s*secrets\./);
   const actions = [...workflow.matchAll(/uses: (\S+)/g)].map(match => match[1]);
   assert.ok(actions.length > 0);
   for (const action of actions) assert.match(action, /^actions\/[a-z-]+@[a-f0-9]{40}$/);
@@ -109,7 +113,10 @@ test('workflow parses as YAML with valid job steps', { skip: !python && 'No inst
   assert.equal(document.jobs['macos-x64'].env?.MODERADO_BUILD_HEAP_MB, undefined,
     'x64 must use the macOS build script heap default instead of a smaller workflow override');
   assert.equal(document.jobs['macos-x64'].steps[0].with.ref, '${{ inputs.source_ref || github.sha }}');
-  assert.equal(document.jobs.publish.if, '${{ false }}');
+  assert.equal(document.jobs.publish.if, "${{ inputs.platform == 'all' && inputs.source_ref == '' }}");
+  assert.deepEqual(document.jobs.publish.needs, ['linux', 'windows', 'macos-arm64', 'macos-x64']);
+  assert.equal(document.jobs.publish.permissions.actions, 'read');
+  assert.equal(document.jobs.publish.permissions.contents, 'write');
   for (const [name, job] of Object.entries(document.jobs)) {
     if (name !== 'publish') {
       assert.equal(job['timeout-minutes'], 180);
