@@ -1,6 +1,7 @@
 param(
   [string]$CliRepository = 'D:\projects\moderado',
-  [string]$Output = 'vendor\moderado'
+  [string]$Output = 'vendor\moderado',
+  [string]$MetadataPath
 )
 
 # Vendors the pinned Moderado packages from the sibling CLI repository into this
@@ -31,6 +32,15 @@ if ($LASTEXITCODE -ne 0 -or $expected -ne 'commit') {
 }
 
 $target = Join-Path $root $Output
+$trackedMetadata = Join-Path $target 'VENDORED.json'
+$metadataPath = if ($MetadataPath) {
+  [System.IO.Path]::GetFullPath((Join-Path $root $MetadataPath))
+} else {
+  [System.IO.Path]::GetFullPath($trackedMetadata)
+}
+if (!$metadataPath.StartsWith($root + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase)) {
+  throw 'MetadataPath must stay inside the IDE workspace.'
+}
 if (Test-Path -LiteralPath $target) {
   # Selective clean: remove only upstream-exported content. The IDE-owned
   # npm wrapper (package.json/package-lock.json) must survive vendoring —
@@ -40,7 +50,9 @@ if (Test-Path -LiteralPath $target) {
   Remove-Item -LiteralPath (Join-Path $target 'packages') -Recurse -Force -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath (Join-Path $target 'workspace-package.json') -Force -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath (Join-Path $target 'tsconfig.base.json') -Force -ErrorAction SilentlyContinue
-  Remove-Item -LiteralPath (Join-Path $target 'VENDORED.json') -Force -ErrorAction SilentlyContinue
+  if ($metadataPath -eq [System.IO.Path]::GetFullPath($trackedMetadata)) {
+    Remove-Item -LiteralPath $trackedMetadata -Force -ErrorAction SilentlyContinue
+  }
   Remove-Item -LiteralPath (Join-Path $target 'node_modules') -Recurse -Force -ErrorAction SilentlyContinue
   Get-ChildItem -LiteralPath $target -Recurse -Directory -Filter 'dist' -ErrorAction SilentlyContinue |
     ForEach-Object { Remove-Item -LiteralPath $_.FullName -Recurse -Force }
@@ -103,7 +115,7 @@ $record = [ordered]@{
   treeHash = $treeHash
 }
 [System.IO.File]::WriteAllText(
-  (Join-Path $target 'VENDORED.json'),
+  $metadataPath,
   ($record | ConvertTo-Json -Depth 5),
   [System.Text.UTF8Encoding]::new($false))
 Write-Output "Vendored $($files.Count) files from Moderado $revision (tree $treeHash)."

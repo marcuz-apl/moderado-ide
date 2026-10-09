@@ -25,7 +25,9 @@ $graphics.FillEllipse($accent, 181, 39, 33, 33)
 $png = [System.IO.MemoryStream]::new()
 $bitmap.Save($png, [System.Drawing.Imaging.ImageFormat]::Png)
 $bytes = $png.ToArray()
-$path = Join-Path $PSScriptRoot 'moderado-ide.ico'
+$generated = Join-Path $PSScriptRoot 'generated'
+[System.IO.Directory]::CreateDirectory($generated) | Out-Null
+$path = Join-Path $generated 'moderado-ide.ico'
 $file = [System.IO.File]::Create($path)
 $writer = [System.IO.BinaryWriter]::new($file)
 $writer.Write([uint16]0)
@@ -41,8 +43,6 @@ $writer.Write([uint32]$bytes.Length)
 $writer.Write([uint32]22)
 $writer.Write($bytes)
 $writer.Dispose()
-$generated = Join-Path $PSScriptRoot 'generated'
-[System.IO.Directory]::CreateDirectory($generated) | Out-Null
 foreach ($size in @(70, 150)) {
   $tile = [System.Drawing.Bitmap]::new($size, $size)
   $tileGraphics = [System.Drawing.Graphics]::FromImage($tile)

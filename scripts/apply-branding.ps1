@@ -12,7 +12,7 @@ $outerProduct = Join-Path $checkout 'product.json'
 $innerProduct = Join-Path $editor 'product.json'
 $installer = Join-Path $editor 'build\win32\code.iss'
 $electronBuild = Join-Path $editor 'build\lib\electron.ts'
-$icon = Join-Path $PSScriptRoot '..\branding\moderado-ide.ico'
+$icon = Join-Path $PSScriptRoot '..\branding\generated\moderado-ide.ico'
 $utf8 = [System.Text.UTF8Encoding]::new($false)
 
 if (!(Test-Path -LiteralPath $innerProduct) -or !(Test-Path -LiteralPath $installer) -or !(Test-Path -LiteralPath $electronBuild) -or !(Test-Path -LiteralPath $icon)) {

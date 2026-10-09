@@ -6,6 +6,9 @@ import { spawnSync } from 'node:child_process';
 const workflow = readFileSync(new URL('../../.github/workflows/build-and-release.yml', import.meta.url), 'utf8');
 const windowsBuildTools = readFileSync(new URL('../ensure-windows-build-tools.ps1', import.meta.url), 'utf8');
 const releaseVerifier = readFileSync(new URL('../verify-release.ps1', import.meta.url), 'utf8');
+const iconBuilder = readFileSync(new URL('../../branding/make-icon.ps1', import.meta.url), 'utf8');
+const brandingScript = readFileSync(new URL('../apply-branding.ps1', import.meta.url), 'utf8');
+const vendorScript = readFileSync(new URL('../vendor-moderado.ps1', import.meta.url), 'utf8');
 const windowsScripts = ['../prepare-m1.ps1', '../build-m1.ps1']
   .map(path => readFileSync(new URL(path, import.meta.url), 'utf8'));
 
@@ -61,6 +64,15 @@ test('publishing stays disabled and external actions are immutable', () => {
   assert.doesNotMatch(workflow, /Installer\\vs_installer\.exe/);
   assert.equal((workflow.match(/GITHUB_TOKEN: \$\{\{ github\.token \}\}/g) ?? []).length, 1);
   assert.match(workflow, /NODE_VERSION: '24\.18\.0'/);
+});
+
+test('release builds keep generated branding and vendor metadata out of tracked source', () => {
+  assert.match(iconBuilder, /Join-Path \$generated 'moderado-ide\.ico'/);
+  assert.match(brandingScript, /branding\\generated\\moderado-ide\.ico/);
+  assert.match(workflow, /vendor-moderado\.ps1[^\r\n]*-MetadataPath 'build\\vendor-moderado\.json'/);
+  assert.match(vendorScript, /\[string\]\$MetadataPath/);
+  assert.match(vendorScript, /\$trackedMetadata = Join-Path \$target 'VENDORED\.json'/);
+  assert.match(vendorScript, /\$metadataPath = if \(\$MetadataPath\)/);
 });
 
 const python = ['python3', 'python'].find(command => spawnSync(command, ['-c', 'import yaml'], { encoding: 'utf8', shell: false }).status === 0);

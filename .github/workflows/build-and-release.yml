@@ -154,7 +154,7 @@ jobs:
         run: |
           # Clones the pinned upstream commit; there is no sibling checkout on a
           # runner. The CLI tree is never modified.
-          ./scripts/vendor-moderado.ps1 -CliRepository "${{ runner.temp }}\no-cli-checkout"
+          ./scripts/vendor-moderado.ps1 -CliRepository "${{ runner.temp }}\no-cli-checkout" -MetadataPath 'build\vendor-moderado.json'
 
       - name: Build the vendored packages
         shell: pwsh
