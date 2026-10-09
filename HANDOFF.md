@@ -1373,3 +1373,23 @@ Windows CI previously failed three snapshot/deletion security tests; those cases
   **12/12 pass**; `npm --prefix extensions/moderado-agent run typecheck`: **pass**.
 - The next all-platform Actions run must include this source change before its
   artifacts can be considered current.
+
+## Windows Spectre toolchain follow-up (2026-10-09 UTC)
+
+- Fixed Windows `MSB8040` by sharing `scripts/ensure-windows-build-tools.ps1`
+  between local preparation/build scripts and Actions. It selects VS 2022,
+  provisions its x86/x64 Spectre component when requested, and verifies the
+  actual Spectre static libraries before node-gyp runs.
+- `node --test scripts/test/workflow.test.mjs`: **3/3 pass**;
+  PowerShell parser checks for the helper and both Windows build scripts pass;
+  `git diff --check`: **pass**.
+- Pushed as `6952a0be8ff76fc3c0b09e3e6b738b8d8b4bba97`. Windows-only workflow
+  run [37863116573](https://github.com/marcuz-apl/moderado-ide/actions/runs/37863116573)
+  passed prerequisite provisioning, vendored package build, and the extension
+  offline suite. Pinned editor source preparation is still running; native
+  `@vscode/deviceid` compilation and installer verification are not yet
+  confirmed.
+- macOS x64/arm64 verification run
+  [37862317695](https://github.com/marcuz-apl/moderado-ide/actions/runs/37862317695)
+  remains in progress without uploaded artifacts. Do not claim installers
+  verified or publish until the corresponding jobs and artifact checks pass.
