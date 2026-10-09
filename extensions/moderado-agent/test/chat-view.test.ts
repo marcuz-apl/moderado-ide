@@ -474,7 +474,8 @@ describe('moderado settings pane', () => {
     expect(pane).toContain('<option value="free-a" selected>');
     expect(pane).not.toContain('class="model-card');
     expect(pane).not.toContain('settings-model-search');
-    expect(pane).toContain('★ free-a — free_trial');
+    expect(pane).toContain('★ free-a</option>');
+    expect(pane).not.toContain('free_trial');
     expect(pane).toContain('1 free');
     expect(pane).toContain('2 listed');
   });
@@ -623,9 +624,7 @@ describe('moderado settings pane', () => {
     expect(pane).toContain('<option value="model-b" selected');
   });
 
-  it('labels each model with its engine access tier instead of hiding cost', () => {
-    // The real AccessTier values are free_trial | paid | local | unknown. The
-    // tier stays in the label so the free-first rule remains observable.
+  it('keeps access tier labels out of model names while preserving tab eligibility', () => {
     // Free renders on the default tab; paid/unknown render on the Paid tab.
     const free = settingsPaneHtml(
       settings({
@@ -637,8 +636,9 @@ describe('moderado settings pane', () => {
         ],
       }),
     );
-    expect(free).toContain('model-a — free_trial');
-    expect(free).not.toContain('model-b — paid');
+    expect(free).toContain('★ model-a</option>');
+    expect(free).not.toContain('free_trial');
+    expect(free).not.toContain('model-b');
     const paid = settingsPaneHtml(
       settings({
         preset: 'nvidia-nim', modelTab: 'paid', allowPaid: true, allowUnknown: true,
@@ -649,8 +649,10 @@ describe('moderado settings pane', () => {
         ],
       }),
     );
-    expect(paid).toContain('model-b — paid');
-    expect(paid).toContain('model-c — unknown');
+    expect(paid).toContain('<option value="model-b">model-b</option>');
+    expect(paid).toContain('<option value="model-c">model-c</option>');
+    expect(paid).not.toContain('— paid');
+    expect(paid).not.toContain('— unknown');
   });
 
   it('escapes untrusted provider names, base URLs, and model ids', () => {
