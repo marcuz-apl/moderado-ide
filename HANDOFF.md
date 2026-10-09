@@ -1,13 +1,13 @@
 # Project Handoff
 
-Updated: 2026-10-09 16:38 UTC
+Updated: 2026-10-09 16:39 UTC
 Branch: master
-Commit: 1fd82a5
+Commit: see `git log`
 Status: v0.1.28 is the official release. Maintained docs now reflect published assets, naming conventions, and remaining verification limits.
 
 ## Summary
 
-Moderado IDE v0.1.28 is published as an official release. Windows, Linux x64, Apple Silicon, and Intel macOS assets are attached. The latest Settings changes add the Gateway Dev/Prod endpoint selector and the requested provider/About refinements. The current development `VERSION` is `v0.1.29+261009h`.
+Moderado IDE v0.1.28 is published as an official release. Windows, Linux x64, Apple Silicon, and Intel macOS assets are attached. The latest Settings changes add the Gateway Dev/Prod endpoint selector and the requested provider/About refinements. The current development identifier is in the root `VERSION` file.
 
 ## Completed
 
@@ -16,16 +16,17 @@ Moderado IDE v0.1.28 is published as an official release. Windows, Linux x64, Ap
 - Updated the v0.1.28 release notes with all platform sections, current Windows filenames, artifact checksums, and platform signing/runtime limits.
 - Documented release asset and manifest naming conventions in `docs/INSTALL.md`; clarified in README, PRD, UPSTREAM, PROFILE, and ROADMAP that v0.1.28 is released while several readiness gates remain open.
 - Committed and pushed the release naming documentation as `1fd82a5` (`docs: document release asset naming`); the version hook advanced the development identifier.
+- Committed and pushed the release documentation audit as `b481b35` (`docs: align project docs with official release`).
 - Added a Gateway-only Dev/Prod selector. It updates the existing Base URL field; the URL remains the persisted setting and drives model discovery.
 - Removed the `Free Models` provider-name suffix, improved OrcaRouter free-suffix classification, and restyled the About page with inline metadata, an intro, and copyright.
 
 ## In progress
 
-- Documentation updates from the release audit are complete but remain uncommitted; the requested prior changes were already pushed as `1fd82a5`.
+- None.
 
 ## Working tree
 
-- Documentation edits from the release audit are in progress. Temporary audit notes under `.planning/` are untracked and will be removed when the audit is complete.
+- The documentation audit changes were committed and pushed. The working tree was clean afterward.
 
 ## Checks
 
@@ -46,7 +47,7 @@ Moderado IDE v0.1.28 is published as an official release. Windows, Linux x64, Ap
 
 ## Next action
 
-1. Confirm release is stable, stale documentation claims are removed, and `git diff --check` passes.
+1. Continue from the official v0.1.28 release; track future changes in the normal handoff process.
 
 ## Resume notes
 
