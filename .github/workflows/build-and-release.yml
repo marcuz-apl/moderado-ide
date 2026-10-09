@@ -8,8 +8,12 @@ on:
       platform:
         description: 'Platforms to build; artifacts remain in Actions and are not published'
         type: choice
-        options: [all, both, linux, windows, macos]
+        options: [all, both, linux, windows, macos, macos-intel]
         default: all
+      source_ref:
+        description: 'Optional source branch, tag, or commit for the macOS Intel build'
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -265,6 +269,42 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: moderado-ide-macos-arm64
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            build/installers/**/*.dmg
+            build/installers/**/*.zip
+            build/installers/**/*.json
+            build/installers/**/SHA256SUMS*
+
+  macos-x64:
+    name: Build and verify (macOS Intel x64)
+    if: ${{ inputs.platform == 'all' || inputs.platform == 'both' || inputs.platform == 'macos' || inputs.platform == 'macos-intel' }}
+    runs-on: macos-15-intel
+    timeout-minutes: 180
+    env:
+      MODERADO_TSGO_CONCURRENCY: '2'
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.source_ref || github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install macOS build utilities
+        run: brew install gnu-sed jq
+      - name: Build the pinned editor and macOS installers
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/build-macos.mjs --arch x64
+      - name: Upload installers and build evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: moderado-ide-macos-x64
           if-no-files-found: error
           retention-days: 30
           path: |
