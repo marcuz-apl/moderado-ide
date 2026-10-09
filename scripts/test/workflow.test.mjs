@@ -47,6 +47,8 @@ test('publishing stays disabled and external actions are immutable', () => {
   assert.match(windowsScripts[1], /Invoke-CheckedNativeCommand \{ & \$bash -c/);
   assert.match(windowsScripts[1], /\$env:MAX_OLD_SPACE_SIZE = \$heapMb/,
     'the editor gulp script reads MAX_OLD_SPACE_SIZE while NODE_OPTIONS alone does not set it');
+  assert.match(windowsScripts[0], /\$env:MAX_OLD_SPACE_SIZE = \$heapMb/,
+    'pinned editor preparation writes the heap size into its gulp command');
   for (const script of windowsScripts) {
     assert.match(script, /ensure-windows-build-tools\.ps1/);
     assert.match(script, /\$env:npm_config_msvs_version = '2022'/);

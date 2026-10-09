@@ -19,6 +19,12 @@ $env:RELEASE_VERSION = $lock.sources.vscodium.version
 $env:SHOULD_BUILD_CLI = 'no'
 $env:VSCODE_ARCH = 'x64'
 $env:VSCODE_QUALITY = 'stable'
+# prepare_vscode.sh writes this value into the pinned editor's gulp command.
+# Keep it aligned with build-m1.ps1 so the prepack step doesn't default to the
+# small Node heap even when CI has already computed a runner-specific limit.
+$heapMb = if ($env:MODERADO_BUILD_HEAP_MB) { $env:MODERADO_BUILD_HEAP_MB } else { '12288' }
+$env:MAX_OLD_SPACE_SIZE = $heapMb
+$env:NODE_OPTIONS = "--max-old-space-size=$heapMb"
 $env:VSCODE_SKIP_NODE_VERSION_CHECK = 'yes'
 $posixCheckout = (& 'C:\Program Files\Git\usr\bin\cygpath.exe' -u $checkout).Trim()
 if ($LASTEXITCODE -ne 0) { throw 'Git Bash path conversion failed.' }
