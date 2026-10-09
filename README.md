@@ -57,11 +57,20 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\prepare-m1.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-m1.ps1
 ```
 
-### macOS
+### macOS (Apple Silicon and Intel)
 
-The manually dispatched GitHub Actions workflow builds macOS arm64 and x64
-packages from the pinned sources. These artifacts use ad-hoc signing only and
-are not notarized. The v0.1.28 packages are attached to the GitHub Release.
+The v0.1.28 release includes builds for both Mac processor families. Choose
+**arm64** for Apple Silicon Macs (M-series) and **x64** for Intel Macs. Each
+architecture has a DMG installer and a ZIP archive:
+
+- [Apple Silicon arm64 DMG](https://github.com/marcuz-apl/moderado-ide/releases/download/v0.1.28%2B261009d/moderado-ide-0.1.28%2B261009d-macos-arm64.dmg) · [ZIP](https://github.com/marcuz-apl/moderado-ide/releases/download/v0.1.28%2B261009d/moderado-ide-0.1.28%2B261009d-macos-arm64.zip)
+- [Intel x64 DMG](https://github.com/marcuz-apl/moderado-ide/releases/download/v0.1.28%2B261009d/moderado-ide-0.1.28%2B261009d-macos-x64.dmg) · [ZIP](https://github.com/marcuz-apl/moderado-ide/releases/download/v0.1.28%2B261009d/moderado-ide-0.1.28%2B261009d-macos-x64.zip)
+
+Both builds use ad-hoc signing only; they are not Developer ID signed or
+notarized, so Gatekeeper may require local approval before opening them. The
+manual GitHub Actions workflow builds both architectures from the pinned
+sources; its artifacts are reviewed and attached to the GitHub Release
+separately.
 
 ### Build all platform artifacts in GitHub Actions
 
