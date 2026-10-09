@@ -7,6 +7,11 @@
 > superseded. IDE-owned provider transport, presets, and policy remain
 > IDE-owned; CLI provider code is not used at runtime. Current guidance is in
 > `PRD.md`, `AGENTS.md`, and `docs/UPSTREAM.md`.
+>
+> **Historical design:** This approved design predates implementation and the
+> v0.1.28 release. Installer and publication statements below describe the
+> original scope of this work, not the current release state. See `HANDOFF.md`
+> and `docs/INSTALL.md` for current status.
 
 **Date:** 2026-10-06
 **Status:** Approved by owner on 2026-10-06

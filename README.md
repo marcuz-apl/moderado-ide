@@ -16,7 +16,7 @@ Moderado IDE and Moderado CLI are separate projects and releases. The IDE bundle
 
 ## Get started quickly
 
-There are no public downloads yet. Build the editor locally using the instructions below. When it starts, open a project and use the Moderado agent view to connect a provider and chat.
+Download Moderado IDE v0.1.28 from the [GitHub Releases page](https://github.com/marcuz-apl/moderado-ide/releases/tag/v0.1.28%2B261009d). The release includes Windows x64, Linux x64, and macOS arm64 and x64 packages. Review [installation notes and platform limitations](docs/INSTALL.md) before installing. Windows installers are unsigned; macOS packages are ad-hoc signed and not notarized. Linux runtime installation has not been verified on a native Linux distribution. There is no built-in update channel.
 
 ## Build the Linux/macOS/Windows editor locally
 
@@ -61,7 +61,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-m1.ps1
 
 The manually dispatched GitHub Actions workflow builds macOS arm64 and x64
 packages from the pinned sources. These artifacts use ad-hoc signing only and
-are not notarized or published.
+are not notarized. The v0.1.28 packages are attached to the GitHub Release.
 
 ### Build all platform artifacts in GitHub Actions
 
@@ -69,9 +69,12 @@ From the repository's Actions tab, run **build-and-release** with platform
 **all** and macOS architectures **both**. The workflow builds Linux x64
 (portable `.tar.gz`, `.deb`, and `.rpm`), Windows x64 (portable `.zip` and both
 `.exe` installers), and macOS arm64/x64 (`.dmg` and `.zip`) as separate
-artifacts retained in Actions for 30 days. It does not create a GitHub Release
-or publish packages. Windows and macOS outputs are unsigned; macOS outputs are
-ad-hoc signed only and are not notarized.
+artifacts retained in Actions for 30 days. The workflow does not create or
+update a GitHub Release; release assets are attached separately after their
+names, checksums, manifests, and notes are reviewed. Windows outputs are
+unsigned. macOS outputs are ad-hoc signed only and are not notarized. See
+[release asset naming conventions](docs/INSTALL.md#public-release-asset-naming-conventions)
+when preparing future releases.
 
 ## License
 

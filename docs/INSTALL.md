@@ -1,6 +1,6 @@
 # Installing Moderado IDE
 
-> **Status: v0.1.28 is available as a prerelease.** Download it from the
+> **Status: v0.1.28 is the current official release.** Download it from the
 > [GitHub release page](https://github.com/marcuz-apl/moderado-ide/releases/tag/v0.1.28%2B261009d).
 > Windows installers are unsigned; macOS images are ad-hoc signed but not
 > notarized. There is no update channel.
@@ -10,12 +10,12 @@
 | | |
 | --- | --- |
 | Targets | Linux x64, macOS x64/arm64, and Windows x64 |
-| Existing artifact evidence | v0.1.28 prerelease includes Windows x64, Linux x64, and macOS arm64/x64 assets |
+| Existing artifact evidence | Official v0.1.28 release includes Windows x64, Linux x64, and macOS arm64/x64 assets |
 | Editor base | Code OSS `1.135.0`, built through VSCodium `1.135.06055` |
 | Agent packages | Moderado CLI `v0.4.8` (`d5e263ed…`, `v0.4.8+261006d`) |
 | Architectures | Linux and Windows x64; macOS x64 and arm64 |
 
-Use the manually dispatched [build-and-release workflow](../.github/workflows/build-and-release.yml) with platform `all` and macOS architectures `both` to build current pinned-source artifacts. It stores unsigned artifacts in GitHub Actions for 30 days; it does not publish them. A successful workflow run is required before claiming its artifacts exist. For a local Linux build, follow the [Linux build instructions](../README.md#build-the-linux-editor-locally). Windows/Linux cross-home profile sharing is outside this milestone: the two environments have different home directories and do not automatically share a `~/.moderado` profile.
+Use the manually dispatched [build-and-release workflow](../.github/workflows/build-and-release.yml) with platform `all` and macOS architectures `both` to build current pinned-source artifacts. It stores workflow artifacts in GitHub Actions for 30 days; it does not publish or update a GitHub Release. A successful workflow run is required before claiming its artifacts exist. For a local Linux build, follow the [Linux build instructions](../README.md#build-the-linux-editor-locally). Windows/Linux cross-home profile sharing is outside this milestone: the two environments have different home directories and do not automatically share a `~/.moderado` profile.
 
 ## Local Debian installer and WSLg window checks
 
@@ -108,10 +108,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-release.ps1
 
 ## Signing
 
-These artifacts are **unsigned**. Windows SmartScreen will warn, and there is no
-Authenticode signature to validate. Signing requires a code-signing certificate
-and an owner's release authorization; neither exists yet. Do not distribute
-these builds.
+Windows installers are **unsigned**; Windows SmartScreen may warn and there is
+no Authenticode signature to validate. macOS images use ad-hoc signing only;
+they are not Developer ID signed or notarized, so Gatekeeper may prevent them
+from opening without local approval. Linux packages are unsigned. These are
+the published v0.1.28 artifacts; no update channel is provided.
 
 ## Provenance and notices
 
@@ -126,8 +127,8 @@ license file is missing or disagrees, the script throws instead of emitting a
 plausible-looking file.
 
 `provenance.json` is an **unsigned build record**, not a signature. It states
-what was produced; it does not prove it to a third party. There is still no
-Authenticode signature.
+what was produced; it does not prove it to a third party. It does not replace
+platform code signing or notarization.
 
 The build now also copies `LICENSE.txt` (Code OSS, MIT) and the IDE license
 into the portable editor. Upstream packaging ships Electron's
@@ -147,7 +148,9 @@ That command **refuses** and explains why. It only proceeds with
 `GITHUB_ACTIONS`, `BUILDKITE`, or `TF_BUILD` is set. It performs no file
 mutation and runs no commands, and it never writes or logs the API key.
 
-**Not done:** code signing, an update channel, and artifact publication.
+**Still open:** platform code signing and notarization, an update channel, and
+native Linux runtime installation verification. The v0.1.28 artifacts are
+published on the [GitHub Release page](https://github.com/marcuz-apl/moderado-ide/releases/tag/v0.1.28%2B261009d).
 
 ## What works, and what does not
 
@@ -159,7 +162,7 @@ Working and verified on a real editor host:
   cancellation, and human approval for mutations and commands
 - Session persistence and shared-profile reads/writes against `~/.moderado`
 
-Not working yet:
+Not verified or not available:
 
 - **Provider keys.** Runs and model discovery build their adapter from the
   active connection in `config.json`, using the vendored OpenAI-compatible or
@@ -168,8 +171,11 @@ Not working yet:
   used a profile with no resolvable key, so the fake provider path is what the
   tests and host check actually exercised. The real adapter path is covered by
   offline construction tests only.
-- **No signing or update channel.** Provenance and third-party notices are
-  generated and verified (M5), but nothing is signed or published.
+- **No update channel.** Provenance and third-party notices are generated and
+  verified. Windows and Linux artifacts are unsigned; macOS artifacts are
+  ad-hoc signed and not notarized.
+- **Native Linux installation.** The DEB metadata was inspected under WSL, but
+  installation and runtime behavior were not verified on native Linux.
 - **Chat view only.** There is no diff renderer; previews appear as text.
 - **Profile coordination is one-sided.** IDE writes `config.json` under a
   lock and detects conflicting CLI changes, but the CLI does not take that lock,

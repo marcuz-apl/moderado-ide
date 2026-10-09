@@ -1,9 +1,11 @@
 # Moderado IDE roadmap
 
-This is an ordered delivery sequence, not a claim that a build exists. Each
-milestone needs a reviewable artifact and its checks before the next begins.
+This roadmap is the original delivery sequence and a record of milestone
+intent. Moderado IDE v0.1.28 has since been published for Windows x64, Linux
+x64, and macOS arm64/x64. That release does not mean every readiness gate
+below is complete; current caveats are in [INSTALL.md](INSTALL.md).
 
-Moderado IDE targets Linux, macOS, and Windows. Current work focuses on the existing Windows IDE GUI; Linux packaging is paused. The Windows milestone evidence below predates the rename; each renamed edition needs its own build and host verification. The owner authorized advancing contracts/core/tools to CLI `v0.4.8` on October 7, 2026; earlier milestone evidence does not verify this updated source baseline.
+Moderado IDE targets Linux, macOS, and Windows. The v0.1.28 release includes packages for all three platforms, and its platform-specific manifests record the source revisions used. Some verification is still platform-specific or incomplete, including native Linux runtime installation and profile coordination with the CLI.
 
 ## M0 — Independent project foundation (documentation scaffold)
 
@@ -11,8 +13,9 @@ Moderado IDE targets Linux, macOS, and Windows. Current work focuses on the exis
 - Create a separate Git repository and verify the CLI working tree is unchanged.
 - Record an initial handoff and the smallest next action.
 
-**Done when:** the root documents agree, the sibling directory exists, its
-repository is independent, and no application is represented as shipped.
+**Historical status:** the repository foundation and documentation scaffold
+were established. Product release status is tracked in the current release
+notes and installation guide.
 
 ## M1 — Reproducible Windows editor build
 
@@ -97,9 +100,9 @@ which this project must not make.
 - Document installation and supported platform/profile combinations.
 - Publish only after explicit owner authorization.
 
-Linux packaging is paused while the existing Windows IDE GUI is improved. macOS and Windows releases require separate evidence-backed platform gates; Windows/Linux cross-home sharing remains a separate compatibility decision.
+Linux, macOS, and Windows packages are included in v0.1.28. Each platform still has its own evidence requirements; Windows/Linux cross-home profile sharing remains a separate compatibility decision.
 
-## M4 status (evidence complete; release not authorized)
+## M4 status (v0.1.28 published; readiness work remains)
 
 Release evidence is produced by `scripts/verify-release.ps1`, which checks
 artifact checksums, manifest provenance against `sources.lock.json`, packaged
@@ -113,16 +116,18 @@ produce an editor with no agent that still passed every other check.
 Installation, supported platform combinations, data locations, and known
 limitations are documented in [INSTALL.md](docs/INSTALL.md).
 
-**Not done:** code signing, provenance attestation, an update channel, and
-artifact publication. A `config.json` protocol that both editions follow is
-also still outstanding. Publishing requires explicit owner authorization and
-has not been requested or performed.
+The v0.1.28 release is published with platform-specific manifests, provenance,
+verification results, checksums, and third-party notices. Remaining gaps
+include platform signing/notarization, an update channel, native Linux runtime
+installation verification, refreshed compatibility evidence for the current
+agent baseline, and a `config.json` coordination protocol both IDE and CLI
+follow. See [PROFILE.md](PROFILE.md) for profile limits. Publishing was
+explicitly authorized by the owner.
 
 ## M5 — Provenance and license compliance
 
-Everything here is IDE-owned and verifiable without publishing anything.
-Signing and the update channel are explicitly out of scope for M5 because both
-require owner authorization to distribute anything.
+This milestone covers IDE-owned release provenance and license evidence.
+Signing and the update channel remain separate release engineering work.
 
 - Emit a machine-readable provenance attestation beside the artifacts: pinned
   upstream revisions, the commit each artifact was built from, per-artifact

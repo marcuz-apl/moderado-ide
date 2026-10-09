@@ -7,6 +7,11 @@
 > superseded. IDE-owned provider transport, presets, and policy remain
 > IDE-owned; CLI provider code is not used at runtime. Current guidance is in
 > `PRD.md`, `AGENTS.md`, and `docs/UPSTREAM.md`.
+>
+> **Historical implementation plan:** The implementation is complete and
+> Moderado IDE v0.1.28 has since been released. The unchecked steps below are
+> the original plan record, not a current task checklist. See `HANDOFF.md` and
+> `docs/INSTALL.md` for current status and release details.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -588,4 +593,5 @@ git commit -m "docs: define Desktop-owned provider integration"
 - [ ] Profile/session compatibility, workspace jail, human approval, and default-deny behavior remain intact.
 - [ ] `npm test`, `npm run typecheck`, `npm run compile`, and any real editor-host check have recorded outcomes.
 - [ ] The sibling CLI worktree has not been modified.
-- [ ] No installer/package/manifest was published.
+- Historical scope note: no installer/package/manifest was published as part
+  of this design implementation task; the separate v0.1.28 release followed.

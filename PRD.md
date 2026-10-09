@@ -1,9 +1,8 @@
 # Moderado IDE Product Requirements
 
-**Project version:** see [VERSION](VERSION) (planning scaffold, unpublished)  
-**Target platforms:** Linux, macOS, and Windows. Source development uses Linux. Linux packaging is currently paused while
-repository naming and the existing Windows GUI are addressed; each edition requires native build and verification
-evidence before release. Existing Windows x64 evidence remains platform-specific.
+**Project version:** see [VERSION](VERSION) (development version; the public v0.1.28 release is tracked separately)
+**Release status:** v0.1.28 is the first public release, with Windows x64, Linux x64, and macOS arm64/x64 packages. This release does not satisfy every long-term delivery gate below; see [installation and release limitations](docs/INSTALL.md) and the [roadmap](docs/ROADMAP.md).
+**Target platforms:** Linux, macOS, and Windows. Public artifacts exist for all three platforms, but native Linux installation, Windows signing, and macOS Developer ID signing/notarization remain open.
 **Reference agent baseline:** Moderado CLI `v0.4.8` pinned contracts, core, and
 tools source; IDE-owned provider behavior adapts CLI `v0.4.8` fixtures and
 behavior without using CLI provider code at runtime. The exact source commits
@@ -98,9 +97,9 @@ formats. Windows provider keys remain in Credential Manager. IDE-specific
 layout and caches are isolated. Unknown config fields must survive a IDE
 write. Schema changes require explicit versioning and a reversible migration.
 
-Before a public release, simultaneous CLI/IDE configuration writes must
-have a tested coordination strategy accepted by both applications; the current
-CLI writer performs a direct read/merge/write and can lose updates. Two live
+IDE configuration writes use an IDE-side lock and detect conflicting CLI
+changes, but the current CLI writer does not take that lock and can still race
+with an IDE write. Two live
 processes must not edit the same session ID without a conflict policy. The
 supported sharing case is IDE and CLI within one account on the same OS;
 credential persistence must be verified separately for each platform. Sharing between
@@ -138,10 +137,11 @@ See [the detailed profile contract](docs/PROFILE.md).
 4. **Release readiness:** Real-editor tests, clean-account install/uninstall,
    provenance, license notices, update channel, and user documentation.
 
-Each gate must pass before the next is declared complete. The scaffold itself
-completes none of the application gates.
+These gates describe the intended product bar; publishing v0.1.28 did not mark
+all of them complete. The current evidence and remaining gaps are tracked in
+the roadmap and installation notes.
 
-## 8. Explicit non-goals for the first release
+## 8. Explicit product non-goals
 
 No reimplementation of the Moderado agent loop, no dependency on an installed
 CLI, no Microsoft Visual Studio Marketplace endpoint in the derived editor,

@@ -8,11 +8,11 @@ the same OS. Windows credential sharing has
 its own platform-specific requirements below. On Windows, `~` is the account's
 home directory, normally `%USERPROFILE%`; it is not the literal `$USER` path.
 Windows and Linux normally have different home directories and path identities,
-so cross-OS sharing is outside the first release.
+so cross-OS sharing remains outside the supported profile contract.
 
 | Location | Current CLI meaning | IDE rule |
 | --- | --- | --- |
-| `config.json` | Provider connections, model and cost policy, MCP servers, enabled skills | Read existing values; preserve unknown fields; write only after safe cross-process coordination is implemented. |
+| `config.json` | Provider connections, model and cost policy, MCP servers, enabled skills | Read existing values and preserve unknown fields. IDE writes use an IDE-side lock and detect conflicting CLI changes, but CLI does not take that lock, so simultaneous writes are not fully coordinated. |
 | `sessions/<workspace-hash>/<id>.json` | Version 1 workspace session records | Use the same canonical workspace path before SHA-256 hashing; validate schema and preserve IDs/history. |
 | `skills/<name>/SKILL.md` | User-installed skills | Discover and validate using the pinned Moderado behavior; do not execute instructions as authority. |
 | `logs/` | CLI diagnostic output | Use a distinct IDE log file and redact secrets. |
@@ -59,24 +59,24 @@ On non-Windows platforms the current CLI uses an in-memory credential store
 plus environment or legacy config values. The CLI cannot retrieve keys from
 the IDE's editor secret storage simply by sharing `~/.moderado`; configure its
 environment independently. This adapter does not establish a non-Windows
-CLI/IDE credential-sharing gate. Native encrypted storage must still be
-verified on each supported platform before release.
+CLI/IDE credential-sharing gate. Native encrypted storage behavior should be
+verified on each supported platform; release evidence does not establish all
+platform profile gates.
 
 ## Writes and migrations
 
-The CLI currently writes `config.json` with a direct read/merge/write. Two
-processes can therefore lose one another's changes, even if IDE writes
-atomically. Until both editions support a coordinated writer, IDE may
-read the shared config but must not claim safe simultaneous edits to it. The
-profile-sharing delivery gate requires a tested common solution, delivered
-through a separate CLI change if necessary; this IDE repository may not
-patch the CLI sibling in place.
+The CLI currently writes `config.json` with a direct read/merge/write. IDE
+writes take an IDE-side lock, re-read the file under lock, and detect changed
+IDE-owned values, but CLI does not take the lock. A CLI write can still race
+with an IDE write, so simultaneous cross-application edits are not guaranteed
+safe. A common writer protocol requires a separate CLI change; this IDE
+repository may not patch the CLI sibling in place.
 
 Session saves use a temporary file and rename, but that only protects against
 a partial file. Two active processes modifying the same session ID can still
-overwrite each other's conversation. The first release will allow sequential
-CLI/IDE resume and distinct concurrent sessions; it must reject or
-coordinate simultaneous writes to one session ID before claiming more.
+overwrite each other's conversation. Use sequential CLI/IDE resume or distinct
+concurrent sessions; simultaneous writes to one session ID need a conflict
+policy before they can be considered supported.
 
 For any schema migration: read and validate first, retain a recoverable copy,
 write a new file atomically, and leave the original untouched on failure. Do

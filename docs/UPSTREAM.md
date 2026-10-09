@@ -1,8 +1,10 @@
 # Upstream source and distribution policy
 
-IDE targets Linux, macOS, and Windows. Current development prioritizes
-Linux x64 using the existing immutable source revisions. Builds remain
-local and unpublished until the target platform's release gates pass.
+IDE targets Linux, macOS, and Windows. The public v0.1.28 release contains
+Linux x64, macOS arm64/x64, and Windows x64 packages built from pinned source
+revisions. Platform limitations and verification gaps are recorded in
+[INSTALL.md](INSTALL.md); the release does not imply that every PRD gate is
+complete.
 
 ## Source chain
 
@@ -27,7 +29,7 @@ from the MIT-licensed Code OSS source.
 
 ## Pinning and updates
 
-Before implementation, record exact immutable revisions for VSCodium,
+Record exact immutable revisions for VSCodium,
 Code OSS, and Moderado in an IDE-owned source lock/manifest. The current
 Moderado contracts/core/tools reference is CLI release `v0.4.8`, commit
 `d5e263ed0c9ba6715d0ce69aa640b9b9111931c8` (package version
@@ -37,8 +39,8 @@ assume its npm package exposes the internal workspaces as separate
 installable packages. IDE-owned Gateway/provider behavior instead
 adapts CLI `v0.4.8` fixtures and behavior without using CLI provider code
 at runtime. Updating the agent snapshot does not transfer provider ownership
-to the CLI. Previous build evidence does not verify the updated source pin.
-Build Moderado's internal packages from the pinned source revision and bundle
+to the CLI. The v0.1.28 release manifests record the source revisions used for
+each platform package. Build Moderado's internal packages from the pinned source revision and bundle
 them with IDE. A build must record source revisions and IDE `VERSION`.
 
 Update each upstream deliberately: read its release notes, rebase the small
@@ -50,9 +52,8 @@ upstream fetch must never silently change a release build's source.
 
 The distributed editor uses Moderado names, icons, application and data-folder
 identifiers, protocol handlers, installer IDs, and update endpoints. These
-must be distinct from VS Code and VSCodium. The current VSCodium preparation
-script changes these fields through `product.json`; IDE needs its own
-reviewed product overlay. Use Open VSX or another compatible, permitted
+must be distinct from VS Code and VSCodium. The VSCodium preparation script
+sets these fields through the IDE's product overlay. Use Open VSX or another compatible, permitted
 extension source rather than assuming Microsoft Visual Studio Marketplace
 access in a derivative distribution. Do not bundle a third-party extension
 without checking its license and redistribution rights.
@@ -61,5 +62,6 @@ without checking its license and redistribution rights.
 
 IDE owns its own signing, checksums, artifact manifest, installer and
 update channel. A successful CLI or VSCodium release does not certify an
-IDE release. Public publishing requires explicit owner approval after
-the PRD release gate passes.
+IDE release. The v0.1.28 assets were published with explicit owner
+authorization. Future releases still require explicit owner authorization;
+the PRD gates remain the target for continued release readiness.
