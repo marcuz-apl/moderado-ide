@@ -1,16 +1,16 @@
 # Installing Moderado IDE
 
-> **Status: no release exists.** Everything below describes a local, unsigned
-> build produced from pinned source. There is no download, no signature, and no
-> update channel. See [HANDOFF.md](HANDOFF.md) for what has actually been
-> verified.
+> **Status: v0.1.28 is available as a prerelease.** Download it from the
+> [GitHub release page](https://github.com/marcuz-apl/moderado-ide/releases/tag/v0.1.28%2B261009d).
+> Windows installers are unsigned; macOS images are ad-hoc signed but not
+> notarized. There is no update channel.
 
 ## Target platforms and verified evidence
 
 | | |
 | --- | --- |
 | Targets | Linux x64, macOS x64/arm64, and Windows x64 |
-| Existing artifact evidence | Earlier Windows x64 builds; current pinned-source artifacts must be verified from the latest Actions run |
+| Existing artifact evidence | v0.1.28 prerelease includes Windows x64, Linux x64, and macOS arm64/x64 assets |
 | Editor base | Code OSS `1.135.0`, built through VSCodium `1.135.06055` |
 | Agent packages | Moderado CLI `v0.4.8` (`d5e263ed…`, `v0.4.8+261006d`) |
 | Architectures | Linux and Windows x64; macOS x64 and arm64 |
@@ -54,9 +54,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-m1.ps1
 fetches the pinned Code OSS revision, and installs its dependencies. Re-running it
 fails on purpose rather than re-cloning over a prepared checkout.
 
-## Windows artifact names
+## Windows build outputs
 
-The renamed Windows build is configured to write the following files to `build/vscodium/assets/`; these names do not imply that renamed artifacts have been built:
+The local build writes these intermediate files to `build/vscodium/assets/`. The public release names are listed below; do not assume an intermediate filename is the final release asset name.
 
 | File | What it is |
 | --- | --- |
@@ -64,6 +64,32 @@ The renamed Windows build is configured to write the following files to `build/v
 | `Moderado IDESetup-x64-<version>.exe` | Per-machine installer (needs elevation) |
 | `Moderado IDEUserSetup-x64-<version>.exe` | Per-user installer, no elevation |
 | `build-manifest.json` | `VERSION`, both upstream revisions, SHA-256 and size per artifact |
+
+## Public release asset naming conventions
+
+Use these names for uploaded release assets. `<semver>` is the product version
+without the connected build suffix (for example, `0.1.28`). `<full-version>`
+includes the connected build suffix (for example, `0.1.28+261009d`). Keep the
+platform, architecture, and package type in each filename:
+
+| Platform | Public asset names | Manifest name |
+| --- | --- | --- |
+| Windows x64 | `Moderado-IDE-win32-x64-<semver>-portable.zip`<br>`Moderado-IDE-win32-x64-<semver>-Setup.exe`<br>`Moderado-IDE-win32-x64-<semver>-User-Setup.exe` | `build-manifest-windows-x64.json` |
+| macOS Apple Silicon | `moderado-ide-<full-version>-macos-arm64.dmg` and `.zip` | `build-manifest-macos-arm64.json` |
+| macOS Intel | `moderado-ide-<full-version>-macos-x64.dmg` and `.zip` | `build-manifest-macos-x64.json` |
+| Linux x64 | `moderado-ide-<full-version>.amd64.deb`<br>`moderado-ide-<full-version>.x86_64.rpm` | `build-manifest-linux-x64.json` |
+
+The platform build jobs may emit different intermediate filenames. Rename the
+release copies to this convention without changing their bytes, verify each
+uploaded digest against its build manifest or checksum file, and update the
+release notes to use the public asset names. Upload and verify a replacement
+before removing an older asset name. Keep manifests platform specific; the
+Windows build's intermediate `build-manifest.json` is published as
+`build-manifest-windows-x64.json`.
+
+Current checksum assets are `SHA256SUMS` for macOS arm64,
+`SHA256SUMS-macos-x64` for macOS Intel, and `SHA256SUMS-linux-x64` for Linux.
+Use `SHA256SUMS-<platform>` for additional platform-specific checksum files.
 
 The build script verifies both editor revisions against `sources.lock.json`
 before packaging and refuses to record a stale artifact.
