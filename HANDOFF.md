@@ -1424,3 +1424,12 @@ Windows CI previously failed three snapshot/deletion security tests; those cases
   portable ZIP and confirmed it contains the agent bundle and all shipped
   license files. This was a local unsigned build; no installer was installed,
   signed, published, or uploaded.
+
+## macOS installer architecture (2026-10-09 UTC)
+
+The owner-triggered installer workflow now builds macOS arm64 only, targeting
+Apple Silicon (M-series) Macs. The `macos_arch` dispatch input and Intel x64
+job were removed; selecting `platform=macos` or `platform=all` runs the arm64
+job on `macos-14`. The generic local build script still accepts an explicit
+architecture, but the installer workflow no longer offers or uploads Intel
+artifacts.

@@ -11,7 +11,6 @@ const windowsScripts = ['../prepare-m1.ps1', '../build-m1.ps1']
 test('installer builds run only by explicit platform and architecture dispatch', () => {
   assert.doesNotMatch(workflow, /^  (push|pull_request):/m);
   assert.match(workflow, /platform:[\s\S]*options: \[all, both, linux, windows, macos\]/);
-  assert.match(workflow, /macos_arch:[\s\S]*options: \[both, arm64, x64\]/);
   assert.match(workflow, /default: all/);
   assert.match(workflow, /timeout-minutes: 180/);
   assert.match(workflow, /runs-on: ubuntu-24\.04/);
@@ -20,10 +19,10 @@ test('installer builds run only by explicit platform and architecture dispatch',
   assert.match(workflow, /scripts\/build-rpm\.sh/);
   assert.match(workflow, /if: \$\{\{ inputs\.platform == 'all' \|\| inputs\.platform == 'linux' \}\}/);
   assert.match(workflow, /node scripts\/build-macos\.mjs --arch arm64/);
-  assert.match(workflow, /node scripts\/build-macos\.mjs --arch x64/);
+  assert.match(workflow, /node scripts\/build-macos\.mjs --arch arm64/);
+  assert.doesNotMatch(workflow, /macos-x64|macos-15-intel|macos_arch|--arch x64/);
   assert.match(workflow, /runs-on: macos-14/);
-  assert.match(workflow, /runs-on: macos-15-intel/);
-  assert.equal((workflow.match(/brew install gnu-sed jq/g) ?? []).length, 2);
+  assert.equal((workflow.match(/brew install gnu-sed jq/g) ?? []).length, 1);
 });
 
 test('publishing stays disabled and external actions are immutable', () => {
@@ -53,7 +52,7 @@ test('publishing stays disabled and external actions are immutable', () => {
   }
   assert.doesNotMatch(workflow, /Installer\\setup\.exe[^\r\n]*--wait/);
   assert.doesNotMatch(workflow, /Installer\\vs_installer\.exe/);
-  assert.equal((workflow.match(/GITHUB_TOKEN: \$\{\{ github\.token \}\}/g) ?? []).length, 2);
+  assert.equal((workflow.match(/GITHUB_TOKEN: \$\{\{ github\.token \}\}/g) ?? []).length, 1);
   assert.match(workflow, /NODE_VERSION: '24\.18\.0'/);
 });
 
@@ -66,9 +65,9 @@ test('workflow parses as YAML with valid job steps', { skip: !python && 'No inst
   const triggers = document.on ?? document.true;
   assert.deepEqual(Object.keys(triggers), ['workflow_dispatch']);
   assert.equal(triggers.workflow_dispatch.inputs.platform.default, 'all');
-  assert.equal(triggers.workflow_dispatch.inputs.macos_arch.default, 'both');
+  assert.equal(triggers.workflow_dispatch.inputs.macos_arch, undefined);
   assert.equal(document.permissions.contents, 'read');
-  assert.equal(Object.keys(document.jobs).length, 5);
+  assert.equal(Object.keys(document.jobs).length, 4);
   assert.equal(document.jobs['macos-arm64'].env?.MODERADO_BUILD_HEAP_MB, undefined,
     'arm64 must use the macOS build script heap default instead of a smaller workflow override');
   assert.equal(document.jobs.publish.if, '${{ false }}');
@@ -82,7 +81,6 @@ test('workflow parses as YAML with valid job steps', { skip: !python && 'No inst
         linux: 'moderado-ide-linux-x64',
         windows: 'moderado-ide-windows-x64',
         'macos-arm64': 'moderado-ide-macos-arm64',
-        'macos-x64': 'moderado-ide-macos-x64',
       }[name];
       assert.equal(upload.with.name, artifact);
     }
