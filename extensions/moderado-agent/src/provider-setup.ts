@@ -68,7 +68,7 @@ export function buildProviderChoices(config?: ConnectProvidersConfig): ProviderC
       baseUrl: preset.baseUrl,
       defaultModel: preset.defaultModel,
       requiresApiKey: preset.requiresApiKey,
-      tag: preset.freeCatalog ? 'Free Models' : preset.local ? 'Local' : undefined,
+      tag: preset.local ? 'Local' : undefined,
     }));
 
   const custom: ProviderChoice[] = (config?.custom ?? []).map((provider) => ({

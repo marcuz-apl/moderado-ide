@@ -312,6 +312,9 @@ body { font-family: var(--vscode-font-family); font-size: 13px; color: var(--vsc
   .settings .set-head { display: flex; align-items: center; justify-content: space-between; padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--vscode-panel-border); }
   .settings .set-head h2 { font-size: 1.05rem; margin: 0; }
   .settings .done { padding: 0.3rem 0.9rem; border-radius: 4px; background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
+  .settings .gateway-environment { border: 0; margin: 0.65rem 0 0; padding: 0; }
+  .settings .gateway-environment legend { font-size: 0.8rem; opacity: 0.85; margin-bottom: 0.25rem; }
+  .settings .gateway-environment .mode-toggle button[aria-pressed="true"] { background: var(--vscode-button-background); color: var(--vscode-button-foreground); opacity: 1; }
   .settings .set-body { display: flex; flex: 1; min-height: 0; }
   .settings .set-nav { flex: 0 0 auto; width: 8.5rem; padding: 0.5rem 0.35rem; border-right: 1px solid var(--vscode-panel-border); overflow-y: auto; }
   .settings .set-nav button { display: block; width: 100%; text-align: left; padding: 0.4rem 0.5rem; border-radius: 4px; font-size: 0.82rem; opacity: 0.85; }
@@ -336,6 +339,15 @@ body { font-family: var(--vscode-font-family); font-size: 13px; color: var(--vsc
   }
   .settings-card { border: 1px solid var(--vscode-panel-border); border-radius: 6px; padding: 0.8rem; margin: 0.7rem 0 1.2rem; }
   .settings-card h3 { margin: 0 0 0.8rem; font-size: 0.85rem; font-weight: 600; }
+  .settings .about-card { max-width: 36rem; border: 1px solid var(--vscode-panel-border); border-radius: 8px; padding: 1.1rem; margin: 0.2rem 0 1rem; background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background)); }
+  .settings .about-card h1 { margin: 0; font-size: 1.25rem; }
+  .settings .about-intro { color: var(--vscode-descriptionForeground); line-height: 1.5; margin: 0.45rem 0 1rem; }
+  .settings .about-details { margin: 0; }
+  .settings .about-details > div { display: grid; grid-template-columns: minmax(7rem, 0.8fr) minmax(0, 1.2fr); gap: 0.5rem; padding: 0.45rem 0; border-top: 1px solid var(--vscode-panel-border); }
+  .settings .about-details dt { color: var(--vscode-descriptionForeground); }
+  .settings .about-details dd { margin: 0; overflow-wrap: anywhere; }
+  .settings .about-link { margin: 0.9rem 0 0; }
+  .settings .about-copyright { color: var(--vscode-descriptionForeground); font-size: 0.72rem; margin: 1rem 0 0; }
   .settings .settings-toggle { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin: 0.8rem 0; }
   .settings-toggle > span { min-width: 0; }
   .settings-toggle .note { display: block; margin-top: 0.3rem; font-weight: normal; }
@@ -496,7 +508,17 @@ ${toolbarHtml(snapshot.historyOpen, snapshot.tokenUsage, snapshot.tokenUsageTitl
     const loginMethod = document.getElementById('settings-login-method');
     const modelSelect = document.getElementById('settings-model-select');
     const apiKey = document.getElementById('settings-api-key');
-    const baseUrl = document.getElementById('settings-base-url');
+    const baseUrl = document.getElementById('settings-base-url') as HTMLInputElement | null;
+    for (const mode of document.querySelectorAll<HTMLButtonElement>('[data-gateway-mode]')) {
+      mode.addEventListener('click', () => {
+        if (!baseUrl || !mode.dataset.baseUrl) return;
+        baseUrl.value = mode.dataset.baseUrl;
+        for (const option of document.querySelectorAll<HTMLButtonElement>('[data-gateway-mode]')) {
+          option.setAttribute('aria-pressed', String(option === mode));
+        }
+        baseUrl.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    }
     if (modelSelect) modelSelect.addEventListener('change', () => {
       const model = document.getElementById('settings-model');
       if (model) model.value = modelSelect.value;

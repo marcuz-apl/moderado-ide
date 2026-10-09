@@ -2,6 +2,7 @@ import { defaultSettingsPreferences, settingsFeaturesHtml, type SettingsPreferen
 import { settingsAboutHtml } from './settings-about.js';
 import { escapeHtml } from './html.js';
 import { validateProviderBaseUrl } from './provider-setup.js';
+import { MODERADO_CLOUD_BASE_URLS } from './provider-catalog.js';
 import type { GatewayLoginMethod } from './gateway-login.js';
 
 /**
@@ -219,7 +220,7 @@ export function settingsPaneHtml(state: SettingsState): string {
     return `<section id="settings-pane" class="settings" aria-label="Moderado settings">
       <div class="set-head"><h2>Settings</h2><button id="close-settings" type="button" class="done">Done</button></div>
       <div class="set-body"><nav class="set-nav" aria-label="Settings sections">${settingsNav(state.page)}</nav>
-      <div class="set-content">${content}<p id="settings-status" class="status" role="status">${escapeHtml(state.status ?? '')}</p></div></div>
+      <div class="set-content">${content}${state.page === 'about' || state.status === 'Saved.' ? '' : `<p id="settings-status" class="status" role="status">${escapeHtml(state.status ?? '')}</p>`}</div></div>
     </section>`;
   }
   const blocked = Boolean(state.profileError);
@@ -228,6 +229,8 @@ export function settingsPaneHtml(state: SettingsState): string {
   const choice = selectedChoice(state);
   const generic = choice?.custom === true;
   const gateway = state.preset === 'moderado-cloud';
+  const currentBaseUrl = state.baseUrl || choice?.storedBaseUrl || choice?.baseUrl || '';
+  const normalizedBaseUrl = currentBaseUrl.replace(/\/+$/, '');
   const loginMethod = state.loginMethod ?? 'public';
   const needsKey = gateway ? loginMethod !== 'public' : choice?.requiresApiKey ?? true;
   // Per-provider credential state: picking a provider shows whether that one
@@ -258,13 +261,22 @@ export function settingsPaneHtml(state: SettingsState): string {
     ${!needsKey ? `<p class="note">${gateway ? 'Public access uses the Gateway without a key.' : 'This local runtime needs no API key.'}</p>` : ''}
     ${gateway && loginMethod === 'browser' ? `<button id="settings-browser-login" type="button"${disabled}>Sign in with browser</button>` : ''}`;
 
+  const gatewayEnvironment = gateway ? `<fieldset class="gateway-environment">
+    <legend>Gateway environment</legend>
+    <div class="mode-toggle" role="group" aria-label="Moderado Gateway environment">
+      <button type="button" data-gateway-mode data-base-url="${MODERADO_CLOUD_BASE_URLS.development}" aria-pressed="${normalizedBaseUrl === MODERADO_CLOUD_BASE_URLS.development}">Dev</button>
+      <button type="button" data-gateway-mode data-base-url="${MODERADO_CLOUD_BASE_URLS.production}" aria-pressed="${normalizedBaseUrl === MODERADO_CLOUD_BASE_URLS.production}">Prod</button>
+    </div>
+  </fieldset>` : '';
+
   const extra = `${generic ? `<label for="settings-display-name">Provider name</label>
     <input id="settings-display-name" type="text" spellcheck="false"
            placeholder="My provider" value="${escapeHtml(state.displayName)}"${disabled} />` : ''}
+    ${gatewayEnvironment}
     <label for="settings-base-url">Base URL</label>
     <input id="settings-base-url" type="text" spellcheck="false"
-           placeholder="https://api.example.com/v1" value="${escapeHtml(state.baseUrl || choice?.storedBaseUrl || choice?.baseUrl || '')}"${disabled} />
-    <p class="note">${state.baseUrl || choice?.storedBaseUrl || choice?.baseUrl ? 'HTTPS only. HTTP is accepted for localhost endpoints.' : 'No Base URL is known for this provider. Enter a Base URL to continue.'}</p>`;
+           placeholder="https://api.example.com/v1" value="${escapeHtml(currentBaseUrl)}"${disabled} />
+    <p class="note">${currentBaseUrl ? 'HTTPS only. HTTP is accepted for localhost endpoints.' : 'No Base URL is known for this provider. Enter a Base URL to continue.'}</p>`;
 
   const modelField = `<h3>Model</h3>
     <div class="tab-row">

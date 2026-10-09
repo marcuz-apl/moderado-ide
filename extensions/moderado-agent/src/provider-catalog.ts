@@ -12,8 +12,13 @@ export interface DesktopProviderPreset {
   local?: boolean;
 }
 
+export const MODERADO_CLOUD_BASE_URLS = {
+  development: 'http://127.0.0.1:4788/v1',
+  production: 'https://mod.alfazen.org/v1',
+} as const;
+
 export const DESKTOP_PROVIDER_PRESETS: readonly DesktopProviderPreset[] = [
-  { id: 'moderado-cloud', label: 'Moderado Gateway', description: 'Free models with Gateway AUTO or a selected route.', kind: 'openai-compatible', baseUrl: 'https://mod.alfazen.org/v1', requiresApiKey: false, defaultModel: 'auto', freeCatalog: true },
+  { id: 'moderado-cloud', label: 'Moderado Gateway', description: 'Free models with Gateway AUTO or a selected route.', kind: 'openai-compatible', baseUrl: MODERADO_CLOUD_BASE_URLS.production, requiresApiKey: false, defaultModel: 'auto', freeCatalog: true },
   { id: 'nvidia-nim', label: 'NVIDIA NIM', description: 'Free-first routing across NVIDIA hosted models.', kind: 'nvidia-nim', baseUrl: 'https://integrate.api.nvidia.com/v1', requiresApiKey: true, freeCatalog: true },
   { id: 'openrouter', label: 'OpenRouter', description: 'One key for hosted models and free-tier models.', kind: 'openai-compatible', baseUrl: 'https://openrouter.ai/api/v1', requiresApiKey: true },
   { id: 'agnes-ai', label: 'Agnes AI', description: 'Agnes Flash and Code endpoints.', kind: 'openai-compatible', baseUrl: 'https://apihub.agnes-ai.com/v1', requiresApiKey: true, freeCatalog: true },
@@ -33,6 +38,12 @@ export function isDesktopFreeModel(entry: { id: string; pricing?: unknown }, pro
   }
   const preset = DESKTOP_PROVIDER_PRESETS.find((item) => item.id === providerId);
   if (preset?.freeCatalog || preset?.local) return true;
-  const segment = entry.id.split(/[/:]/).at(-1);
-  return (preset?.freeIdSuffixes ?? []).includes(segment ?? '');
+  const modelId = entry.id.toLowerCase();
+  return (preset?.freeIdSuffixes ?? []).some((suffix) =>
+    new RegExp(`(?:^|[/:_-])${escapeRegExp(suffix.toLowerCase())}$`).test(modelId),
+  );
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

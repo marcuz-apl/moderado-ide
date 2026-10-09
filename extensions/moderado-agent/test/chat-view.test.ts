@@ -572,12 +572,13 @@ describe('moderado settings pane', () => {
     expect(pane).toContain('needs no API key');
   });
 
-  it('tags providers the same way the CLI does', () => {
+  it('shows provider names without a free-model suffix and retains local tags', () => {
     const pane = settingsPaneHtml(settings({ preset: 'ollama', providers: [
-      { value: 'nvidia-nim', label: 'NVIDIA NIM', description: 'd', requiresApiKey: true, tag: 'Free Models' },
+      { value: 'nvidia-nim', label: 'NVIDIA NIM', description: 'd', requiresApiKey: true },
       { value: 'ollama', label: 'Ollama', description: 'd', requiresApiKey: false, tag: 'Local' },
     ] }));
-    expect(pane).toContain('NVIDIA NIM · Free Models');
+    expect(pane).toContain('>NVIDIA NIM</option>');
+    expect(pane).not.toContain('Free Models');
     expect(pane).toContain('Ollama · Local');
   });
 
