@@ -81,6 +81,14 @@ describe('Gateway and provider Settings boundary', () => {
     expect(html).not.toContain('free_trial');
   });
 
+  it('hides a literal Free_trial tail in the label but preserves the provider model ID', () => {
+    const html = settingsPaneHtml({ ...gateway(), defaultModel: 'router/model -- Free_trial', models: [
+      { id: 'router/model -- Free_trial', accessTier: 'free_trial', isFree: true },
+    ] });
+    expect(html).toContain('<option value="router/model -- Free_trial" selected>★ router/model</option>');
+    expect(html).toContain('Selected model: <strong>router/model</strong>');
+  });
+
   it('keeps direct AUTO visible on the Free tab while paid models move to the Paid tab', () => {
     const state = { ...gateway(), preset: 'openrouter', modelTab: 'free', models: [
       { id: 'auto', accessTier: 'unknown', isFree: false },

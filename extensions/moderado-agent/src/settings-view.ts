@@ -132,6 +132,10 @@ function selectedChoice(state: SettingsState): SettingsProviderChoice | undefine
   return state.providers.find((choice) => choice.value === state.preset);
 }
 
+function displayModelName(modelId: string): string {
+  return modelId.replace(/\s*--\s*free[_ ]trial\s*$/i, '');
+}
+
 /**
  * One `<option>` per model, keeping the provider's model name intact.
  *
@@ -143,7 +147,7 @@ function modelOptions(state: SettingsState): string {
     .map((model) => {
       const name = model.id === 'auto'
         ? state.preset === 'moderado-cloud' ? 'AUTO · Gateway routing' : 'AUTO · Free-first'
-        : model.id;
+        : displayModelName(model.id);
       return `<option value="${escapeHtml(model.id)}"${model.id === state.defaultModel ? ' selected' : ''}>${escapeHtml(`${model.isFree ? '★ ' : ''}${name}`)}</option>`;
     })
     .join('');
@@ -271,7 +275,7 @@ export function settingsPaneHtml(state: SettingsState): string {
     <select id="settings-model-select"${disabled}>${modelOptions(state)}</select>
     <label class="sr-only" for="settings-model">Default model</label>
     <select id="settings-model" class="sr-only"${disabled}>${modelOptions(state)}</select>
-    <p class="note">Selected model: <strong>${escapeHtml(state.defaultModel || 'No model selected')}</strong></p>
+    <p class="note">Selected model: <strong>${escapeHtml(state.defaultModel ? displayModelName(state.defaultModel) : 'No model selected')}</strong></p>
     ${selectedModelDetails(state)}
     <p class="summary">
       <span>${state.models.filter((m) => m.isFree).length} free</span>
