@@ -1,9 +1,9 @@
 # Project Handoff
 
-Updated: 2026-10-09 17:55 UTC
+Updated: 2026-10-09 17:57 UTC
 Branch: master
 Commit: see `git log`
-Status: v0.1.29 is the current stable release. The workflow now publishes only after a successful full default-source build; its changes are being committed and pushed.
+Status: v0.1.29 is the current stable release. The workflow publishes only after a successful full default-source build; this change is committed and pushed.
 
 ## Summary
 
