@@ -81,6 +81,7 @@ jobs:
 
       - name: Build and verify the Linux x64 editor
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           MODERADO_TSGO_CONCURRENCY: '2'
           MODERADO_BUILD_HEAP_MB: '12288'
         run: node scripts/build-linux.mjs
