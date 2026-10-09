@@ -16,7 +16,13 @@ Moderado IDE and Moderado CLI are separate projects and releases. The IDE bundle
 
 ## Get started quickly
 
-Download Moderado IDE v0.1.28 from the [GitHub Releases page](https://github.com/marcuz-apl/moderado-ide/releases/tag/v0.1.28%2B261009d). The release includes Windows x64, Linux x64, and macOS arm64 and x64 packages. Review [installation notes and platform limitations](docs/INSTALL.md) before installing. Windows installers are unsigned; macOS packages are ad-hoc signed and not notarized. Linux runtime installation has not been verified on a native Linux distribution. There is no built-in update channel.
+1. **Download the build for your computer** from the [latest stable GitHub release](https://github.com/marcuz-apl/moderado-ide/releases/latest). Choose Windows x64, Linux x64 (`.deb` or `.rpm`), or macOS for your processor. On macOS, choose **arm64** for an Apple Silicon M-series Mac or **x64** for an Intel Mac.
+2. **Install and launch Moderado IDE.** On Windows, run `Setup.exe` or `User-Setup.exe`, or extract the portable ZIP. On macOS, open the DMG and move the app into Applications. On Debian or Ubuntu, install the downloaded `.deb` with `sudo apt install ./moderado-ide-*.amd64.deb`; on an RPM-based distribution, install the downloaded `.rpm` with `sudo dnf install ./moderado-ide-*.x86_64.rpm`.
+3. **Open a project folder** from the File menu. The agent works in the opened workspace.
+4. **Connect a model provider.** Open Settings → API Config, choose a provider, enter its API key and Base URL if required, then save. Choose a model in Settings or from the model selector. For Moderado Gateway, select Dev or Prod as appropriate.
+5. **Start a chat** in the Moderado agent view and ask about or make a change to the project.
+
+Windows installers are unsigned. macOS builds are ad-hoc signed, not Developer ID signed or notarized, so Gatekeeper may require local approval. Linux runtime installation has not been verified on a native Linux distribution. There is no built-in update channel; see [installation notes and platform limitations](docs/INSTALL.md) before installing.
 
 ## Build the Linux/macOS/Windows editor locally
 
