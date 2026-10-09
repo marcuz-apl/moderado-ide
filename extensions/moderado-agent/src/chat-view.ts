@@ -498,6 +498,7 @@ ${toolbarHtml(snapshot.historyOpen, snapshot.tokenUsage, snapshot.tokenUsageTitl
     discoveryTimer = setTimeout(reloadModels, 400);
   }
 
+  // This block is emitted verbatim inside a webview script; keep it plain JavaScript.
   function bindSettings() {
     const close = document.getElementById('close-settings');
     const save = document.getElementById('settings-save');
@@ -508,12 +509,12 @@ ${toolbarHtml(snapshot.historyOpen, snapshot.tokenUsage, snapshot.tokenUsageTitl
     const loginMethod = document.getElementById('settings-login-method');
     const modelSelect = document.getElementById('settings-model-select');
     const apiKey = document.getElementById('settings-api-key');
-    const baseUrl = document.getElementById('settings-base-url') as HTMLInputElement | null;
-    for (const mode of document.querySelectorAll<HTMLButtonElement>('[data-gateway-mode]')) {
+    const baseUrl = document.getElementById('settings-base-url');
+    for (const mode of document.querySelectorAll('[data-gateway-mode]')) {
       mode.addEventListener('click', () => {
         if (!baseUrl || !mode.dataset.baseUrl) return;
         baseUrl.value = mode.dataset.baseUrl;
-        for (const option of document.querySelectorAll<HTMLButtonElement>('[data-gateway-mode]')) {
+        for (const option of document.querySelectorAll('[data-gateway-mode]')) {
           option.setAttribute('aria-pressed', String(option === mode));
         }
         baseUrl.dispatchEvent(new Event('input', { bubbles: true }));
