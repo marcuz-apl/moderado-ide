@@ -1393,3 +1393,34 @@ Windows CI previously failed three snapshot/deletion security tests; those cases
   [37862317695](https://github.com/marcuz-apl/moderado-ide/actions/runs/37862317695)
   remains in progress without uploaded artifacts. Do not claim installers
   verified or publish until the corresponding jobs and artifact checks pass.
+
+## Local Windows x64 installer build (2026-10-09 UTC)
+
+- Provisioned Visual Studio 2022 Build Tools with
+  `.\scripts\ensure-windows-build-tools.ps1 -InstallIfMissing`; verified the
+  x86 and x64 Spectre libraries were present.
+- Ran
+  `$env:MODERADO_BUILD_HEAP_MB='12288'; $env:npm_config_loglevel='error'; .\scripts\build-m1.ps1`
+  on the existing pinned VSCodium `5a73682ca091082675b10c9dc3f348c1d824d94f`
+  and Code OSS `08d4889f9ec4a1685d257b9b95de036c8e1ce1e5` checkouts. The complete
+  Windows x64 editor prepack, native/package step, and Inno Setup builds exited
+  successfully. Log: `build/logs/windows-local-build.log`.
+- The first local attempt exposed Windows PowerShell 5.1 treating benign child
+  process stderr (including Node's `DEP0180` warning) as terminating under
+  `$ErrorActionPreference='Stop'`. `build-m1.ps1` now runs its native build
+  steps with stderr tolerated but checks each process exit code. The workflow
+  regression test and PowerShell parser checks pass.
+- Fresh outputs in `build/vscodium/assets`:
+  - `Moderado IDE-win32-x64-1.135.06055.zip` (312,859,853 bytes),
+    SHA-256 `8fbb8e14f02e72b9125f0505014a0115b562c759c72fb73f60a6522f258011ab`.
+  - `Moderado IDESetup-x64-1.135.06055.exe` (213,173,722 bytes),
+    SHA-256 `5c674b6ce893bfa374cf76dd3ca989ba979c2ec3a7cdf0ad461f1dbfe9b2cb8f`.
+  - `Moderado IDEUserSetup-x64-1.135.06055.exe` (213,174,060 bytes),
+    SHA-256 `30fd665e9391184a51e77d7a350bc458186ed1831f34181afa34db846539c3f7`.
+- Re-ran `.\scripts\build-m1.ps1 -PackingOnly` after installing the
+  latest API Config webview bundle so the test installers show model names
+  without the `free_trial` suffix.
+- All three sizes and hashes match the generated build manifest. Inspected the
+  portable ZIP and confirmed it contains the agent bundle and all shipped
+  license files. This was a local unsigned build; no installer was installed,
+  signed, published, or uploaded.

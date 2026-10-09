@@ -7,6 +7,23 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $checkout = (Resolve-Path -LiteralPath $Checkout).Path
+function Invoke-CheckedNativeCommand {
+  param(
+    [Parameter(Mandatory)][scriptblock]$Command,
+    [Parameter(Mandatory)][string]$FailureMessage
+  )
+
+  $previousErrorActionPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = 'Continue'
+    & $Command
+    $exitCode = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $previousErrorActionPreference
+  }
+  if ($exitCode -ne 0) { throw "$FailureMessage (exit code $exitCode)" }
+}
+
 if (!$checkout.StartsWith($root + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase)) {
   throw 'Checkout must be inside the IDE workspace.'
 }
@@ -17,16 +34,13 @@ if ($outerRevision -ne $lock.sources.vscodium.commit -or $innerRevision -ne $loc
   throw 'Editor source checkout does not match sources.lock.json.'
 }
 
-& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'branding\make-icon.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Icon generation failed.' }
-& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'apply-branding.ps1') -Checkout $checkout
-if ($LASTEXITCODE -ne 0) { throw 'Branding failed.' }
+Invoke-CheckedNativeCommand { & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'branding\make-icon.ps1') } 'Icon generation failed.'
+Invoke-CheckedNativeCommand { & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'apply-branding.ps1') -Checkout $checkout } 'Branding failed.'
 
 # Build the bundled agent extension and install it into the editor checkout so
 # the packaged IDE ships with it. A failure must not silently produce an
 # editor without the agent.
-& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'build-agent-extension.ps1') -Checkout $checkout -SkipTests
-if ($LASTEXITCODE -ne 0) { throw 'Agent extension build or install failed.' }
+Invoke-CheckedNativeCommand { & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'build-agent-extension.ps1') -Checkout $checkout -SkipTests } 'Agent extension build or install failed.'
 
 $env:APP_NAME = 'Moderado IDE'
 $env:BINARY_NAME = 'moderado-ide'
@@ -107,8 +121,7 @@ $posixCheckout = (& 'C:\Program Files\Git\usr\bin\cygpath.exe' -u $checkout).Tri
 if ($LASTEXITCODE -ne 0) { throw 'Git Bash path conversion failed.' }
 if (!$AssetsOnly) {
   $prepack = if ($PackingOnly) { '' } else { 'npm run gulp vscode-min-prepack && ' }
-  & $bash -c "cd '$posixCheckout/vscode' && ${prepack}npm run gulp vscode-win32-x64-min-packing"
-  if ($LASTEXITCODE -ne 0) { throw 'Editor packing failed.' }
+  Invoke-CheckedNativeCommand { & $bash -c "cd '$posixCheckout/vscode' && ${prepack}npm run gulp vscode-win32-x64-min-packing" } 'Editor packing failed.'
 }
 $assetDir = Join-Path $checkout 'assets'
 [System.IO.Directory]::CreateDirectory($assetDir) | Out-Null
@@ -136,8 +149,7 @@ if (Test-Path -LiteralPath $portable) {
   Copy-Item -LiteralPath (Join-Path $root 'LICENSE') -Destination (Join-Path $portable 'Moderado IDE LICENSE') -Force
 }
 $assetStart = [System.DateTime]::UtcNow
-& $bash -c "cd '$posixCheckout' && . ./prepare_assets.sh"
-if ($LASTEXITCODE -ne 0) { throw 'Windows asset packaging failed.' }
+Invoke-CheckedNativeCommand { & $bash -c "cd '$posixCheckout' && . ./prepare_assets.sh" } 'Windows asset packaging failed.'
 
 $artifacts = foreach ($name in $expected) {
   $file = Get-Item -LiteralPath (Join-Path $assetDir $name) -ErrorAction Stop

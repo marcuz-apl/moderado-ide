@@ -54,7 +54,8 @@ describe('Gateway and provider Settings boundary', () => {
     ] });
     expect(html).toContain('<option value="owner/Exact:Route" selected>');
     expect(html).toContain('<option value="auto"');
-    expect(html).toContain('★ owner/Exact:Route — free_trial');
+    expect(html).toContain('★ owner/Exact:Route</option>');
+    expect(html).not.toContain('free_trial');
     for (const value of ['&lt;provider&gt;', '&lt;owner&gt;', '&lt;tools&gt;', '&lt;script&gt;bad&lt;/script&gt;']) expect(html).toContain(value);
     expect(html).not.toContain('<script>bad</script>');
     expect(html).toContain('id="settings-model-select"');
@@ -62,14 +63,22 @@ describe('Gateway and provider Settings boundary', () => {
     expect(html).not.toContain('class="model-card');
   });
 
-  it('does not repeat the free trial tier when a model ID already ends in :free', () => {
+  it('preserves model IDs ending in :free without adding a free trial suffix', () => {
     const html = settingsPaneHtml({ ...gateway(), models: [
       { id: 'company/model-ver-flash:free', accessTier: 'free_trial', isFree: true },
       { id: 'company/other-model', accessTier: 'free_trial', isFree: true },
     ] });
     expect(html).toContain('★ company/model-ver-flash:free</option>');
-    expect(html).not.toContain('company/model-ver-flash:free — free_trial');
-    expect(html).toContain('★ company/other-model — free_trial');
+    expect(html).not.toContain('free_trial');
+    expect(html).toContain('★ company/other-model</option>');
+  });
+
+  it('keeps the free_trial classification out of the model name', () => {
+    const html = settingsPaneHtml({ ...gateway(), models: [
+      { id: 'deepseek-ai/deepseek-v4.1-flash', accessTier: 'free_trial', isFree: true },
+    ] });
+    expect(html).toContain('★ deepseek-ai/deepseek-v4.1-flash</option>');
+    expect(html).not.toContain('free_trial');
   });
 
   it('keeps direct AUTO visible on the Free tab while paid models move to the Paid tab', () => {

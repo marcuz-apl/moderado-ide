@@ -133,11 +133,10 @@ function selectedChoice(state: SettingsState): SettingsProviderChoice | undefine
 }
 
 /**
- * One `<option>` per model, labelled with its cost tier.
+ * One `<option>` per model, keeping the provider's model name intact.
  *
  * The list arrives free-first so the cheapest option is the one at the top, and
- * the tier stays visible so the free-first rule and the paid/unknown opt-in
- * remain observable rather than hidden.
+ * Paid/unknown eligibility is controlled by the selected tab and opt-in.
  */
 function modelOptions(state: SettingsState): string {
   return tabModels(state)
@@ -145,10 +144,7 @@ function modelOptions(state: SettingsState): string {
       const name = model.id === 'auto'
         ? state.preset === 'moderado-cloud' ? 'AUTO · Gateway routing' : 'AUTO · Free-first'
         : model.id;
-      const tier = model.isFree && model.id.toLowerCase().endsWith(':free')
-        ? ''
-        : ` — ${model.accessTier}`;
-      return `<option value="${escapeHtml(model.id)}"${model.id === state.defaultModel ? ' selected' : ''}>${escapeHtml(`${model.isFree ? '★ ' : ''}${name}${tier}`)}</option>`;
+      return `<option value="${escapeHtml(model.id)}"${model.id === state.defaultModel ? ' selected' : ''}>${escapeHtml(`${model.isFree ? '★ ' : ''}${name}`)}</option>`;
     })
     .join('');
 }

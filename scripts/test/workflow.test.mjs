@@ -43,6 +43,9 @@ test('publishing stays disabled and external actions are immutable', () => {
   assert.match(windowsBuildTools, /Start-Process -FilePath \$bootstrapper -ArgumentList \$arguments -Wait -PassThru/);
   assert.match(windowsBuildTools, /Microsoft\.VCToolsVersion\.default\.txt/);
   assert.match(windowsBuildTools, /lib\\spectre\\\$architecture\\libcmt\.lib/);
+  assert.match(windowsScripts[1], /function Invoke-CheckedNativeCommand[\s\S]*\$ErrorActionPreference = 'Continue'[\s\S]*\$exitCode = \$LASTEXITCODE[\s\S]*if \(\$exitCode -ne 0\)/);
+  assert.match(windowsScripts[1], /Invoke-CheckedNativeCommand \{ & powershell[\s\S]*build-agent-extension\.ps1/);
+  assert.match(windowsScripts[1], /Invoke-CheckedNativeCommand \{ & \$bash -c/);
   for (const script of windowsScripts) {
     assert.match(script, /ensure-windows-build-tools\.ps1/);
     assert.match(script, /\$env:npm_config_msvs_version = '2022'/);
