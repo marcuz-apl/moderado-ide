@@ -1433,3 +1433,20 @@ job were removed; selecting `platform=macos` or `platform=all` runs the arm64
 job on `macos-14`. The generic local build script still accepts an explicit
 architecture, but the installer workflow no longer offers or uploads Intel
 artifacts.
+
+## Windows API Config label refresh (2026-10-09 UTC)
+
+The Model selector and selected-model summary now hide a trailing
+`-- Free_trial` display suffix while preserving the original provider model ID
+for persistence and requests. Focused settings tests (14) and extension
+typecheck pass. Rebuilt with `.\scripts\build-m1.ps1 -PackingOnly` using the
+local Visual Studio 2022 Build Tools installation. `.\scripts\gen-provenance.ps1`
+and `.\scripts\verify-release.ps1` completed; all artifact, pin, bundled
+extension, and license checks passed. Artifacts remain unsigned and unpublished.
+
+- `Moderado IDE-win32-x64-1.135.06055.zip`: 312,854,116 bytes,
+  SHA-256 `a84d63cbb7ce17c49c86dc29db77ad6b7a319a87e10708465183e4a8bdf30d46`.
+- `Moderado IDESetup-x64-1.135.06055.exe`: 213,161,940 bytes,
+  SHA-256 `52e9b6befc5e233296afba0be98df30eafdffe22d974b2c44ad72290e1befa0c`.
+- `Moderado IDEUserSetup-x64-1.135.06055.exe`: 213,162,279 bytes,
+  SHA-256 `ad7ceba829ade1e26556907adeda301f1d1f110bfee4b15c28d24c831cc3b98f`.
