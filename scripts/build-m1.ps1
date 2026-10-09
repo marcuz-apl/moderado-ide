@@ -96,12 +96,11 @@ if ($python) {
   $env:PYTHON = $python
   $env:npm_config_python = $python
 }
-$vswhere = 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe'
-$vs = (& $vswhere -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath | Select-Object -First 1).Trim()
-if ($vs) {
-  Write-Output "Detected Visual Studio installation: $vs"
-  $env:vs2022_install = $vs
-}
+$vs = (& (Join-Path $PSScriptRoot 'ensure-windows-build-tools.ps1') | Select-Object -Last 1).Trim()
+Write-Output "Detected Visual Studio 2022 installation: $vs"
+$env:vs2022_install = $vs
+$env:npm_config_msvs_version = '2022'
+$env:GYP_MSVS_VERSION = '2022'
 
 $bash = 'C:\Program Files\Git\bin\bash.exe'
 $posixCheckout = (& 'C:\Program Files\Git\usr\bin\cygpath.exe' -u $checkout).Trim()

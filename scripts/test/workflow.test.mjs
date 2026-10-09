@@ -4,6 +4,9 @@ import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 
 const workflow = readFileSync(new URL('../../.github/workflows/build-and-release.yml', import.meta.url), 'utf8');
+const windowsBuildTools = readFileSync(new URL('../ensure-windows-build-tools.ps1', import.meta.url), 'utf8');
+const windowsScripts = ['../prepare-m1.ps1', '../build-m1.ps1']
+  .map(path => readFileSync(new URL(path, import.meta.url), 'utf8'));
 
 test('installer builds run only by explicit platform and architecture dispatch', () => {
   assert.doesNotMatch(workflow, /^  (push|pull_request):/m);
@@ -29,14 +32,22 @@ test('publishing stays disabled and external actions are immutable', () => {
   const actions = [...workflow.matchAll(/uses: (\S+)/g)].map(match => match[1]);
   assert.ok(actions.length > 0);
   for (const action of actions) assert.match(action, /^actions\/[a-z-]+@[a-f0-9]{40}$/);
-  assert.match(workflow, /Microsoft\.VisualStudio\.Component\.VC\.14\.50\.18\.0\.x86\.x64\.Spectre/);
-  assert.match(workflow, /https:\/\/aka\.ms\/vs\/stable\/vs_buildtools\.exe/);
-  assert.match(workflow, /Get-AuthenticodeSignature \$bootstrapper/);
-  assert.match(workflow, /-version '\[18\.0,19\.0\)'/);
-  assert.match(workflow, /'install', '--installPath'[\s\S]*'--channelUri', 'https:\/\/aka\.ms\/vs\/stable\/channel'[\s\S]*'Microsoft\.VisualStudio\.Workload\.VCTools'/);
-  assert.match(workflow, /'modify', '--installPath'[\s\S]*'--channelId', 'VisualStudio\.18\.Release'/);
-  assert.match(workflow, /Start-Process -FilePath \$bootstrapper -ArgumentList \$arguments -Wait -PassThru/);
-  assert.match(workflow, /Installer\\vswhere\.exe/);
+  assert.match(workflow, /scripts\/ensure-windows-build-tools\.ps1 -InstallIfMissing/);
+  assert.match(windowsBuildTools, /Microsoft\.VisualStudio\.Component\.VC\.14\.44\.17\.14\.x86\.x64\.Spectre/);
+  assert.match(windowsBuildTools, /https:\/\/aka\.ms\/vs\/17\/release\/vs_buildtools\.exe/);
+  assert.match(windowsBuildTools, /https:\/\/aka\.ms\/vs\/17\/release\/channel/);
+  assert.match(windowsBuildTools, /Get-AuthenticodeSignature -LiteralPath \$bootstrapper/);
+  assert.match(windowsBuildTools, /-version '\[17\.0,18\.0\)'/);
+  assert.match(windowsBuildTools, /'install', '--installPath'[\s\S]*'--channelUri', 'https:\/\/aka\.ms\/vs\/17\/release\/channel'[\s\S]*'Microsoft\.VisualStudio\.Workload\.VCTools'/);
+  assert.match(windowsBuildTools, /'modify', '--installPath'[\s\S]*'--channelId', 'VisualStudio\.17\.Release'/);
+  assert.match(windowsBuildTools, /Start-Process -FilePath \$bootstrapper -ArgumentList \$arguments -Wait -PassThru/);
+  assert.match(windowsBuildTools, /Microsoft\.VCToolsVersion\.default\.txt/);
+  assert.match(windowsBuildTools, /lib\\spectre\\\$architecture\\libcmt\.lib/);
+  for (const script of windowsScripts) {
+    assert.match(script, /ensure-windows-build-tools\.ps1/);
+    assert.match(script, /\$env:npm_config_msvs_version = '2022'/);
+    assert.match(script, /\$env:GYP_MSVS_VERSION = '2022'/);
+  }
   assert.doesNotMatch(workflow, /Installer\\setup\.exe[^\r\n]*--wait/);
   assert.doesNotMatch(workflow, /Installer\\vs_installer\.exe/);
   assert.equal((workflow.match(/GITHUB_TOKEN: \$\{\{ github\.token \}\}/g) ?? []).length, 2);

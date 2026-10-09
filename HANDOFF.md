@@ -51,6 +51,21 @@ has a fixture test for the macOS layout. A fresh macOS matrix run is required
 to verify both fixes; no artifact is yet release-ready.
 Run [37862200953](https://github.com/marcuz-apl/moderado-ide/actions/runs/37862200953)
 was started to test the arm64 heap change only and predates this bundle-path fix.
+The Windows job in [37857820215](https://github.com/marcuz-apl/moderado-ide/actions/runs/37857820215)
+passed Visual Studio 2026 component-registration checks but `@vscode/deviceid`
+still failed with `MSB8040` because MSBuild could not find the x64 Spectre
+libraries. The workflow had trusted `vswhere` registration rather than checking
+the toolset files and selected VS 2026 despite the upstream `vs2022_install`
+build interface. Windows builds now share
+`scripts/ensure-windows-build-tools.ps1`, require VS 2022 and the 14.44 x86/x64
+Spectre component, verify the default toolset's x86 and x64 `libcmt.lib` paths,
+and explicitly select VS 2022 in node-gyp. Actions can install the prerequisites
+through the same script; local preparation/build scripts validate and reuse it.
+For a local build, run `.\scripts\ensure-windows-build-tools.ps1
+-InstallIfMissing` from an elevated PowerShell prompt once, then
+`.\scripts\prepare-m1.ps1` and `.\scripts\build-m1.ps1`. The Actions job calls
+the same prerequisite script before those build scripts. A fresh Windows run
+must pass before claiming an installer is verified.
 Host and attachment test fixtures canonicalize their temporary roots with
 `realpathSync`, preserving production symlink checks. The restored-image limit
 test keeps its over-limit coverage with smaller fixtures and a 30-second

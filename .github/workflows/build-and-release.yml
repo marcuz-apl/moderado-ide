@@ -148,37 +148,7 @@ jobs:
       - name: Ensure Visual Studio C++ and Spectre prerequisites
         shell: pwsh
         run: |
-          $vswhere = 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe'
-          $component = 'Microsoft.VisualStudio.Component.VC.14.50.18.0.x86.x64.Spectre'
-          $vs18 = & $vswhere -latest -products '*' -version '[18.0,19.0)' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath | Select-Object -First 1
-          $ready = & $vswhere -latest -products '*' -version '[18.0,19.0)' -requires $component -property installationPath | Select-Object -First 1
-          if (-not $ready) {
-            $bootstrapper = Join-Path $env:RUNNER_TEMP 'vs_buildtools.exe'
-            Invoke-WebRequest -Uri 'https://aka.ms/vs/stable/vs_buildtools.exe' -OutFile $bootstrapper
-            $signature = Get-AuthenticodeSignature $bootstrapper
-            if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'CN=Microsoft Corporation') {
-              throw 'The Visual Studio Build Tools bootstrapper signature is invalid.'
-            }
-            if ($vs18) {
-              $arguments = @(
-                'modify', '--installPath', "`"$vs18`"", '--channelId', 'VisualStudio.18.Release',
-                '--add', $component, '--quiet', '--wait', '--norestart'
-              )
-            } else {
-              $vs18 = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Microsoft Visual Studio\18\BuildTools'
-              $arguments = @(
-                'install', '--installPath', "`"$vs18`"", '--channelUri', 'https://aka.ms/vs/stable/channel',
-                '--add', 'Microsoft.VisualStudio.Workload.VCTools', '--add', $component,
-                '--includeRecommended', '--quiet', '--wait', '--norestart'
-              )
-            }
-            Write-Host "Ensuring VS 2026 Build Tools with Spectre at $vs18"
-            $process = Start-Process -FilePath $bootstrapper -ArgumentList $arguments -Wait -PassThru
-            if ($process.ExitCode -notin @(0, 3010)) { throw "Spectre installation failed: $($process.ExitCode)" }
-          }
-          $ready = & $vswhere -latest -products '*' -version '[18.0,19.0)' -requires $component -property installationPath | Select-Object -First 1
-          if (-not $ready) { throw 'Spectre component is still missing after installation.' }
-          Write-Host "Visual Studio with Spectre: $ready"
+          ./scripts/ensure-windows-build-tools.ps1 -InstallIfMissing | Out-Null
           $ram = (Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1MB
           $heap = [Math]::Min(12288, [Math]::Floor($ram - 4096))
           if ($heap -lt 4096) { throw 'Runner needs at least 8 GiB RAM.' }
