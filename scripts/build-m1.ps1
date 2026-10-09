@@ -62,6 +62,7 @@ $env:VSCODE_QUALITY = 'stable'
 # `npm list` failing inside vsce, esbuild failing). Raise it; override with
 # MODERADO_BUILD_HEAP_MB when the machine has less headroom.
 $heapMb = if ($env:MODERADO_BUILD_HEAP_MB) { $env:MODERADO_BUILD_HEAP_MB } else { '12288' }
+$env:MAX_OLD_SPACE_SIZE = $heapMb
 $env:NODE_OPTIONS = "--max-old-space-size=$heapMb"
 $env:VSCODE_SKIP_NODE_VERSION_CHECK = 'yes'
 $env:Path = 'C:\Program Files\7-Zip;' + $env:Path

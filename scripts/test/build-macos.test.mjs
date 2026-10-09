@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { macBuildEnvironment, assertSourcePin, createMacIcon, macArtifactManifest, parseMacArgs, macEditorBuildCommands, adHocSignMacApp, verifyPackagedMacAgentFreshness } from '../build-macos.mjs';
+import { macBuildEnvironment, assertSourcePin, assertPackagedIconName, createMacIcon, macArtifactManifest, parseMacArgs, macEditorBuildCommands, adHocSignMacApp, verifyPackagedMacAgentFreshness } from '../build-macos.mjs';
 
 const lock = { sources: { vscodium: { commit: 'a'.repeat(40), version: '1.135.06055' }, codeOss: { commit: 'b'.repeat(40) }, moderado: { commit: 'c'.repeat(40) } } };
 test('mac target and upstream commands remain native and pinned', () => {
@@ -21,6 +21,10 @@ test('source pins reject unexpected revisions and malformed commits', () => {
   assertSourcePin('a'.repeat(40), 'a'.repeat(40));
   assert.throws(() => assertSourcePin('b'.repeat(40), 'a'.repeat(40)), /pin/);
   assert.throws(() => assertSourcePin('main', 'main'), /commit/);
+});
+test('packaged macOS icon name follows the branded product name', () => {
+  assert.doesNotThrow(() => assertPackagedIconName('Moderado IDE.icns', 'Moderado IDE'));
+  assert.throws(() => assertPackagedIconName('code-oss-dev.icns', 'Moderado IDE'), /Packaged icon name/);
 });
 test('native icon generation uses existing PNG and argument arrays', () => {
   const root = mkdtempSync(join(tmpdir(), 'moderado-mac-icon-'));

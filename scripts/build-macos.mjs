@@ -48,6 +48,9 @@ export function adHocSignMacApp(app, execute = run) {
 export function verifyPackagedMacAgentFreshness(app, extension) {
   verifyAgentFreshness(join(app, 'Contents'), extension);
 }
+export function assertPackagedIconName(iconName, nameShort) {
+  assert.equal(iconName, `${nameShort}.icns`, 'Packaged icon name');
+}
 function run(command, args, cwd = root, env = process.env) {
   console.log(`Build: ${command} ${args.join(' ')} (${cwd})`);
   const result = spawnSync(command, args, { cwd, env, stdio: 'inherit', shell: false });
@@ -134,7 +137,7 @@ function main() {
   assertSourcePin(product.commit, lock.sources.codeOss.commit);
   verifyPackagedMacAgentFreshness(app, extension);
   const iconName = output('plutil', ['-extract', 'CFBundleIconFile', 'raw', '-o', '-', join(app, 'Contents/Info.plist')]);
-  assert.equal(iconName, `${json(join(editor, 'package.json')).name}.icns`, 'Packaged icon name');
+  assertPackagedIconName(iconName, product.nameShort);
   assert.deepEqual(readFileSync(join(resources, iconName)), readFileSync(join(editor, 'resources/darwin/code.icns')), 'Packaged macOS icon mismatch');
   copyFileSync(join(editor, 'LICENSE.txt'), join(resources, 'LICENSE.txt'));
   copyFileSync(join(root, 'LICENSE'), join(resources, 'Moderado IDE LICENSE'));
