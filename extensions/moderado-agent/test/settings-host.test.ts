@@ -78,7 +78,7 @@ beforeEach(() => {
     return { written: true };
   });
   vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ object: 'list', data: [
-    { id: 'Exact/Route', provider: 'owner', owned_by: 'owner', capabilities: ['tools'], data_note: '<note>' },
+    { id: 'Exact/Route', access: 'free', provider: 'owner', owned_by: 'owner', capabilities: ['tools'], data_note: '<note>' },
   ] }))));
   activate({ subscriptions: [], workspaceState: {
     get: (key: string) => harness.workspaceTitles.get(key),

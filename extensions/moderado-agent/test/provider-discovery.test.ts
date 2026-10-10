@@ -26,12 +26,23 @@ describe('Gateway model discovery', () => {
     expect(complete[0]).toEqual({ id: 'vendor/model:route', provider: 'vendor', owned_by: 'org', capabilities: ['text', 'tools'], data_note: 'verified' });
   });
 
+  it('retains the Gateway access classification for each route', async () => {
+    const routes = await fetchGatewayRoutes('https://gateway.example/v1', {
+      fetchImpl: async () => Response.json({ object: 'list', data: [
+        { id: 'free-route', capabilities: [], access: 'free' },
+        { id: 'paid-route', capabilities: [], access: 'paid' },
+      ] }),
+    });
+    expect(routes.map(route => route.access)).toEqual(['free', 'paid']);
+  });
+
   it.each([
     ['wrong envelope', { object: 'array', data: [] }],
     ['missing ID', { object: 'list', data: [{ capabilities: [] }] }],
     ['empty ID', { object: 'list', data: [{ id: '', capabilities: [] }] }],
     ['malformed capabilities', { object: 'list', data: [{ id: 'route', capabilities: 'text' }] }],
     ['malformed metadata', { object: 'list', data: [{ id: 'route', capabilities: [], provider: 5 }] }],
+    ['invalid access', { object: 'list', data: [{ id: 'route', capabilities: [], access: 'unknown' }] }],
     ['mixed valid and malformed entries', { object: 'list', data: [{ id: 'good', capabilities: [] }, { id: 'bad', capabilities: null }] }],
   ])('rejects %s', async (_name, payload) => {
     await expect(fetchGatewayRoutes('https://gateway.example/v1', {

@@ -6,6 +6,20 @@ const gateway = () => ({ ...emptySettings(), open: true, preset: 'moderado-cloud
   providers: buildProviderChoices(), baseUrl: 'http://127.0.0.1:4788/v1' });
 
 describe('Gateway and provider Settings boundary', () => {
+  it('presents Gateway access in the unified provider connection flow', () => {
+    const choices = buildProviderChoices();
+    const gatewayChoice = choices.find((choice) => choice.value === 'moderado-cloud');
+    expect(gatewayChoice?.tag).toBe('Gateway');
+    expect(gatewayChoice?.description).toContain('public access');
+
+    const html = settingsPaneHtml(gateway());
+    expect(html).toContain('id="settings-provider"');
+    expect(html).toContain('value="moderado-cloud"');
+    expect(html).toContain('Public Gateway (paid routes)');
+    expect(html).toContain('Browser website key');
+    expect(html).toContain('Manual website key');
+  });
+
   it('keeps a large model inventory inside selects with only selected metadata outside', () => {
     const models = Array.from({ length: 200 }, (_, index) => ({
       id: `model-${index}`, accessTier: 'free_trial', isFree: true,
@@ -28,7 +42,14 @@ describe('Gateway and provider Settings boundary', () => {
     expect(html).toContain('id="settings-base-url"');
     expect(html).toContain('http://127.0.0.1:4788/v1');
     expect(html).not.toContain('local runtime needs no API key');
-    expect(html).toContain('Public access');
+    expect(html).toContain('Public Gateway (paid routes)');
+    expect(html).toContain('Free Gateway models require a Moderado website API key');
+  });
+
+  it('warns that Gateway AUTO may select a paid route', () => {
+    const html = settingsPaneHtml({ ...gateway(), defaultModel: 'auto', models: [{ id: 'auto', accessTier: 'unknown', isFree: false }] });
+    expect(html).toContain('AUTO · Gateway routing');
+    expect(html).toContain('may select a free or paid route');
   });
 
   it('offers a masked write-only key field without returning stored credentials', () => {

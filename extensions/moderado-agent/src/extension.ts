@@ -503,9 +503,11 @@ async function openDiffTab(requestId: string): Promise<void> {
       const inventory = routes ? routes.map(route => ({ id: route.id, object: 'model' as const, owned_by: route.owned_by ?? route.provider ?? 'moderado-cloud',
         ...(route.capabilities.includes('tools') || route.capabilities.includes('tool_calling') ? { supported_parameters: ['tools'] } : {}) }))
         : await new DesktopOpenAIAdapter({ id: connection.id, name: connection.displayName, baseUrl: connection.baseUrl, apiKey }).discoverModels(controller.signal);
-      const router = new DesktopModelRouter({ providerId: connection.id, inventory, allowPaid: settings.allowPaid ?? false,
+      const router = new DesktopModelRouter({ providerId: connection.id, inventory,
+        gatewayAccess: routes ? new Map(routes.flatMap(route => route.access ? [[route.id, route.access] as const] : [])) : undefined,
+        allowPaid: settings.allowPaid ?? false,
         allowUnknown: settings.allowUnknown ?? false, requireTools: true });
-      return [{ id: 'auto', accessTier: routes ? 'free_trial' : 'unknown', isFree: Boolean(routes), toolSupport: 'supported' }, ...inventory.map(entry => {
+      return [{ id: 'auto', accessTier: 'unknown', isFree: false, toolSupport: 'supported' }, ...inventory.map(entry => {
         const classification = router.classifyModel(entry.id);
         const route = routes?.find(item => item.id === entry.id);
         return { id: entry.id, accessTier: classification.accessTier, toolSupport: classification.toolSupport,

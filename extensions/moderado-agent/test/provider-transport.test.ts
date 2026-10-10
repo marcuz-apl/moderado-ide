@@ -61,6 +61,12 @@ describe('Desktop provider transport', () => {
     await expect(collect(adapter)).rejects.not.toThrow('secret-test-body');
   });
 
+  it('explains the Gateway free-route key requirement on HTTP 401 without exposing the response body', async () => {
+    const adapter = new DesktopOpenAIAdapter({ id: 'moderado-cloud', name: 'Gateway', baseUrl: 'https://example.test/v1', fetchImpl: async () => new Response('private-body', { status: 401 }) });
+    await expect(collect(adapter)).rejects.toThrow(/Moderado website API key.*Settings/);
+    await expect(collect(adapter)).rejects.not.toThrow('private-body');
+  });
+
   it('classifies stream errors without exposing provider detail', async () => {
     await expect(collect(adapterFor(frame({ error: { code: 429, message: 'secret' } })))).rejects.toMatchObject({ code: 'ERR_PROVIDER_RATE_LIMIT' });
     await expect(collect(adapterFor(frame({ error: { code: 429, message: 'secret' } })))).rejects.not.toThrow('secret');

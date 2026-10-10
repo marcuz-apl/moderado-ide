@@ -9,9 +9,20 @@ const makeRouter = (inventory: ModelInventoryEntry[], providerId = 'openrouter',
   new DesktopModelRouter({ providerId, inventory, allowPaid, allowUnknown, requireTools: true });
 
 describe('Desktop model routing', () => {
-  it('classifies Gateway AUTO with free tool support when the v0.4.8 core asks directly', () => {
-    expect(makeRouter([], 'moderado-cloud').classifyModel('auto')).toMatchObject({ accessTier: 'free_trial', toolSupport: 'supported' });
+  it('classifies Gateway AUTO as unknown cost because the server may select a paid route', () => {
+    expect(makeRouter([], 'moderado-cloud').classifyModel('auto')).toMatchObject({ accessTier: 'unknown', toolSupport: 'supported' });
     expect(makeRouter([], 'openrouter').classifyModel('auto')).toMatchObject({ accessTier: 'unknown', toolSupport: 'unknown' });
+  });
+
+  it('uses Gateway access metadata without inventing a numeric provider price', () => {
+    const inventory = [model('free-route'), model('paid-route'), model('legacy-route')];
+    const router = new DesktopModelRouter({ providerId: 'moderado-cloud', inventory, allowPaid: false, allowUnknown: false, requireTools: true,
+      gatewayAccess: new Map([['free-route', 'free'], ['paid-route', 'paid']]),
+    });
+    expect(router.classifyModel('free-route').accessTier).toBe('free_trial');
+    expect(router.classifyModel('paid-route').accessTier).toBe('paid');
+    expect(router.classifyModel('legacy-route').accessTier).toBe('unknown');
+    expect(inventory.every(entry => entry.pricing === undefined)).toBe(true);
   });
 
   it('extends the injected engine router contract', () => {
@@ -99,9 +110,11 @@ describe('Desktop model routing', () => {
     expect(router.selectModel([], { pinnedModelId: 'auto' }).selectedModel.id).toBe('auto');
   });
 
-  it('pins an exact Gateway route and classifies the owner-confirmed catalog as Free', () => {
+  it('pins an exact Gateway route with explicit free access metadata', () => {
     const inventory = [model('moonshotai/kimi-k3')];
-    const router = makeRouter(inventory, 'moderado-cloud');
+    const router = new DesktopModelRouter({ providerId: 'moderado-cloud', inventory, allowPaid: false, allowUnknown: false, requireTools: true,
+      gatewayAccess: new Map([[inventory[0].id, 'free']]),
+    });
     expect(router.classifyModel(inventory[0].id).accessTier).toBe('free_trial');
     expect(router.selectModel(inventory, { pinnedModelId: inventory[0].id }).selectedModel.id).toBe(inventory[0].id);
   });

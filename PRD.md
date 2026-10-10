@@ -3,11 +3,11 @@
 **Project version:** see [VERSION](VERSION) (development version; releases are tracked separately)
 **Release status:** v0.1.30 is the latest published stable release. v0.1.29 was withdrawn after a webview startup error. See [installation and release limitations](docs/INSTALL.md) and the [roadmap](docs/ROADMAP.md).
 **Target platforms:** Linux, macOS, and Windows. Public artifacts exist for all three platforms, but native Linux installation, Windows signing, and macOS Developer ID signing/notarization remain open.
-**Reference agent baseline:** Moderado CLI `v0.4.8` pinned contracts, core, and
-tools source; IDE-owned provider behavior adapts CLI `v0.4.8` fixtures and
+**Reference agent baseline:** Moderado CLI `v0.4.10` pinned contracts, core, and
+tools source; IDE-owned provider behavior adapts CLI `v0.4.10` fixtures and
 behavior without using CLI provider code at runtime. The exact source commits
 are pinned in `sources.lock.json`. The approved source update is commit
-`d5e263ed0c9ba6715d0ce69aa640b9b9111931c8` (`v0.4.8+261006d`);
+`a3479fffc6e00ca8796893920930a258759243c5` (`v0.4.10+2610105`);
 prior build/test evidence does not verify this updated baseline.
 
 ## 1. Purpose
@@ -30,7 +30,8 @@ agent in a complete editor. The first complete flow is:
    one through IDE; resolve its key without exposing it in UI messages.
 4. Discover models, select a pinned model or free-first AUTO route, and show
    paid or unknown-cost models only under the same explicit opt-in rules as
-   the pinned Moderado engine.
+   the pinned Moderado engine. Free Moderado Gateway routes require a valid
+   Moderado website API key; Gateway model listing and paid routes do not.
 5. Start or resume a workspace session, stream events and usage, inspect a
    proposed diff or command, decide approval, and observe the result.
 6. Close and reopen IDE; the session and selected provider/model remain
@@ -56,7 +57,7 @@ agent in a complete editor. The first complete flow is:
 | --- | --- | --- |
 | F1 | Produce Moderado-branded Linux, macOS, and Windows IDE packages from pinned Code OSS/VSCodium inputs, starting with Linux x64 development. | Build, install, and launch each edition on its target OS; product name, icon, data directory, URL scheme, and installer IDs do not collide with VSCodium or VS Code. |
 | F2 | Bundle the pinned Moderado agent contracts, core, and tools with a IDE-owned provider layer and presets. | With no CLI executable installed, connect to a fake provider and complete a bounded agent turn. |
-| F3 | Preserve model inventory, free-first AUTO routing, model pinning, and paid/unknown-cost opt-in in the IDE-owned provider layer with offline parity to CLI `v0.4.8`. | Shared offline fixtures yield equivalent eligibility and routing outcomes in CLI and IDE for the IDE-owned provider revision. |
+| F3 | Preserve model inventory, free-first AUTO routing, model pinning, and paid/unknown-cost opt-in in the IDE-owned provider layer with offline parity to CLI `v0.4.10`. | Shared offline fixtures yield equivalent eligibility and routing outcomes in CLI and IDE for the IDE-owned provider revision. |
 | F4 | Render structured agent events, tool previews, usage, cancellation, and actionable errors; show current-task input/output/total token counts and output rate in the Moderado header. | A real editor-host test observes ordered events, can cancel a running turn, and verifies provider-reported versus estimated token usage display. |
 | F5 | Auto-Approve starts enabled for reads, file edits, web content, and MCP calls; command execution remains approval-gated. Users can turn categories off to require human approval. Plan mode blocks mutations, and requests needing a human decision fail closed on timeout, cancellation, malformed or mismatched decisions, or non-interactive execution. | Tests verify the startup defaults and that enabled categories are approved by the host. Gated writes show every affected path and a complete proposed replacement/patch; commands show the command and working directory. A missing complete preview denies the action. |
 | F6 | Reuse the same local Moderado configuration, skills, and session schema on the same OS. | IDE reads a CLI-created profile/session and the CLI reads a IDE-created session after restart. |

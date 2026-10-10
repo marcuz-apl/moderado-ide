@@ -18,7 +18,7 @@ Moderado IDE plans to use three independent source inputs:
 3. [Moderado CLI](https://github.com/marcuz-apl/moderado), the source of the
    agent contracts, provider-neutral core, and workspace tools.
    Gateway/provider adapters, presets, discovery, model policy, transport,
-   and routing are IDE-owned code that adapts CLI `v0.4.8` behavior
+   and routing are IDE-owned code that adapts CLI `v0.4.10` behavior
    without using CLI provider code at runtime.
 
 VSCodium is not a vendored editor library and its released executable is not
@@ -32,13 +32,13 @@ from the MIT-licensed Code OSS source.
 
 Record exact immutable revisions for VSCodium,
 Code OSS, and Moderado in an IDE-owned source lock/manifest. The current
-Moderado contracts/core/tools reference is CLI release `v0.4.8`, commit
-`d5e263ed0c9ba6715d0ce69aa640b9b9111931c8` (package version
-`v0.4.8+261006d`, tag object `8d9b75df038a3cd6764dcf11a218ca6d47fcb27c`).
-The owner authorized advancing this baseline on October 7, 2026. Do not
+Moderado contracts/core/tools reference is CLI release `v0.4.10`, commit
+`a3479fffc6e00ca8796893920930a258759243c5` (package version
+`v0.4.10+2610105`, tag `v0.4.10`).
+The owner authorized advancing this baseline on October 10, 2026. Do not
 assume its npm package exposes the internal workspaces as separate
 installable packages. IDE-owned Gateway/provider behavior instead
-adapts CLI `v0.4.8` fixtures and behavior without using CLI provider code
+adapts CLI `v0.4.10` fixtures and behavior without using CLI provider code
 at runtime. Updating the agent snapshot does not transfer provider ownership
 to the CLI. Release manifests record the source revisions used for each
 platform package. Build Moderado's internal packages from the pinned source revision and bundle

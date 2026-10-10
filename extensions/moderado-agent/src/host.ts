@@ -366,9 +366,9 @@ export class AgentHost implements IApprovalHandler {
           timestamp: Date.now(),
         });
       }
-      const { inventory } = await this.discoverInventory(resolution, controller.signal);
+      const { inventory, routes } = await this.discoverInventory(resolution, controller.signal);
       this.catalogConnectionId = resolution.connectionId ?? provider.id;
-      this.router = this.routerFor(resolution, inventory, preferences);
+      this.router = this.routerFor(resolution, inventory, routes, preferences);
       const requested = input.modelId || this.options.pinnedModelId
         || (state.kind === 'ok' && typeof state.config.defaultModel === 'string' ? state.config.defaultModel : undefined)
         || resolution.defaultModel;
@@ -508,7 +508,7 @@ export class AgentHost implements IApprovalHandler {
     );
     const { inventory, routes } = await this.discoverInventory(resolution);
     this.catalogConnectionId = resolution.connectionId ?? resolution.adapter.id;
-    this.router = this.routerFor(resolution, inventory, preferences);
+    this.router = this.routerFor(resolution, inventory, routes, preferences);
 
     const models: ModelOption[] = inventory.map((entry) => {
       const classification = this.router.classifyModel(entry.id);
@@ -523,14 +523,15 @@ export class AgentHost implements IApprovalHandler {
       };
     });
     if (resolution.adapter.id !== 'fake') models.unshift({
-      id: 'auto', accessTier: resolution.connectionId === 'moderado-cloud' ? 'free_trial' : 'unknown',
-      toolSupport: 'supported', isFree: resolution.connectionId === 'moderado-cloud',
+      id: 'auto', accessTier: 'unknown',
+      toolSupport: 'supported', isFree: false,
     });
     return models;
   }
 
-  private routerFor(resolution: ProviderResolution, inventory: ModelInventoryEntry[], preferences?: SettingsPreferences): DesktopModelRouter {
+  private routerFor(resolution: ProviderResolution, inventory: ModelInventoryEntry[], routes?: GatewayRoute[], preferences?: SettingsPreferences): DesktopModelRouter {
     return new DesktopModelRouter({ providerId: resolution.connectionId ?? resolution.adapter.id, inventory,
+      gatewayAccess: routes ? new Map(routes.flatMap(route => route.access ? [[route.id, route.access] as const] : [])) : undefined,
       allowPaid: preferences?.allowPaidModels ?? this.options.allowPaid ?? false, allowUnknown: preferences?.allowUnknownModels ?? this.options.allowUnknown ?? false, requireTools: true });
   }
 

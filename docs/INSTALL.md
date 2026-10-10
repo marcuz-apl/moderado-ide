@@ -15,7 +15,7 @@
 | Targets | Linux x64, macOS x64/arm64, and Windows x64 |
 | Existing artifact evidence | Official v0.1.30 release includes Windows x64, Linux x64, macOS Apple Silicon arm64, and macOS Intel x64 assets |
 | Editor base | Code OSS `1.135.0`, built through VSCodium `1.135.06055` |
-| Agent packages | Moderado CLI `v0.4.8` (`d5e263ed…`, `v0.4.8+261006d`) |
+| Agent packages | Moderado CLI `v0.4.10` (`a3479fff…`, `v0.4.10+2610105`) |
 | Architectures | Linux and Windows x64; macOS x64 and arm64 |
 
 The stable [v0.1.30 release](https://github.com/marcuz-apl/moderado-ide/releases/tag/v0.1.30%2B261009t) was built from commit `5432a4a88027bb0d3185dc528a9de78a371e6629` by [workflow run 37985155914](https://github.com/marcuz-apl/moderado-ide/actions/runs/37985155914). Use the manually dispatched [build-and-release workflow](../.github/workflows/build-and-release.yml) with platform `all` for future full releases; partial-platform and custom-source builds remain in Actions for review. For a local Linux build, follow the [Linux build instructions](../README.md#build-the-linux-editor-locally). Windows/Linux cross-home profile sharing is outside this milestone: the two environments have different home directories and do not automatically share a `~/.moderado` profile.

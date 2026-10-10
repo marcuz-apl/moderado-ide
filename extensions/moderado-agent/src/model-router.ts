@@ -5,6 +5,7 @@ import { DESKTOP_PROVIDER_PRESETS, isDesktopFreeModel } from './provider-catalog
 export interface DesktopModelRouterOptions {
   providerId: string;
   inventory: ModelInventoryEntry[];
+  gatewayAccess?: ReadonlyMap<string, 'free' | 'paid'>;
   allowPaid: boolean;
   allowUnknown: boolean;
   requireTools: boolean;
@@ -21,7 +22,7 @@ export class DesktopModelRouter extends Router {
 
   override classifyModel(modelId: string, isLocalProfile = false, supportedParameters?: string[]): ModelClassification {
     if (this.defaults.providerId === 'moderado-cloud' && modelId === 'auto') {
-      return { modelId, accessTier: 'free_trial', toolSupport: 'supported', source: 'official_metadata', notes: 'Gateway selects and falls back between routes.' };
+      return { modelId, accessTier: 'unknown', toolSupport: 'supported', source: 'official_metadata', notes: 'Gateway selects and falls back between free or paid routes.' };
     }
     const entry = this.inventory.find((candidate) => candidate.id === modelId) ?? { id: modelId };
     const parameters = supportedParameters ?? ('supported_parameters' in entry ? entry.supported_parameters : undefined);
@@ -37,7 +38,11 @@ export class DesktopModelRouter extends Router {
       || Object.values(pricing).some((price) => typeof price !== 'string' || price.trim() === '' || !Number.isFinite(Number(price)) || Number(price) !== 0)
     );
     const local = isLocalProfile || DESKTOP_PROVIDER_PRESETS.find((preset) => preset.id === this.defaults.providerId)?.local;
-    const accessTier = invalidOrMetered ? 'paid'
+    const gatewayAccess = this.defaults.providerId === 'moderado-cloud' ? this.defaults.gatewayAccess?.get(modelId) : undefined;
+    const accessTier = gatewayAccess === 'paid' ? 'paid'
+      : gatewayAccess === 'free' ? 'free_trial'
+      : this.defaults.providerId === 'moderado-cloud' ? 'unknown'
+      : invalidOrMetered ? 'paid'
       : local ? 'local'
         : isDesktopFreeModel(entry, this.defaults.providerId) ? 'free_trial' : 'unknown';
     return { modelId, accessTier, toolSupport, source: 'official_metadata' };

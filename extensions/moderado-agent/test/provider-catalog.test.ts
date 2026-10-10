@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { isDesktopFreeModel } from '../src/provider-catalog.js';
 
 describe('Desktop model cost policy', () => {
-  it.each(['agnes-ai', 'nvidia-nim', 'moderado-cloud', 'ollama', 'lm-studio'])('recognizes the declared free catalog for %s', (providerId) => {
+  it.each(['agnes-ai', 'nvidia-nim', 'ollama', 'lm-studio'])('recognizes the declared free catalog for %s', (providerId) => {
     expect(isDesktopFreeModel({ id: 'model-a' }, providerId)).toBe(true);
+  });
+
+  it('does not infer free Gateway access from a missing route classification', () => {
+    expect(isDesktopFreeModel({ id: 'model-a' }, 'moderado-cloud')).toBe(false);
   });
 
   it('requires pricing evidence for an undeclared provider', () => {

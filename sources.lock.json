@@ -22,12 +22,12 @@
     },
     "moderado": {
       "repository": "https://github.com/marcuz-apl/moderado.git",
-      "tag": "v0.4.8",
-      "tagObject": "8d9b75df038a3cd6764dcf11a218ca6d47fcb27c",
-      "commit": "d5e263ed0c9ba6715d0ce69aa640b9b9111931c8",
-      "version": "v0.4.8+261006d",
-      "role": "contracts-core-tools; IDE owns Gateway/provider adapters, discovery, model policy, transport, and routing, adapting CLI v0.4.8 behavior without CLI provider code at runtime",
-      "verification": "Annotated tag object and peeled commit verified with git ls-remote and an IDE-local clone. Contracts/core/tools diffs and MIT license reviewed; no new runtime dependencies or approval/jail policy changes. Owner requested v0.4.8 baseline on 2026-10-07."
+      "tag": "v0.4.10",
+      "tagObject": "a3479fffc6e00ca8796893920930a258759243c5",
+      "commit": "a3479fffc6e00ca8796893920930a258759243c5",
+      "version": "v0.4.10+2610105",
+      "role": "contracts-core-tools; IDE owns Gateway/provider adapters, discovery, model policy, transport, and routing, adapting CLI v0.4.10 behavior without CLI provider code at runtime",
+      "verification": "Tag and commit verified with git ls-remote. Contracts/core/tools diffs and MIT license reviewed; changes add optional Gateway route access metadata, make free-route website-key policy explicit, and update provider presets without new runtime dependencies or approval/jail policy changes. Owner requested v0.4.10 baseline on 2026-10-10."
     }
   },
   "buildUse": "Source identities are verified. Use these revisions for the Windows x64 build with branding/product.json as the Desktop product overlay."

@@ -24,6 +24,19 @@ The Gateway connection uses connection ID `moderado-cloud` with
 config-schema migration: Gateway and direct-provider connections,
 `defaultModel`, route IDs, and cost-policy flags reuse the existing
 shared fields alongside the CLI.
+As with CLI `v0.4.10`, IDE presents Gateway access in its unified provider
+connection flow rather than a separate login command.
+
+Gateway model listing is public. Its route catalog may include `access: 'free'`
+or `access: 'paid'`; the IDE uses that field for model cost classification and
+marks older catalogs without it as unknown cost. Free-route inference requires a valid
+Moderado website API key. The saved manual key or browser credential is
+resolved by the host and sent as a bearer token on Gateway completion requests.
+The `public` auth method remains a keyless connection for paid routes and
+public model listing. Gateway `auto` is selected by the server and may choose
+a free or paid route, so the IDE labels its cost unknown. It requires a key
+when the Gateway dispatches a free route. Direct BYOK and local provider
+connections are unaffected.
 
 The editor's own layout, extension database, caches, and update metadata use
 separate application data identified by Moderado IDE. Their location must
@@ -50,7 +63,7 @@ New IDE key saves stage an immutable target of the form
 `moderado/provider/<normalized-provider-id>-<UUID>` and link that exact reference
 from config only after storage succeeds. Existing canonical targets remain
 readable and are never migrated or overwritten by staging. The pinned CLI
-`v0.4.8` preserves the stored reference string and passes it unchanged through
+`v0.4.10` preserves the stored reference string and passes it unchanged through
 its resolver to Windows Credential Manager, so these targets need no profile
 schema change. A failed save can leave an unreferenced credential; IDE does not
 automatically delete such entries or claim coordinated CLI credential writes.
@@ -91,11 +104,11 @@ must cover these existing CLI behaviors.
 ## Behavior parity boundary
 
 Provider/model eligibility and agent engine behavior follow the pinned CLI
-contracts/core/tools source at CLI `v0.4.8`, as recorded in `sources.lock.json`.
+contracts/core/tools source at CLI `v0.4.10`, as recorded in `sources.lock.json`.
 The updated baseline requires fresh compatibility checks; previous fixtures
 and host evidence do not establish verification of this source update.
 The IDE-owned provider layer adapts CLI
-`v0.4.8` cost, AUTO, and routing fixtures/behavior without using CLI provider
+`v0.4.10` cost, AUTO, and routing fixtures/behavior without using CLI provider
 code at runtime; it does not claim simultaneous config-write safety beyond
 the coordinated-writer guarantees above.
 IDE's Auto-Approve defaults enable reads, file edits, web content, and MCP

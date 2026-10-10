@@ -14,6 +14,7 @@ export interface DiscoveryOptions {
 
 export interface GatewayRoute {
   id: string;
+  access?: 'free' | 'paid';
   provider?: string;
   owned_by?: string;
   capabilities: string[];
@@ -22,6 +23,7 @@ export interface GatewayRoute {
 
 const GatewayRouteSchema = z.object({
   id: z.string().min(1),
+  access: z.enum(['free', 'paid']).optional(),
   provider: z.string().optional(),
   owned_by: z.string().optional(),
   capabilities: z.array(z.string()),

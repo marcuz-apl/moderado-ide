@@ -245,7 +245,7 @@ describe('Desktop provider host integration', () => {
     const body = JSON.parse(String(post[1]?.body));
     expect(body).not.toHaveProperty('max_tokens');
     expect(body.messages.find((message: { role: string }) => message.role === 'tool').content).toBe(content);
-    expect(events.find(event => event.type === 'model_change')).toMatchObject({ newModelId: 'auto', accessClass: 'free_trial' });
+    expect(events.find(event => event.type === 'model_change')).toMatchObject({ newModelId: 'auto', accessClass: 'unknown' });
   });
 
   it('leaves Gateway AUTO retry and fallback to the server', async () => {
@@ -256,11 +256,31 @@ describe('Desktop provider host integration', () => {
     expect(fetchImpl.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
   });
 
-  it('exposes Free Gateway models with validated metadata and an AUTO row', async () => {
+  it('exposes legacy Gateway models with unknown access and an AUTO row', async () => {
     const host = new AgentHost({ workspaceRoot: workspace(), moderadoHome: configuredHome('moderado-cloud', gateway), fetchImpl: fakeHTTP([route]), onEvent: () => {}, promptForApproval: async () => undefined });
     const models = await host.discoverModels();
-    expect(models[0]).toMatchObject({ id: 'auto', isFree: true, accessTier: 'free_trial' });
-    expect(models[1]).toMatchObject({ id: route.id, isFree: true, provider: route.provider, ownedBy: route.owned_by, capabilities: route.capabilities, dataNote: route.data_note, toolSupport: 'supported' });
+    expect(models[0]).toMatchObject({ id: 'auto', isFree: false, accessTier: 'unknown' });
+    expect(models[1]).toMatchObject({ id: route.id, isFree: false, accessTier: 'unknown', provider: route.provider, ownedBy: route.owned_by, capabilities: route.capabilities, dataNote: route.data_note, toolSupport: 'supported' });
+  });
+
+  it('classifies advertised paid Gateway routes separately from free routes', async () => {
+    const routes = [
+      { ...route, access: 'free' },
+      { id: 'paid-route', provider: 'openrouter', capabilities: ['chat', 'tools'], access: 'paid' },
+    ];
+    const host = new AgentHost({ workspaceRoot: workspace(), moderadoHome: configuredHome('moderado-cloud', gateway), fetchImpl: fakeHTTP(routes), onEvent: () => {}, promptForApproval: async () => undefined });
+    const models = await host.discoverModels();
+    expect(models.find(model => model.id === route.id)).toMatchObject({ accessTier: 'free_trial', isFree: true });
+    expect(models.find(model => model.id === 'paid-route')).toMatchObject({ accessTier: 'paid', isFree: false });
+  });
+
+  it('allows a keyless advertised paid Gateway route when paid use is enabled', async () => {
+    const paidRoute = { id: 'paid-route', provider: 'openrouter', capabilities: ['chat', 'tools'], access: 'paid' };
+    const fetchImpl = fakeHTTP([paidRoute]);
+    const host = new AgentHost({ workspaceRoot: workspace(), moderadoHome: configuredHome('moderado-cloud', gateway), fetchImpl, allowPaid: true, onEvent: () => {}, promptForApproval: async () => undefined });
+    expect((await host.startRun({ task: 'Hello.', modelId: paidRoute.id })).model).toBe(paidRoute.id);
+    const post = fetchImpl.mock.calls.find(([, init]) => init?.method === 'POST')!;
+    expect(post[1]?.headers).not.toHaveProperty('Authorization');
   });
 
   it('uses the saved connection selection when the run does not override it', async () => {

@@ -39,9 +39,9 @@ notes and installation guide.
 ## M2 status (integrated; agent wiring verified)
 
 `vendor/moderado/` holds the pinned CLI agent packages exported at the
-immutable CLI `v0.4.8` revision in `sources.lock.json` (commit
-`d5e263ed0c9ba6715d0ce69aa640b9b9111931c8`, package version
-`v0.4.8+261006d`; export details are recorded in `vendor/moderado/VENDORED.json`). The export uses `git archive`, so
+immutable CLI `v0.4.10` revision in `sources.lock.json` (commit
+`a3479fffc6e00ca8796893920930a258759243c5`, package version
+`v0.4.10+2610105`; export details are recorded in `vendor/moderado/VENDORED.json`). The export uses `git archive`, so
 the sibling CLI working tree is never modified.
 
 `extensions/moderado-agent/` bundles those packages with IDE's host into a
@@ -66,7 +66,7 @@ release, Credential Manager references, and a coordinated `config.json` writer.
 ## M3 status (implemented; prior baseline verified)
 
 IDE now reads and writes the shared `~/.moderado` profile through a
-canonical, coordinated path. The CLI `v0.4.8` source update requires rerunning
+canonical, coordinated path. The CLI `v0.4.10` source update requires rerunning
 the compatibility suite before claiming verification of the current baseline.
 Round-trip tests run against the *actual* CLI
 `dist` from the pinned revision rather than a hand-written copy of its schema,

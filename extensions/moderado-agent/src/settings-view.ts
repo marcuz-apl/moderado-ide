@@ -193,7 +193,7 @@ function selectedModelDetails(state: SettingsState): string {
   const model = shown.find(entry => entry.id === state.defaultModel);
   if (!model) return '';
   return `<div class="selected-model-details">
-    ${model.id === 'auto' ? `<p class="note">${state.preset === 'moderado-cloud' ? 'Gateway selects a free route.' : 'Ranks eligible models and permits fallback.'}</p>` : ''}
+    ${model.id === 'auto' ? `<p class="note">${state.preset === 'moderado-cloud' ? 'Gateway selects the route and may select a free or paid route.' : 'Ranks eligible models and permits fallback.'}</p>` : ''}
     ${model.provider ? `<p class="note">Provider: ${escapeHtml(model.provider)}</p>` : ''}
     ${model.ownedBy ? `<p class="note">Owner: ${escapeHtml(model.ownedBy)}</p>` : ''}
     ${model.capabilities?.length ? `<p class="note">Capabilities: ${escapeHtml(model.capabilities.join(', '))}</p>` : ''}
@@ -252,13 +252,13 @@ export function settingsPaneHtml(state: SettingsState): string {
 
   const loginField = gateway ? `<label for="settings-login-method">Gateway access</label>
     <select id="settings-login-method"${disabled}>
-      ${(['public', 'browser', 'manual'] as const).map(method => `<option value="${method}"${method === loginMethod ? ' selected' : ''}>${{ public: 'Public access · no key', browser: 'Browser sign-in', manual: 'Manual Gateway key' }[method]}</option>`).join('')}
+      ${(['public', 'browser', 'manual'] as const).map(method => `<option value="${method}"${method === loginMethod ? ' selected' : ''}>${{ public: 'Public Gateway (paid routes)', browser: 'Browser website key', manual: 'Manual website key' }[method]}</option>`).join('')}
     </select>` : '';
   const keyField = `<label for="settings-api-key">API Key${needsKey ? '' : ' (optional)'}</label>
     <input id="settings-api-key" type="password" autocomplete="off" spellcheck="false" maxlength="8192"
            placeholder="${keyStored ? 'Key stored · paste to replace' : 'Paste API key'}" value=""${disabled} />
     <p class="note">${keyStored ? 'Credential stored. A key is already stored for this provider; this field stays blank. Paste only to replace it.' : 'No credential stored. Keys are stored securely when you save.'}</p>
-    ${!needsKey ? `<p class="note">${gateway ? 'Public access uses the Gateway without a key.' : 'This local runtime needs no API key.'}</p>` : ''}
+    ${!needsKey ? `<p class="note">${gateway ? 'Free Gateway models require a Moderado website API key. Paid routes remain available without one when paid models are enabled.' : 'This local runtime needs no API key.'}</p>` : ''}
     ${gateway && loginMethod === 'browser' ? `<button id="settings-browser-login" type="button"${disabled}>Sign in with browser</button>` : ''}`;
 
   const gatewayEnvironment = gateway ? `<fieldset class="gateway-environment">
