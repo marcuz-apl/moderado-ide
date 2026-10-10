@@ -2,8 +2,8 @@
 
 Updated: 2026-10-10
 Branch: master
-Release source commit: `5432a4a88027bb0d3185dc528a9de78a371e6629`
-Status: v0.1.30 is published as the latest stable release. The owner withdrew the v0.1.29 GitHub Release; its source tag remains intact.
+Release source commit: `f9e4632939d13ec392cbeb9635ffd1806ab782f3`
+Status: v0.1.31 is published as the latest stable release. The owner withdrew the v0.1.29 GitHub Release; its source tag remains intact.
 
 ## Summary
 
@@ -36,6 +36,13 @@ The user tested the Windows v0.1.29 portable build from fix commit `37f494c` and
 The next action is for the owner to test the v0.1.30 packages. The 0.1.29 GitHub Release is absent; keep its source tag and the v0.1.28 release intact.
 
 ## 2026-10-10 CLI v0.4.10 Gateway flow (unreleased)
+
+## 2026-10-10 Moderado IDE v0.1.31 release
+
+- Released [Moderado IDE v0.1.31](https://github.com/marcuz-apl/moderado-ide/releases/tag/v0.1.31%2B2610102) from source commit `f9e4632939d13ec392cbeb9635ffd1806ab782f3`, tag `v0.1.31+2610102`, with 19 assets.
+- Pre-release build-only runs all succeeded: Linux run `38078257847`, Windows/macOS arm64 run `38078259882`, and macOS Intel run `38078261756`.
+- The owner authorized release and dispatch of full-platform run `38081616708`. All four build/verify jobs and the stable GitHub release publisher succeeded.
+- Release verification: non-draft, non-prerelease, 19 assets, target commit `f9e4632939d13ec392cbeb9635ffd1806ab782f3`, published at `2026-10-10T20:55:50Z`. No live provider calls were used as test evidence.
 
 - Advanced the pinned Moderado contracts/core/tools baseline from `v0.4.8+261006d` to `v0.4.10+2610105`, regenerated the vendored snapshot, and updated the documented source revision and verification notes.
 - Kept Gateway access in the IDE's unified Settings → API Config provider flow, matching CLI `v0.4.10`'s merge of `/login` into `/connect`. Gateway is tagged in the provider list, and its access methods are labeled public paid access, browser website key, and manual website key.
