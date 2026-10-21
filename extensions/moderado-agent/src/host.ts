@@ -683,7 +683,14 @@ export function withApprovalGates(
 export function previewFor(toolName: string, parameters: unknown, workspaceRoot: string): Record<string, unknown> {
   const params = (parameters ?? {}) as Record<string, unknown>;
   const relativePath = typeof params.path === 'string' ? params.path : undefined;
-  const target = relativePath && relativePath.trim() ? resolveInJail(workspaceRoot, relativePath) : undefined;
+  // Resolve against the canonical root so the returned path shares one spelling
+  // with `canonicalWorkspaceRoot`. The jail canonicalizes with `realpathSync`,
+  // which on Windows preserves an 8.3 short root (`RUNNER~1`), while
+  // `canonicalWorkspaceRoot` uses `realpathSync.native`, which expands it; a
+  // short target would then make `relative()` emit an absolute path and leak it
+  // into the diff header.
+  const root = canonicalWorkspaceRoot(workspaceRoot);
+  const target = relativePath && relativePath.trim() ? resolveInJail(root, relativePath) : undefined;
 
   switch (toolName) {
     case 'write_file':

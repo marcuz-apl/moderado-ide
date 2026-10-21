@@ -6,7 +6,7 @@ import { AgentEvent, ApprovalRequest } from '@moderado/contracts';
 import { resolveInJail } from '@moderado/tools';
 import { AgentHost, previewFor, resolveProvider } from '../src/host.js';
 import { MemoryCredentialStore } from '../src/credentials.js';
-import { readConfig } from '../src/profile.js';
+import { canonicalWorkspaceRoot, readConfig } from '../src/profile.js';
 import { DesktopOpenAIAdapter } from '../src/provider-transport.js';
 import { preparePrompt } from '../src/attachments.js';
 import { createSession, SessionStore } from '../src/sessions.js';
@@ -352,6 +352,15 @@ describe('previewFor', () => {
     const preview = previewFor('write_file', { path: 'notes.md', content: 'hi' }, root) as Record<string, unknown>;
     expect(String(preview.targetFile).toLowerCase()).toContain('notes.md');
     expect(preview.contentPreview).toBe('hi');
+  });
+
+  it('resolves the target against the canonical workspace root', () => {
+    // `workspace()` uses `realpathSync`, which on a Windows runner preserves an
+    // 8.3 short root (`RUNNER~1`). The preview must still report a target under
+    // the canonical root so `relative()` yields a workspace-relative header.
+    const root = workspace();
+    const preview = previewFor('write_file', { path: 'notes.md', content: 'hi' }, root) as Record<string, unknown>;
+    expect(preview.targetFile).toBe(join(canonicalWorkspaceRoot(root), 'notes.md'));
   });
 
   it('rejects a path that escapes the workspace', () => {
