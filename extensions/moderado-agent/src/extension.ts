@@ -17,7 +17,7 @@ import {
   type CredentialStore,
   resolveCredential,
 } from './credentials.js';
-import { ChatViewState, TranscriptEntry, AutoApproveState, chatHtml, viewSnapshot } from './chat-view.js';
+import { ChatViewState, TranscriptEntry, AutoApproveState, chatHtml, viewSnapshot, transcriptEntryHtml } from './chat-view.js';
 import { autoApproveCategoryForTool, autoApproveDecision, DEFAULT_AUTO_APPROVE } from './auto-approve.js';
 import {
   SettingsState,
@@ -52,6 +52,9 @@ import { authorizeGatewayInBrowser, buildGatewayConnection, persistGatewayLogin 
  * wedge the panel.
  */
 const MODEL_DISCOVERY_TIMEOUT_MS = 20_000;
+
+/** Streamed tokens are painted at most this often. */
+const STREAM_RENDER_INTERVAL_MS = 60;
 
 export interface ModeradoApi {
   /** Starts one bounded agent turn. Any mutation still requires human approval. */
@@ -107,6 +110,9 @@ export function activate(context: vscode.ExtensionContext): ModeradoApi {
   let chatView: vscode.WebviewView | undefined;
   // True once the webview document has been written; see render().
   let documentRendered = false;
+  // The RECENT list is read from disk. It is cached between session changes so
+  // a streamed token does not rescan every session file.
+  let recentsDirty = true;
 
   // Prefer the real editor workspace root so a session directory matches what the
   // CLI would derive for the same folder.
@@ -202,17 +208,61 @@ export function activate(context: vscode.ExtensionContext): ModeradoApi {
 
   /** Coalesces streamed assistant text into a single transcript entry. */
   let streaming: { text: string; entry: TranscriptEntry } | null = null;
+  let deltaTimer: ReturnType<typeof setTimeout> | undefined;
+  // The transcript length the webview last received in a full snapshot. A delta
+  // is only safe when the webview's row count still matches it.
+  let renderedTranscriptLength = -1;
+
   function appendDelta(delta: string): void {
     if (!streaming) {
       const entry: TranscriptEntry = { kind: 'assistant', label: 'Moderado', text: '' };
       streaming = { text: '', entry };
       view.transcript.push(entry);
-      if (view.transcript.length > 200) view.transcript.shift();
+      if (view.transcript.length > 200) {
+        view.transcript.shift();
+        // The webview still holds the unshifted rows; rebuild them once.
+        renderedTranscriptLength = -1;
+      }
     }
     streaming.text += delta;
     streaming.entry.text = streaming.text;
-    render();
+    if (deltaTimer === undefined) {
+      deltaTimer = setTimeout(() => {
+        deltaTimer = undefined;
+        renderDelta();
+      }, STREAM_RENDER_INTERVAL_MS);
+    }
   }
+
+  function flushDelta(): void {
+    if (deltaTimer !== undefined) {
+      clearTimeout(deltaTimer);
+      deltaTimer = undefined;
+    }
+  }
+
+  /**
+   * Paints only the entry that is currently streaming. A full snapshot is used
+   * when the document is not ready or the transcript shape changed, because a
+   * single-row update is only valid while the webview has the same rows.
+   */
+  function renderDelta(): void {
+    if (!chatView || !documentRendered || !streaming) {
+      render();
+      return;
+    }
+    const index = view.transcript.indexOf(streaming.entry);
+    // A new streaming entry may be the one row the webview has not seen yet;
+    // the delta handler appends it. Any other shape change needs a full render.
+    const appending = renderedTranscriptLength === view.transcript.length - 1
+      && view.transcript[view.transcript.length - 1] === streaming.entry;
+    if (index < 0 || (!appending && renderedTranscriptLength !== view.transcript.length)) {
+      render();
+      return;
+    }
+    void chatView.webview.postMessage({ type: 'delta', index, html: transcriptEntryHtml(streaming.entry) });
+  }
+
   function endStreaming(): void {
     streaming = null;
   }
@@ -836,20 +886,21 @@ async function openDiffTab(requestId: string): Promise<void> {
       view.pendingApproval = null;
       view.running = false;
       host.startNewSession();
-      refreshRecents();
+      invalidateRecents();
       settings.status = undefined;
       render();
       return;
     }
     if (msg.type === 'showSessions') {
       view.historyOpen = true;
+      invalidateRecents();
       render();
       return;
     }
     if (msg.type === 'toggleHistory') {
       // Chat History: expand/collapse the RECENT panel; refresh on open.
       view.historyOpen = !view.historyOpen;
-      if (view.historyOpen) refreshRecents();
+      if (view.historyOpen) invalidateRecents();
       render();
       return;
     }
@@ -1060,8 +1111,18 @@ async function openDiffTab(requestId: string): Promise<void> {
     return `$${value.toFixed(2)}`;
   }
 
-  /** Rebuilds the RECENT list from the shared session store. */
-  function refreshRecents(): void {
+  /** Marks the RECENT list stale after a session is created, renamed or deleted. */
+  function invalidateRecents(): void {
+    recentsDirty = true;
+  }
+
+  /**
+   * Rebuilds the RECENT list from the shared session store. It is cached until
+   * a session event invalidates it, so streaming does not read every session
+   * file for each token.
+   */
+  function refreshRecents(force = false): void {
+    if (!force && !recentsDirty) return;
     const { sessions } = host.listSessions();
     view.recents = sessions.map((session) => ({
       id: session.id,
@@ -1071,6 +1132,7 @@ async function openDiffTab(requestId: string): Promise<void> {
       updatedAt: formatWhen(session.updatedAt),
       costLabel: costLabelOf(session.usage),
     }));
+    recentsDirty = false;
   }
 
   const sessionTitleKey = (id: string) => `moderado.sessionTitle.${id}`;
@@ -1104,6 +1166,7 @@ async function openDiffTab(requestId: string): Promise<void> {
     }
     try {
       await context.workspaceState.update(sessionTitleKey(id), title);
+      invalidateRecents();
       render();
     } catch {
       void vscode.window.showErrorMessage('Could not save the chat name. The recorded chat was not changed.');
@@ -1139,6 +1202,7 @@ async function openDiffTab(requestId: string): Promise<void> {
         view.transcript = [];
         view.pendingApproval = null;
       }
+      invalidateRecents();
       render();
     } catch {
       void vscode.window.showErrorMessage('Could not delete this chat. Stop any active run and check the history files.');
@@ -1171,6 +1235,7 @@ async function openDiffTab(requestId: string): Promise<void> {
         text: typeof m.content === 'string' ? m.content : '',
       }))
       .slice(-200);
+    invalidateRecents();
     render();
     void vscode.window.showInformationMessage(`Resumed session ${found.id.slice(0, 8)}.`);
   }
@@ -1190,6 +1255,8 @@ async function openDiffTab(requestId: string): Promise<void> {
 
   /** Renders the current chat state into the open sidebar view, if there is one. */
   function render(): void {
+    // Any full render already carries the latest streamed text.
+    flushDelta();
     view.attachments = [...draftAttachments.values()].map(({ id, kind, label }) => ({ id, kind, label }));
     if (!chatView) return;
     // The footer follows the connection and model, so it is recomputed from
@@ -1203,9 +1270,11 @@ async function openDiffTab(requestId: string): Promise<void> {
     if (!documentRendered) {
       chatView.webview.html = chatHtml(view, previewText);
       documentRendered = true;
+      renderedTranscriptLength = view.transcript.length;
       return;
     }
     void chatView.webview.postMessage({ type: 'update', ...viewSnapshot(view, previewText) });
+    renderedTranscriptLength = view.transcript.length;
   }
 
   function append(entry: TranscriptEntry): void {
@@ -1240,6 +1309,7 @@ async function openDiffTab(requestId: string): Promise<void> {
       endStreaming();
       view.running = false;
       view.pendingApproval = null;
+      invalidateRecents();
       render();
     }
   }

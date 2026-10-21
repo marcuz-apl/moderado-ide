@@ -654,6 +654,21 @@ ${toolbarHtml(snapshot.historyOpen, snapshot.tokenUsage, snapshot.tokenUsageTitl
       if (field) field.value = '';
       return;
     }
+    // A streamed token updates one entry instead of rebuilding every row. The
+    // host has already escaped the entry HTML; this message only carries the
+    // entry that changed.
+    if (update && update.type === 'delta') {
+      const index = Number.isInteger(update.index) ? update.index : -1;
+      if (index < 0) return;
+      const pinned = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight <= 24;
+      const entry = transcript.children[index];
+      if (entry) entry.outerHTML = update.html;
+      else if (index === transcript.children.length) transcript.insertAdjacentHTML('beforeend', update.html);
+      const empty = document.querySelector('.empty-state');
+      if (empty) empty.remove();
+      if (pinned) scroll.scrollTop = scroll.scrollHeight;
+      return;
+    }
     if (!update || update.type !== 'update') return;
     const tokenUsage = document.getElementById('token-usage');
     if (tokenUsage) {
@@ -665,6 +680,12 @@ ${toolbarHtml(snapshot.historyOpen, snapshot.tokenUsage, snapshot.tokenUsageTitl
     // so the tail is only followed when it was already in view.
     const pinned = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight <= 24;
     transcript.innerHTML = update.rows;
+    // The welcome state is a sibling of the transcript, so writing rows does
+    // not remove it. Drop it as soon as the first entry exists.
+    if (update.empty === false) {
+      const empty = document.querySelector('.empty-state');
+      if (empty) empty.remove();
+    }
     approvalHost.innerHTML = update.approval;
     input.disabled = update.running;
     document.getElementById('foot-context').disabled = update.running;
@@ -754,16 +775,17 @@ ${toolbarHtml(snapshot.historyOpen, snapshot.tokenUsage, snapshot.tokenUsageTitl
 </body>
 </html>`;
 }
+
+/** Escaped HTML for one transcript row, shared by full and delta updates. */
+export function transcriptEntryHtml(entry: TranscriptEntry): string {
+  return `<li class="${escapeHtml(entry.kind)}"><span class="who">${escapeHtml(entry.label)}</span><pre>${escapeHtml(entry.text)}</pre></li>`;
+}
+
 export function viewSnapshot(
   state: ChatViewState,
   preview: (r: ApprovalRequest) => string,
 ): ViewSnapshot {
-  const rows = state.transcript
-    .map(
-      (entry) =>
-        `<li class="${escapeHtml(entry.kind)}"><span class="who">${escapeHtml(entry.label)}</span><pre>${escapeHtml(entry.text)}</pre></li>`,
-    )
-    .join('');
+  const rows = state.transcript.map(transcriptEntryHtml).join('');
   const settings = state.settings ?? emptySettings();
   const auto = state.autoApprove ?? {
     expanded: false,

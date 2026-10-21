@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ApprovalRequest } from '@moderado/contracts';
-import { chatHtml, emptyAutoApprove, escapeHtml, viewSnapshot, ChatViewState } from '../src/chat-view.js';
+import { chatHtml, emptyAutoApprove, escapeHtml, transcriptEntryHtml, viewSnapshot, ChatViewState } from '../src/chat-view.js';
 import {
   settingsPaneHtml,
   settingsSnapshot,
@@ -173,6 +173,29 @@ describe('chat view', () => {
     expect(html).toContain("update.type !== 'update'");
     expect(html).toContain('transcript.innerHTML = update.rows');
     expect(html).toContain('input.disabled = update.running');
+  });
+
+  it('applies a streamed entry as a single-row delta', () => {
+    const html = chatHtml(state(), preview);
+    expect(html).toContain("update.type === 'delta'");
+    expect(html).toContain('transcript.children[index]');
+    expect(html).toContain('outerHTML = update.html');
+    // The welcome state must not survive the first streamed entry.
+    expect(html).toContain("querySelector('.empty-state')");
+  });
+
+  it('renders one escaped transcript row for delta updates', () => {
+    const entry = { kind: 'assistant' as const, label: '<b>Moderado</b>', text: '<img src=x onerror=bad>' };
+    const row = transcriptEntryHtml(entry);
+    expect(row).toContain('&lt;b&gt;Moderado&lt;/b&gt;');
+    expect(row).toContain('&lt;img src=x onerror=bad&gt;');
+    expect(row).not.toContain('<img src=x');
+    expect(viewSnapshot(state({ transcript: [entry] }), preview).rows).toBe(row);
+  });
+
+  it('drops the welcome state when a full update has rows', () => {
+    const html = chatHtml(state(), preview);
+    expect(html).toContain('update.empty === false');
   });
 
   it('authorises scripts with a per-render nonce', () => {

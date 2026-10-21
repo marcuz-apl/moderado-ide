@@ -12,7 +12,7 @@ const harness = vi.hoisted(() => ({
   finalMessage: null as string | null,
   workspaceRoot: '', windows: true, fileDialog: vi.fn(), contextPicker: vi.fn(), findFiles: vi.fn(), errors: vi.fn(),
   prompt: vi.fn(), browser: vi.fn(), write: vi.fn(), openExternal: vi.fn(),
-  workspaceTitles: new Map<string, unknown>(),
+  workspaceTitles: new Map<string, unknown>(), listCalls: 0,
 }));
 vi.mock('vscode', () => ({
   version: '1.135.0', ConfigurationTarget: { Global: 1 },
@@ -32,7 +32,7 @@ vi.mock('../src/profile.js', async original => ({ ...await original<typeof impor
   readConfig: () => harness.invalid ? { kind: 'invalid', error: 'corrupt profile' } : { kind: 'ok', config: harness.profile } }));
 vi.mock('../src/host.js', () => ({ AgentHost: class {
   constructor(options: unknown) { harness.agentOptions = options; }
-  listSessions() { return { sessions: harness.histories, invalid: [] }; }
+  listSessions() { harness.listCalls += 1; return { sessions: harness.histories, invalid: [] }; }
   get session() { return harness.histories.find(session => session.id === harness.currentId) ?? null; }
   get isRunning() { return false; }
   deleteSession(id: string) { harness.deleted(id); harness.histories = harness.histories.filter(session => session.id !== id); return true; }
@@ -69,7 +69,7 @@ beforeEach(() => {
   harness.fileDialog.mockResolvedValue(undefined); harness.contextPicker.mockResolvedValue(undefined); harness.findFiles.mockResolvedValue([]);
   harness.configValues.clear();
   harness.configUpdate.mockImplementation(async (key: string, value: unknown) => { harness.configValues.set(key, value); });
-  harness.windows = true; harness.histories = []; harness.currentId = ''; harness.confirm.mockResolvedValue('Delete'); harness.workspaceTitles.clear();
+  harness.windows = true; harness.histories = []; harness.currentId = ''; harness.confirm.mockResolvedValue('Delete'); harness.workspaceTitles.clear(); harness.listCalls = 0;
   vi.clearAllMocks(); harness.messages = []; harness.keys.clear(); harness.profile = {}; harness.invalid = false; harness.runs = []; harness.finalMessage = null;
   harness.prompt.mockResolvedValue('mrd_native-secret');
   harness.browser.mockResolvedValue({ accessToken: 'mrd_browser-secret', expiresAt: Date.now() + 60_000 });
@@ -524,6 +524,52 @@ describe('simple answer presentation', () => {
     expect(rows.match(/class="assistant"/g)).toHaveLength(1);
     expect(rows).not.toContain('>Session</span>');
     expect(rows).not.toContain('session s');
+  });
+});
+
+describe('streamed assistant output', () => {
+  it('coalesces deltas into one single-row update without rescanning sessions', () => {
+    vi.useFakeTimers();
+    try {
+      const scansBefore = harness.listCalls;
+      harness.agentOptions.onEvent({ type: 'assistant_delta', delta: 'Hello ' });
+      harness.agentOptions.onEvent({ type: 'assistant_delta', delta: 'world' });
+
+      // Nothing is painted per token.
+      expect(harness.messages.filter(message => message.type === 'delta')).toHaveLength(0);
+      vi.advanceTimersByTime(60);
+
+      const deltas = harness.messages.filter(message => message.type === 'delta');
+      expect(deltas).toHaveLength(1);
+      expect(deltas[0]).toMatchObject({ type: 'delta', index: 0 });
+      expect(String(deltas[0].html)).toContain('Hello world');
+      // The RECENT list is cached; streaming must not read every session file.
+      expect(harness.listCalls).toBe(scansBefore);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('flushes pending streamed text before a full update', () => {
+    vi.useFakeTimers();
+    try {
+      harness.agentOptions.onEvent({ type: 'assistant_delta', delta: 'partial' });
+      harness.agentOptions.onEvent({
+        type: 'usage',
+        usage: { promptTokens: 1, completionTokens: 2, totalTokens: 3 },
+        estimated: false,
+        outputTokensPerSecond: 1,
+        timestamp: Date.now(),
+      });
+      const last = harness.messages.at(-1);
+      expect(last?.type).toBe('update');
+      expect(String(last?.rows)).toContain('partial');
+      // The full update already carried the text; the timer must not paint it again.
+      vi.advanceTimersByTime(60);
+      expect(harness.messages.filter(message => message.type === 'delta')).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
