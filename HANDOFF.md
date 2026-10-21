@@ -88,4 +88,15 @@ The next action is for the owner to test the v0.1.30 packages. The 0.1.29 GitHub
 - `e7e6b42` (`v0.1.31+2610219`) `fix: bound the Windows credential bridge with a timeout`: `WindowsCredentialStore` races the bridge runner against a validated timeout (default 5 s; rejects non-finite, ≤0, or >5 s values) and `defaultRunner` kills a hung `powershell.exe` after 5 s and settles once. Failures stay sanitized to `Windows Credential Manager operation failed. Set the provider environment variable to continue.`
 - Out of scope (deferred): pruning superseded credential references/secrets — the review's P2 note that old staged keys are never deleted remains open. MCP is still not wired in (PRD F8).
 - Verification: focused `npx vitest run test/credentials.test.ts test/chat-view.test.ts test/settings-host.test.ts` passed 134 tests; full `npm test` passed 442 with 4 skipped; `npm run typecheck` passed; `git diff --check` passed. No live provider calls, editor smoke test, build, or release.
-- Open decision: the published `v0.1.31+2610102` release predates these fixes. Preferred path is to ship them as a later `v0.1.32` rather than withdraw and rebuild v0.1.31; owner authorization is still required.
+- Owner decision: withdraw the published `v0.1.31+2610102` GitHub Release and rebuild v0.1.31 from this line, keeping the original source tag. The release deletion and four-platform workflow dispatch are blocked until a valid `gh` session is available (see the rebuild entry below).
+
+## 2026-10-21 v0.1.31 rebuild (pending)
+
+- The owner chose to withdraw the `v0.1.31+2610102` GitHub Release and rebuild v0.1.31 with the Order 1/2/4 fixes. Per the v0.1.29 precedent, delete the GitHub Release but keep the `v0.1.31+2610102` source tag.
+- `scripts/publish-release.mjs` release notes now describe the approval, session-isolation, streaming, and credential-bridge changes instead of only the original v0.1.31 content.
+- Remaining owner-auth steps:
+  1. `gh auth status` currently reports the default token is invalid. Run `gh auth login -h github.com` or set a valid `GH_TOKEN`.
+  2. Delete only the release (not the tag): `gh release delete "v0.1.31+2610102" --repo marcuz-apl/moderado-ide --yes`.
+  3. Dispatch the four-platform build from this commit: `gh workflow run build-and-release.yml --repo marcuz-apl/moderado-ide --ref master -f platform=all -f source_ref=`.
+- The rebuilt release will use the dispatched commit's VERSION and tag (for example `v0.1.31+261021b`), so the old `+2610102` tag and build remain immutable history.
+- After the workflow publishes, record the new tag, run id, and 19-asset verification, and refresh `PRD.md`, `docs/INSTALL.md`, `docs/ROADMAP.md`, `CHANGELOG.md`, and `HANDOFF.md`.

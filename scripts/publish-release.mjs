@@ -131,10 +131,15 @@ addChecksums([debName, rpmName], 'SHA256SUMS-linux-x64');
 
 const releaseNotes = join(outputRoot, 'release-notes.md');
 writeFileSync(releaseNotes, [
-  `Moderado IDE ${productVersion} fixes a webview startup error that could leave the Moderado chat and settings controls unresponsive. It also includes Gateway endpoint selection, provider catalog refinements, and a refreshed About page.`,
+  `Moderado IDE ${productVersion} fixes a webview startup error, approval-preview and session-isolation defects, and adds faster streamed rendering plus a bounded Windows credential bridge.`,
   '',
   '### Included',
   '- Fix the webview JavaScript startup error so Moderado controls respond normally.',
+  '- Show complete diffs for file-write and multi-file patch approvals, and stop leaving unanswerable approval cards.',
+  '- Start a distinct chat from New Session and honor disabled auto-approve categories for read and web tools.',
+  '- Coalesce streamed assistant output and update only the streaming transcript row instead of rebuilding the transcript per token.',
+  '- Cache the RECENT session list and invalidate it on session changes instead of rescanning session files while streaming.',
+  '- Bound Windows Credential Manager bridge operations with a 5 s timeout and kill a hung PowerShell child.',
   '- Switch the Moderado Gateway between its development and production endpoints in API Config.',
   '- Improve provider labels and OrcaRouter free-model identification.',
   '- Add a clearer About card with product information and copyright.',
