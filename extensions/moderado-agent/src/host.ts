@@ -1,8 +1,10 @@
+import { existsSync, readFileSync, statSync } from 'node:fs';
+import { relative } from 'node:path';
 import { ImageAttachmentSchema, saveImageContext, loadImageContext, type ImageAttachment } from './attachments.js';
 import { AgentLoop, PolicyManager, Router } from '@moderado/core';
 import { FakeProviderAdapter } from '@moderado/providers';
 import { z } from 'zod';
-import { createDefaultToolRegistry, resolveInJail } from '@moderado/tools';
+import { createDefaultToolRegistry, generateDiffPreview, resolveInJail } from '@moderado/tools';
 import {
   AgentEvent,
   ApprovalDecision,
@@ -10,6 +12,8 @@ import {
   ChatMessage,
   IApprovalHandler,
   IProviderAdapter,
+  IToolDefinition,
+  IToolRegistry,
   ModelInventoryEntry,
 } from '@moderado/contracts';
 import { ApprovalCoordinator, RawDecision } from './approval.js';
@@ -543,15 +547,15 @@ export class AgentHost implements IApprovalHandler {
       allowPaid: preferences?.allowPaidModels ?? this.options.allowPaid ?? false, allowUnknown: preferences?.allowUnknownModels ?? this.options.allowUnknown ?? false, requireTools: true });
   }
 
-  private toolsFor(webSearchEnabled: boolean) {
+  private toolsFor(webSearchEnabled: boolean): IToolRegistry {
     const tools = createDefaultToolRegistry();
-    if (webSearchEnabled) return tools;
-    return {
+    if (webSearchEnabled) return withToolPreviews(tools, this.options.workspaceRoot);
+    return withToolPreviews({
       register: tools.register.bind(tools),
       get: (name: string) => name === 'web_search' ? undefined : tools.get(name),
       list: () => tools.list().filter(tool => tool.name !== 'web_search'),
       getDeclarations: () => tools.getDeclarations().filter(tool => tool.name !== 'web_search'),
-    };
+    }, this.options.workspaceRoot);
   }
 
   private async discoverInventory(resolution: ProviderResolution, signal?: AbortSignal): Promise<{ inventory: ModelInventoryEntry[]; routes?: GatewayRoute[] }> {
@@ -568,6 +572,68 @@ export class AgentHost implements IApprovalHandler {
   }
 }
 
+/** Largest existing file read to build a `write_file` replacement diff. */
+const MAX_DIFF_BYTES = 2_000_000;
+
+/**
+ * Adds the missing approval preview to workspace-mutating tools.
+ *
+ * The vendored `write_file` tool implements no preview, and the core only
+ * forwards `tool.preview()` into the approval request. Without this the
+ * coordinator denies every write as having "no complete preview". The preview
+ * is a unified diff of the complete replacement against the jailed target; the
+ * coordinator still validates it and the human still decides.
+ */
+export function withToolPreviews(tools: IToolRegistry, workspaceRoot: string): IToolRegistry {
+  const previewing = (tool: IToolDefinition<any>): IToolDefinition<any> => {
+    if (tool.name !== 'write_file' || tool.preview) return tool;
+    return {
+      ...tool,
+      preview: async (params, context) => {
+        const { targetFile, contentPreview } = previewFor(tool.name, params, context.workspaceRoot);
+        const target = typeof targetFile === 'string' ? targetFile : '';
+        if (!target) throw new Error('A write preview requires a workspace path.');
+        const content = String(contentPreview ?? '');
+        const inside = relative(canonicalWorkspaceRoot(workspaceRoot), target);
+        const shown = (inside && !inside.startsWith('..') ? inside : target).replace(/\\/g, '/');
+
+        // Read the current content so the human sees the real change. A large
+        // or unreadable file falls back to naming the complete replacement
+        // rather than failing the approval outright.
+        let previous: string | undefined;
+        try {
+          if (existsSync(target)) {
+            if (statSync(target).size > MAX_DIFF_BYTES) {
+              return `Replace ${shown} (${Buffer.byteLength(content, 'utf8')} bytes)\n\n${content}`;
+            }
+            previous = readFileSync(target, 'utf8');
+          }
+        } catch {
+          return `Replace ${shown} (${Buffer.byteLength(content, 'utf8')} bytes)\n\n${content}`;
+        }
+
+        if (previous) return generateDiffPreview(shown, previous, previous, content).diffPreview;
+        const lines = content === '' ? [] : content.split(/\r?\n/);
+        return [
+          previous === undefined ? '--- /dev/null' : `--- a/${shown}`,
+          `+++ b/${shown}`,
+          lines.length ? `@@ -0,0 +1,${lines.length} @@` : '@@ -0,0 +0,0 @@',
+          ...lines.map(line => `+${line}`),
+        ].join('\n');
+      },
+    };
+  };
+  return {
+    register: tools.register.bind(tools),
+    get: (name) => {
+      const tool = tools.get(name);
+      return tool ? previewing(tool) : undefined;
+    },
+    list: () => tools.list().map(previewing),
+    getDeclarations: () => tools.getDeclarations(),
+  };
+}
+
 /**
  * Builds the payload shown to the human for a proposed tool call.
  *
@@ -577,8 +643,8 @@ export class AgentHost implements IApprovalHandler {
  */
 export function previewFor(toolName: string, parameters: unknown, workspaceRoot: string): Record<string, unknown> {
   const params = (parameters ?? {}) as Record<string, unknown>;
-  const relative = typeof params.path === 'string' ? params.path : undefined;
-  const target = relative && relative.trim() ? resolveInJail(workspaceRoot, relative) : undefined;
+  const relativePath = typeof params.path === 'string' ? params.path : undefined;
+  const target = relativePath && relativePath.trim() ? resolveInJail(workspaceRoot, relativePath) : undefined;
 
   switch (toolName) {
     case 'write_file':

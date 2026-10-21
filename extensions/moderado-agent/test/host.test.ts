@@ -481,6 +481,76 @@ describe('AgentHost approvals', () => {
   });
 });
 
+describe('AgentHost tool approvals end to end', () => {
+  const route = { id: 'offline/tool-route', provider: 'offline', owned_by: 'offline', capabilities: ['chat', 'tools'] };
+  const gateway = { baseUrl: 'http://127.0.0.1:4788/v1' };
+
+  /** A provider that requests one tool call, then finishes with text. */
+  function toolThenDone(toolName: string, args: Record<string, unknown>) {
+    let posts = 0;
+    return vi.fn<typeof fetch>().mockImplementation(async (_url, init) => {
+      if (init?.method !== 'POST') return Response.json({ object: 'list', data: [route] });
+      const delta = ++posts === 1
+        ? { tool_calls: [{ index: 0, id: `call-${toolName}`, type: 'function', function: { name: toolName, arguments: JSON.stringify(args) } }] }
+        : { content: 'Done.' };
+      return new Response('data: ' + JSON.stringify({ choices: [{ delta, finish_reason: posts === 1 ? 'tool_calls' : 'stop' }] }) + '\n\ndata: [DONE]\n\n');
+    });
+  }
+
+  function hostFor(root: string, fetchImpl: typeof fetch, promptForApproval: ConstructorParameters<typeof AgentHost>[0]['promptForApproval'], onEvent: (event: AgentEvent) => void) {
+    return new AgentHost({ workspaceRoot: root, moderadoHome: configuredHome('moderado-cloud', gateway), fetchImpl, onEvent, promptForApproval });
+  }
+
+  it('writes a file after the human approves the generated preview', async () => {
+    const root = workspace();
+    const { events, onEvent } = collector();
+    const promptForApproval = vi.fn(async (request: ApprovalRequest) => ({ requestId: request.requestId, status: 'approved' as const }));
+    const host = hostFor(root, toolThenDone('write_file', { path: 'created.txt', content: 'hello world\n' }), promptForApproval, onEvent);
+
+    await host.startRun({ task: 'Create created.txt.', modelId: 'auto' });
+
+    expect(promptForApproval).toHaveBeenCalledTimes(1);
+    const preview = promptForApproval.mock.calls[0][0].exactPayload.diffPreview ?? '';
+    expect(preview).toContain('created.txt');
+    expect(preview).toContain('hello world');
+    expect(readFileSync(join(root, 'created.txt'), 'utf8')).toBe('hello world\n');
+    expect(events).toContainEqual(expect.objectContaining({
+      type: 'tool_result', result: expect.objectContaining({ toolName: 'write_file', status: 'success' }),
+    }));
+  });
+
+  it('shows and applies a complete diff when replacing an existing file', async () => {
+    const root = workspace();
+    writeFileSync(join(root, 'existing.txt'), 'before\n');
+    const promptForApproval = vi.fn(async (request: ApprovalRequest) => ({ requestId: request.requestId, status: 'approved' as const }));
+    const host = hostFor(root, toolThenDone('write_file', { path: 'existing.txt', content: 'after\n' }), promptForApproval, () => {});
+
+    await host.startRun({ task: 'Replace existing.txt.', modelId: 'auto' });
+
+    const preview = promptForApproval.mock.calls[0][0].exactPayload.diffPreview ?? '';
+    expect(preview).toContain('--- a/existing.txt');
+    expect(preview).toContain('+++ b/existing.txt');
+    expect(preview).toContain('-before');
+    expect(preview).toContain('+after');
+    expect(readFileSync(join(root, 'existing.txt'), 'utf8')).toBe('after\n');
+  });
+
+  it('does not write a file when the human denies the generated preview', async () => {
+    const root = workspace();
+    const { events, onEvent } = collector();
+    const promptForApproval = vi.fn(async (request: ApprovalRequest) => ({ requestId: request.requestId, status: 'denied' as const }));
+    const host = hostFor(root, toolThenDone('write_file', { path: 'denied.txt', content: 'nope' }), promptForApproval, onEvent);
+
+    await host.startRun({ task: 'Create denied.txt.', modelId: 'auto' });
+
+    expect(promptForApproval).toHaveBeenCalledTimes(1);
+    expect(existsSync(join(root, 'denied.txt'))).toBe(false);
+    expect(events).toContainEqual(expect.objectContaining({
+      type: 'tool_result', result: expect.objectContaining({ toolName: 'write_file', status: 'denied' }),
+    }));
+  });
+});
+
 describe('AgentHost new session', () => {
   it('starts a distinct session after the user asks for a new one', async () => {
     const workspaceRoot = workspace();
