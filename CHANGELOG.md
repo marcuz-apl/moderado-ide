@@ -9,6 +9,14 @@
   - Agnes AI and OrcaRouter are no longer shipped presets; identically named custom or saved connections remain the user's own profile data.
   - The production Moderado API base URL is `https://modr.alfazen.org/v1`, and browser website-key sign-in plus token exchange use `https://modr.alfazen.org`. The development endpoint stays selectable in API Config.
 
+**Fix: Gateway key retention, an accurate 401 message, and a simpler key box**
+- **Type**: `fix` / `provider` / `patch`
+- **Key deliverables**:
+  - Saving a model choice no longer drops a stored Gateway credential from the shared profile. The access-method control and the key box could disagree, and the profile kept the access method while losing the key reference, so the next run sent no key and failed with a misleading error.
+  - A Gateway 401 now distinguishes a rejected key from a missing one, and a free Gateway route selected without a key is reported by name before the request is sent.
+  - API Config offers one editable, masked API key box. Type or paste a key, save, and it is stored in Credential Manager; browser website-key sign-in remains a separate action.
+  - `Moderado: Remove Saved Connection` deletes a stale connection from the shared profile, so an entry left by an earlier build no longer lingers in the provider menu.
+
 **Fix: Approval previews, session isolation, and auto-approve categories**
 - **Type**: `fix` / `agent` / `patch`
 - **Key deliverables**:
