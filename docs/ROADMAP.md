@@ -1,11 +1,11 @@
 # Moderado IDE roadmap
 
 This roadmap is the original delivery sequence and a record of milestone
-intent. v0.1.30 is the latest published stable release. The v0.1.29 release
+intent. v0.1.31 is the latest published stable release. The v0.1.29 release
 was withdrawn after a webview startup error. Current caveats are in
 [INSTALL.md](INSTALL.md).
 
-Moderado IDE targets Linux, macOS, and Windows. The v0.1.30 release includes Windows x64, Linux x64, macOS Apple Silicon arm64, and macOS Intel x64 packages; each platform's manifest records the source revisions used. Some verification remains incomplete, including native Linux runtime installation and profile coordination with the CLI.
+Moderado IDE targets Linux, macOS, and Windows. The v0.1.31 release includes Windows x64, Linux x64, macOS Apple Silicon arm64, and macOS Intel x64 packages; each platform's manifest records the source revisions used. Some verification remains incomplete, including native Linux runtime installation and profile coordination with the CLI.
 
 ## M0 — Independent project foundation (documentation scaffold)
 
@@ -48,7 +48,7 @@ the sibling CLI working tree is never modified.
 single CommonJS bundle for the editor host. It provides the chat view, the
 fail-closed approval boundary, model selection, and session persistence against
 the shared `~/.moderado` profile. Verification is recorded in
-[HANDOFF.md](HANDOFF.md).
+[HANDOFF.md](../HANDOFF.md).
 
 Milestone 3 still needs the cross-process round-trip against a pinned CLI
 release, Credential Manager references, and a coordinated `config.json` writer.
@@ -100,9 +100,9 @@ which this project must not make.
 - Document installation and supported platform/profile combinations.
 - Publish only after explicit owner authorization.
 
-Linux, macOS, and Windows packages are included in v0.1.28. The full v0.1.30 build is planned; Windows/Linux cross-home profile sharing remains a separate compatibility decision.
+Linux, macOS, and Windows packages are included in v0.1.31. Windows/Linux cross-home profile sharing remains a separate compatibility decision.
 
-## M4 status (v0.1.28 published; v0.1.30 planned)
+## M4 status (v0.1.31 published)
 
 Release evidence is produced by `scripts/verify-release.ps1`, which checks
 artifact checksums, manifest provenance against `sources.lock.json`, packaged
@@ -114,9 +114,9 @@ packaging-only rebuild skips the non-native extension task and would otherwise
 produce an editor with no agent that still passed every other check.
 
 Installation, supported platform combinations, data locations, and known
-limitations are documented in [INSTALL.md](docs/INSTALL.md).
+limitations are documented in [INSTALL.md](INSTALL.md).
 
-The v0.1.28 release is published with platform-specific manifests, provenance,
+The v0.1.31 release is published with platform-specific manifests, provenance,
 verification results, checksums, and third-party notices. Remaining gaps
 include platform signing/notarization, an update channel, native Linux runtime
 installation verification, refreshed compatibility evidence for the current

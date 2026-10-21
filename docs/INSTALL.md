@@ -1,7 +1,7 @@
 # Installing Moderado IDE
 
-> **Status: v0.1.30 is the latest published stable release.** The v0.1.29
-> release was withdrawn after a webview startup error. The v0.1.30 release
+> **Status: v0.1.31 is the latest published stable release.** The v0.1.29
+> release was withdrawn after a webview startup error. The v0.1.31 release
 > includes the fix and all four platform builds.
 > Download the current release from the
 > [GitHub release page](https://github.com/marcuz-apl/moderado-ide/releases/latest).
@@ -13,12 +13,12 @@
 | | |
 | --- | --- |
 | Targets | Linux x64, macOS x64/arm64, and Windows x64 |
-| Existing artifact evidence | Official v0.1.30 release includes Windows x64, Linux x64, macOS Apple Silicon arm64, and macOS Intel x64 assets |
+| Existing artifact evidence | Official v0.1.31 release includes Windows x64, Linux x64, macOS Apple Silicon arm64, and macOS Intel x64 assets |
 | Editor base | Code OSS `1.135.0`, built through VSCodium `1.135.06055` |
 | Agent packages | Moderado CLI `v0.4.10` (`a3479fff…`, `v0.4.10+2610105`) |
 | Architectures | Linux and Windows x64; macOS x64 and arm64 |
 
-The stable [v0.1.30 release](https://github.com/marcuz-apl/moderado-ide/releases/tag/v0.1.30%2B261009t) was built from commit `5432a4a88027bb0d3185dc528a9de78a371e6629` by [workflow run 37985155914](https://github.com/marcuz-apl/moderado-ide/actions/runs/37985155914). Use the manually dispatched [build-and-release workflow](../.github/workflows/build-and-release.yml) with platform `all` for future full releases; partial-platform and custom-source builds remain in Actions for review. For a local Linux build, follow the [Linux build instructions](../README.md#build-the-linux-editor-locally). Windows/Linux cross-home profile sharing is outside this milestone: the two environments have different home directories and do not automatically share a `~/.moderado` profile.
+The stable [v0.1.31 release](https://github.com/marcuz-apl/moderado-ide/releases/tag/v0.1.31%2B2610102) was built from commit `f9e4632939d13ec392cbeb9635ffd1806ab782f3` by [workflow run 38081616708](https://github.com/marcuz-apl/moderado-ide/actions/runs/38081616708). Use the manually dispatched [build-and-release workflow](../.github/workflows/build-and-release.yml) with platform `all` for future full releases; partial-platform and custom-source builds remain in Actions for review. For a local Linux build, follow the [Linux build instructions](../README.md#build-the-linux-editor-locally). Windows/Linux cross-home profile sharing is outside this milestone: the two environments have different home directories and do not automatically share a `~/.moderado` profile.
 
 ## Local Debian installer and WSLg window checks
 
@@ -116,7 +116,7 @@ Windows installers are **unsigned**; Windows SmartScreen may warn and there is
 no Authenticode signature to validate. macOS images use ad-hoc signing only;
 they are not Developer ID signed or notarized, so Gatekeeper may prevent them
 from opening without local approval. Linux packages are unsigned. These are
-the published v0.1.28 artifacts; no update channel is provided.
+the published v0.1.31 artifacts; no update channel is provided.
 
 ## Provenance and notices
 
@@ -153,7 +153,7 @@ That command **refuses** and explains why. It only proceeds with
 mutation and runs no commands, and it never writes or logs the API key.
 
 **Still open:** platform code signing and notarization, an update channel, and
-native Linux runtime installation verification. The current v0.1.28 artifacts
+native Linux runtime installation verification. The current v0.1.31 artifacts
 are published on the [GitHub Release page](https://github.com/marcuz-apl/moderado-ide/releases/latest).
 
 ## What works, and what does not
@@ -207,7 +207,7 @@ directory by hand only if you are certain you want to discard shared agent data.
 The editor is built from MIT-licensed Code OSS through VSCodium's MIT-licensed
 build scripts. `LICENSES.chromium.html` ships with the packaged editor and
 carries the bundled Chromium/Electron third-party notices. Moderado's own code is
-MIT; see [LICENSE](LICENSE).
+MIT; see [LICENSE](../LICENSE).
 
 
 ### Provider keys on Linux

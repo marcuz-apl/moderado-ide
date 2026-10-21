@@ -1,7 +1,7 @@
 # Moderado IDE Product Requirements
 
 **Project version:** see [VERSION](VERSION) (development version; releases are tracked separately)
-**Release status:** v0.1.30 is the latest published stable release. v0.1.29 was withdrawn after a webview startup error. See [installation and release limitations](docs/INSTALL.md) and the [roadmap](docs/ROADMAP.md).
+**Release status:** v0.1.31 is the latest published stable release. v0.1.29 was withdrawn after a webview startup error. See [installation and release limitations](docs/INSTALL.md) and the [roadmap](docs/ROADMAP.md).
 **Target platforms:** Linux, macOS, and Windows. Public artifacts exist for all three platforms, but native Linux installation, Windows signing, and macOS Developer ID signing/notarization remain open.
 **Reference agent baseline:** Moderado CLI `v0.4.10` pinned contracts, core, and
 tools source; IDE-owned provider behavior adapts CLI `v0.4.10` fixtures and
@@ -71,7 +71,10 @@ agent in a complete editor. The first complete flow is:
 | F14 | The chat composer lets users browse submitted prompts with Up/Down while preserving the unsent draft; multiline editing keeps normal caret navigation except at the first/last line. | Offline webview tests verify history navigation boundaries, draft restoration, and bounded webview-state persistence. |
 | F15 | Chat History lets users assign a meaningful display name to each recorded chat; names are stored in workspace-local IDE state and do not alter the shared CLI session schema. | Offline host/webview tests verify rename, validation, cancellation, escaping, and unchanged shared session records. |
 
-
+**Known gaps in the current build:** MCP server discovery and trust (F8) are
+not implemented; the Use MCP servers toggle is present but inert. Skill files
+are discovered and validated (F6) but are not yet injected into agent runs.
+Those rows describe the intended product bar, not delivered behavior.
 
 Auto-Approve defaults to Read files, Edit files, Fetch web content, and Use MCP
 servers. Execute commands stays off by default. These host-side defaults are

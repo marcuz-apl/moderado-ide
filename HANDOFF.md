@@ -1,6 +1,6 @@
 # Project Handoff
 
-Updated: 2026-10-10
+Updated: 2026-10-21
 Branch: master
 Release source commit: `f9e4632939d13ec392cbeb9635ffd1806ab782f3`
 Status: v0.1.31 is published as the latest stable release. The owner withdrew the v0.1.29 GitHub Release; its source tag remains intact.
@@ -73,3 +73,11 @@ The next action is for the owner to test the v0.1.30 packages. The 0.1.29 GitHub
 - Audit confirmations: auto-approve runs inside `askHuman`, after the coordinator's complete-preview, non-interactive, abort, and request-id checks, so it cannot bypass them. Timeout/cancel settle through the coordinator's abort signal, which clears the pending card. Auto-approve preferences remain in-memory and reset to safe defaults on reload (not listed among persisted preferences in PRD F13).
 - Remaining gap: MCP is not wired into the extension, so the Use MCP servers category is still inert and PRD F8 (explicit per-server trust before launch, separate from per-call approval) is unimplemented. Do not describe MCP as trusted or jailed until that flow exists.
 - Verification: focused `npx vitest run test/host.test.ts test/settings-host.test.ts` passed 101 tests. Full `npm test` passed 435 with 4 skipped; `npm run typecheck` passed. No live provider calls, editor smoke test, push, or release.
+
+## 2026-10-21 Documentation and changelog refresh (unreleased)
+
+- Corrected the latest published release to v0.1.31 across `PRD.md`, `docs/INSTALL.md`, `docs/ROADMAP.md`, and `docs/UPSTREAM.md`, with the tag `v0.1.31+2610102`, source commit `f9e4632939d13ec392cbeb9635ffd1806ab782f3`, and workflow run `38081616708`.
+- Added `CHANGELOG.md` entries for v0.1.31 and the unreleased P0/approval fixes, and updated the release progression (v0.1.29 withdrawn).
+- Fixed relative links: `docs/ROADMAP.md` now points to `../HANDOFF.md` and `INSTALL.md`; `docs/INSTALL.md` points to `../LICENSE`.
+- Marked MCP server discovery/trust (F8) as unimplemented in `PRD.md` and `docs/PROFILE.md`; the Use MCP servers toggle is inert. Documented that skill files are discovered and validated but not yet injected into agent runs.
+- Verification: relative-link checker reported all links resolve; `git diff --check` passed. No code change, live provider call, build, push, or release in this step.
