@@ -91,6 +91,8 @@ export interface ProviderResolution {
   /** Display/profile-safe identity. Never includes a resolved key. */
   connectionId?: string;
   defaultModel?: string;
+  /** True when a credential resolved. The key itself is never exposed here. */
+  hasApiKey?: boolean;
   /** Validated Gateway metadata retained separately from the core inventory. */
   discoverGatewayRoutes?: (signal?: AbortSignal) => Promise<GatewayRoute[]>;
 }
@@ -203,6 +205,7 @@ export async function resolveProvider(
     }),
     connectionId,
     defaultModel: connection.defaultModel,
+    hasApiKey: Boolean(apiKey),
     ...(connectionId === 'moderado-cloud' ? {
       discoverGatewayRoutes: (signal?: AbortSignal) => fetchGatewayRoutes(baseUrl, { fetchImpl, signal }),
     } : {}),
@@ -404,6 +407,18 @@ export class AgentHost implements IApprovalHandler {
           || this.options.pinnedModelId === input.modelId;
         if (!savedPin && !inventory.some((entry) => entry.id === input.modelId)) {
           throw new Error(`The selected model '${input.modelId}' is not available from this connection. Open Moderado Settings to refresh models or choose another.`);
+        }
+      }
+      // A free Gateway route needs a website key. Without one the provider
+      // answers 401 and the only visible symptom is a request that failed,
+      // so the real cause is named here instead.
+      if (resolution.connectionId === 'moderado-cloud' && !resolution.hasApiKey) {
+        const route = routes?.find((item) => item.id === requested);
+        if (route?.access === 'free') {
+          throw new Error(
+            `Model '${route.id}' is a free Gateway route and needs a Moderado website API key. `
+            + 'Open Moderado Settings, paste a key, and save.',
+          );
         }
       }
       const policy = new PolicyManager({

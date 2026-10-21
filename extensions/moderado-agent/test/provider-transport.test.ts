@@ -67,6 +67,14 @@ describe('Desktop provider transport', () => {
     await expect(collect(adapter)).rejects.not.toThrow('private-body');
   });
 
+  it('reports a rejected key instead of a missing one when the request carried a key', async () => {
+    // A 401 with an Authorization header means the key itself was refused.
+    // Telling the user to "enter a key" sends them to the wrong place.
+    const adapter = new DesktopOpenAIAdapter({ id: 'moderado-cloud', name: 'Gateway', baseUrl: 'https://example.test/v1', apiKey: 'mrd_test', fetchImpl: async () => new Response('private-body', { status: 401 }) });
+    await expect(collect(adapter)).rejects.toThrow(/rejected|not accepted|invalid/i);
+    await expect(collect(adapter)).rejects.not.toThrow('private-body');
+  });
+
   it('classifies stream errors without exposing provider detail', async () => {
     await expect(collect(adapterFor(frame({ error: { code: 429, message: 'secret' } })))).rejects.toMatchObject({ code: 'ERR_PROVIDER_RATE_LIMIT' });
     await expect(collect(adapterFor(frame({ error: { code: 429, message: 'secret' } })))).rejects.not.toThrow('secret');

@@ -144,7 +144,12 @@ export class DesktopOpenAIAdapter implements IProviderAdapter {
         void response.body?.cancel().catch(() => {});
         const retry = response.headers.get('Retry-After');
         if (this.config.id === 'moderado-cloud' && response.status === 401) {
-          throw new AuthenticationError('Free Gateway models require a valid Moderado website API key. Open Moderado Settings to sign in or enter a key.', 401);
+          // The two causes need different actions. Without a key, a free route
+          // needs one; with a key, the key itself was refused, and telling the
+          // user to enter a key sends them to the wrong place.
+          throw new AuthenticationError(this.config.apiKey
+            ? 'The Moderado Gateway rejected this API key. Open Moderado Settings to sign in again or enter a current key.'
+            : 'Free Gateway models require a valid Moderado website API key. Open Moderado Settings to sign in or enter a key.', 401);
         }
         throw statusError(response.status, retry && /^\d+$/.test(retry) ? Number(retry) : undefined);
       }

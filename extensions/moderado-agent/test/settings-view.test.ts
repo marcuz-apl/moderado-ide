@@ -17,9 +17,11 @@ describe('Gateway and provider Settings boundary', () => {
     expect(html).toContain('id="settings-provider"');
     expect(html).toContain('value="moderado-cloud"');
     expect(html).toContain('>Moderado</option>');
-    expect(html).toContain('Public Gateway (paid routes)');
-    expect(html).toContain('Browser website key');
-    expect(html).toContain('Manual website key');
+    // One editable key box replaces the access dropdown, so a stored key can
+    // never be dropped by a stale "public" choice.
+    expect(html).toContain('id="settings-api-key"');
+    expect(html).not.toContain('id="settings-login-method"');
+    expect(html).toContain('Sign in with browser');
   });
 
   it('keeps a large model inventory inside selects with only selected metadata outside', () => {
@@ -37,15 +39,13 @@ describe('Gateway and provider Settings boundary', () => {
     expect(html).not.toContain('settings-model-search');
   });
 
-  it('offers the Gateway login choices and an editable loopback/HTTPS endpoint', () => {
+  it('offers the Gateway key box and an editable loopback/HTTPS endpoint', () => {
     const html = settingsPaneHtml(gateway());
-    expect(html).toContain('id="settings-login-method"');
-    for (const method of ['public', 'browser', 'manual']) expect(html).toContain(`value="${method}"`);
+    expect(html).toContain('id="settings-api-key"');
     expect(html).toContain('id="settings-base-url"');
     expect(html).toContain('http://127.0.0.1:4788/v1');
     expect(html).not.toContain('local runtime needs no API key');
-    expect(html).toContain('Public Gateway (paid routes)');
-    expect(html).toContain('Free Gateway models require a Moderado website API key');
+    expect(html).toContain('Free Gateway models need a website API key');
   });
 
   it('warns that Gateway AUTO may select a paid route', () => {
@@ -59,10 +59,36 @@ describe('Gateway and provider Settings boundary', () => {
     const html = settingsPaneHtml(state);
     expect(html).toContain('id="settings-api-key"');
     expect(html).toContain('Key stored · paste to replace');
-    expect(html).toContain('Credential stored');
+    expect(html).toContain('A key is stored for this provider');
     expect(html).toContain('type="password"');
     expect(html).toContain('value=""');
     expect(JSON.stringify(settingsSnapshot(state))).not.toContain('moderado/provider/');
+  });
+
+  it('offers one editable API key box that saves and masks a pasted key', () => {
+    const html = settingsPaneHtml({ ...gateway(), loginMethod: 'manual' as const, apiKeyStored: false });
+    // A single editable box, masked, that the user types or pastes into.
+    expect(html).toContain('id="settings-api-key"');
+    expect(html).toContain('type="password"');
+    expect(html).toContain('value=""');
+    expect(html).toContain('Paste API key');
+    // The box is the way to supply a key, so it must stay enabled.
+    expect(html).not.toMatch(/id="settings-api-key"[^>]*disabled/);
+  });
+
+  it('keeps the API key box editable and masked while a key is stored', () => {
+    const html = settingsPaneHtml({ ...gateway(), loginMethod: 'manual' as const, apiKeyStored: true });
+    expect(html).toContain('id="settings-api-key"');
+    expect(html).toContain('type="password"');
+    expect(html).not.toMatch(/id="settings-api-key"[^>]*disabled/);
+    // The stored key is never rendered back into the pane.
+    expect(html).not.toMatch(/id="settings-api-key"[^>]*value="[^"]+"/);
+  });
+
+  it('warns that a free Gateway model needs a key', () => {
+    const html = settingsPaneHtml({ ...gateway(), apiKeyStored: false,
+      models: [{ id: 'owner/free-route', accessTier: 'free_trial', isFree: true }] });
+    expect(html).toContain('Free Gateway models need a website API key');
   });
 
   it('offers browser sign-in without accepting a token in the pane', () => {

@@ -46,6 +46,25 @@ describe('provider profile recovery', () => {
     expect(result.reason).toBe(`No provider settings found at ${path}. Open Settings → API Config, enter URL/key, load models and Save settings.`);
   });
 
+  it('names the missing key when a free Gateway route is used without one', async () => {
+    // Public access reaches the paid routes only. A free route then fails at
+    // the provider with no usable clue, so the reason is given here.
+    const home = configuredHome('moderado-cloud', { baseUrl: 'https://modr.alfazen.org/v1', authMethod: 'public', defaultModel: 'free/route' });
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async (url) => {
+      if (String(url).endsWith('/models')) {
+        return Response.json({ object: 'list', data: [{ id: 'free/route', access: 'free', capabilities: ['tools'] }] });
+      }
+      return new Response('data: {"choices":[{"delta":{"content":"Hello."},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n');
+    });
+    const host = new AgentHost({
+      workspaceRoot: workspace(), moderadoHome: home, fetchImpl,
+      onEvent: () => {}, promptForApproval: async () => undefined,
+      getPreferences: () => ({ allowPaidModels: false, allowUnknownModels: false, webSearchEnabled: true, showHistoryOnStartup: false, preferredLanguage: 'English', approvalTimeoutSeconds: 120 }),
+    });
+    await expect(host.startRun({ task: 'Hello.', modelId: 'free/route' })).rejects.toThrow(/free Gateway route.*needs a Moderado website API key/s);
+    expect(fetchImpl.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+  });
+
   it.each([
     ['config.json is not valid JSON: private-api-key excerpt', 'config.json is not valid JSON.'],
     ['config.json is empty.', 'config.json is empty.'],

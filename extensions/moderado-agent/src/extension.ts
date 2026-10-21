@@ -503,7 +503,9 @@ async function openDiffTab(requestId: string): Promise<void> {
     settings.preset = form.preset;
     settings.displayName = form.displayName;
     settings.baseUrl = form.baseUrl;
-    settings.loginMethod = form.loginMethod;
+    // An absent method means the pane did not choose one, so the host keeps
+    // the method the profile already records.
+    if (form.loginMethod) settings.loginMethod = form.loginMethod;
     if (form.modelId) settings.defaultModel = form.modelId;
   }
 
@@ -615,6 +617,42 @@ async function openDiffTab(requestId: string): Promise<void> {
     await loadSettingsState(`Active connection is now ${id}.`);
   }
 
+  /**
+   * Removes a saved connection from the shared profile.
+   *
+   * A connection left behind by an earlier build keeps showing up in the
+   * provider picker, and there is no other way to clear it than editing
+   * `config.json` by hand. The write goes through the coordinated merge so the
+   * CLI's own connections survive.
+   */
+  async function removeConnection(id: string): Promise<void> {
+    const state = readConfig();
+    if (state.kind !== 'ok') {
+      settings.status = state.kind === 'invalid' ? state.error : 'No profile to update.';
+      render();
+      return;
+    }
+    const connections = (state.config.connections ?? {}) as Record<string, unknown>;
+    if (!connections[id]) {
+      settings.status = 'That connection is no longer in the shared profile.';
+      render();
+      return;
+    }
+    const remaining = { ...connections };
+    delete remaining[id];
+    // The coordinated writer merges one level deep, so a removed connection is
+    // dropped by an explicit undefined, which the JSON write omits.
+    const patch: Record<string, unknown> = { connections: { ...remaining, [id]: undefined } };
+    if (state.config.activeConnectionId === id) patch.activeConnectionId = Object.keys(remaining)[0] ?? '';
+    const result = updateConfigCoordinated(configPath(), patch);
+    if (!result.written) {
+      settings.status = result.conflict?.reason ?? result.reason ?? 'Could not remove the connection.';
+      render();
+      return;
+    }
+    await loadSettingsState(`Removed connection ${id}.`);
+  }
+
   /** Nonsecret form values are validated before native login or coordinated writes. */
   async function saveSettings(message: unknown, action: 'save' | 'key' | 'browser' = 'save'): Promise<void> {
     settings.open = true;
@@ -624,13 +662,15 @@ async function openDiffTab(requestId: string): Promise<void> {
     const profile = readConfig();
     if (profile.kind === 'invalid') { settings.profileError = profile.error; settings.status = profile.error; render(); return; }
     const form = parsed.value;
-    if ('apiKey' in form && form.apiKey && form.preset === 'moderado-cloud' && form.loginMethod === 'public') form.loginMethod = 'manual';
+    // A pasted key always means manual access. The pane's separate access
+    // control is advisory, so it can never override the key that was entered.
+    if ('apiKey' in form && form.apiKey && form.preset === 'moderado-cloud') form.loginMethod = 'manual';
     const profileConfig = profile.kind === 'ok' ? profile.config : {};
     const connectConfig = readConnectProviders(profile);
     const choice = buildProviderChoices(connectConfig).find(item => item.value === form.preset);
     if (!choice) { settings.status = 'That provider is no longer available.'; render(); return; }
     if (action === 'browser' && (form.preset !== 'moderado-cloud' || form.loginMethod !== 'browser')) return;
-    if (action === 'key' && form.preset === 'moderado-cloud' && form.loginMethod !== 'manual') return;
+    if (action === 'key' && form.preset === 'moderado-cloud' && form.loginMethod === 'public') return;
     applySettingsForm(form);
     settingsBusy = true;
     loginAbort = new AbortController();
@@ -664,32 +704,35 @@ async function openDiffTab(requestId: string): Promise<void> {
         return;
       }
       if (discovery.id === 'moderado-cloud') {
-        if (form.loginMethod === 'public') {
+        // The pane no longer sends an access method for an ordinary save, so
+        // saving a model choice cannot drop a stored key from the profile.
+        // Public access is only chosen when the pane asked for it, or when
+        // there is no key to use.
+        const wantsPublic = form.loginMethod === 'public';
+        if (wantsPublic) {
           connection = buildGatewayConnection('public', { baseUrl: discovery.baseUrl });
-        } else {
-          if (form.loginMethod === 'browser') {
-            const expiry = typeof stored?.credentialExpiresAt === 'number' ? stored.credentialExpiresAt : undefined;
-            if (action === 'browser' || !apiKey || !expiry || expiry <= Date.now() || stored?.authMethod !== 'browser') {
-              settings.status = 'Waiting for browser sign-in?'; render();
-              const credential = await authorizeGatewayInBrowser({ openExternal: url => Promise.resolve(vscode.env.openExternal(vscode.Uri.parse(url))), signal });
-              if (signal.aborted) throw new Error('Gateway login cancelled.');
-              connection = await persistGatewayLogin('browser', { baseUrl: discovery.baseUrl, key: credential.accessToken, expiresAt: credential.expiresAt }, stagedStore);
-            } else {
-              connection = buildGatewayConnection('browser', { baseUrl: discovery.baseUrl, key: apiKey, expiresAt: expiry });
-              if (typeof stored?.credentialReference === 'string') connection.credentialReference = stored.credentialReference;
-            }
+        } else if (form.loginMethod === 'browser') {
+          const expiry = typeof stored?.credentialExpiresAt === 'number' ? stored.credentialExpiresAt : undefined;
+          if (action === 'browser' || !apiKey || !expiry || expiry <= Date.now() || stored?.authMethod !== 'browser') {
+            settings.status = 'Waiting for browser sign-in?'; render();
+            const credential = await authorizeGatewayInBrowser({ openExternal: url => Promise.resolve(vscode.env.openExternal(vscode.Uri.parse(url))), signal });
+            if (signal.aborted) throw new Error('Gateway login cancelled.');
+            connection = await persistGatewayLogin('browser', { baseUrl: discovery.baseUrl, key: credential.accessToken, expiresAt: credential.expiresAt }, stagedStore);
           } else {
-            const replaceManualKey = Boolean(pastedKey) || action === 'key' || !apiKey || stored?.authMethod === 'browser';
-            if (!pastedKey && replaceManualKey) {
-              apiKey = await vscode.window.showInputBox({ prompt: 'Gateway key beginning with mrd_ (stored in secure credential storage)', password: true, ignoreFocusOut: true });
-              if (apiKey === undefined || signal.aborted) throw new Error('Gateway key entry cancelled.');
-            }
-            if (!apiKey) throw new Error('Paste a Gateway key before saving.');
-            if (replaceManualKey) connection = await persistGatewayLogin('manual', { baseUrl: discovery.baseUrl, key: apiKey.trim() }, stagedStore);
-            else {
-              connection = buildGatewayConnection('manual', { baseUrl: discovery.baseUrl, key: apiKey.trim() });
-              connection.credentialReference = typeof stored?.credentialReference === 'string' ? stored.credentialReference : undefined;
-            }
+            connection = buildGatewayConnection('browser', { baseUrl: discovery.baseUrl, key: apiKey, expiresAt: expiry });
+            if (typeof stored?.credentialReference === 'string') connection.credentialReference = stored.credentialReference;
+          }
+        } else {
+          const replaceManualKey = Boolean(pastedKey) || action === 'key' || !apiKey || stored?.authMethod === 'browser';
+          if (!pastedKey && replaceManualKey) {
+            apiKey = await vscode.window.showInputBox({ prompt: 'Gateway key beginning with mrd_ (stored in secure credential storage)', password: true, ignoreFocusOut: true });
+            if (apiKey === undefined || signal.aborted) throw new Error('Gateway key entry cancelled.');
+          }
+          if (!apiKey) throw new Error('Paste a Gateway key before saving.');
+          if (replaceManualKey) connection = await persistGatewayLogin('manual', { baseUrl: discovery.baseUrl, key: apiKey.trim() }, stagedStore);
+          else {
+            connection = buildGatewayConnection('manual', { baseUrl: discovery.baseUrl, key: apiKey.trim() });
+            connection.credentialReference = typeof stored?.credentialReference === 'string' ? stored.credentialReference : undefined;
           }
         }
         connection.defaultModel = form.modelId || 'auto';
@@ -710,8 +753,12 @@ async function openDiffTab(requestId: string): Promise<void> {
       }
       if (stagedReference) connection.credentialReference = stagedReference;
       if (signal.aborted) throw new Error('Provider connection cancelled.');
+      // A stored plaintext key survives only while the same endpoint is
+      // configured. Switching to public access drops it, because that is what
+      // public access means.
+      const dropsStoredKey = discovery.id === 'moderado-cloud' && form.loginMethod === 'public';
       const saved = { ...stored, ...connection,
-        apiKey: stagedReference || endpointChanged || (discovery.id === 'moderado-cloud' && form.loginMethod === 'public')
+        apiKey: stagedReference || endpointChanged || dropsStoredKey
           ? undefined : typeof stored?.apiKey === 'string' ? stored.apiKey : undefined,
         ...(discovery.id === 'moderado-cloud' ? {
           credentialReference: connection.credentialReference,
@@ -955,6 +1002,10 @@ async function openDiffTab(requestId: string): Promise<void> {
       void useConnection(msg.id);
       return;
     }
+    if (msg.type === 'removeConnection' && typeof msg.id === 'string') {
+      void removeConnection(msg.id);
+      return;
+    }
     if (msg.type === 'selectPreset' && typeof msg.preset === 'string') {
       // Switching provider must bring that provider's key state and its free
       // models with it, without the user pressing Reload.
@@ -1085,6 +1136,26 @@ async function openDiffTab(requestId: string): Promise<void> {
       vscode.window.showErrorMessage(result.reason ?? 'Could not save the choice.');
     }),
     vscode.commands.registerCommand('moderado.configureProvider', () => openSettingsPane()),
+    vscode.commands.registerCommand('moderado.removeConnection', async () => {
+      const state = readConfig();
+      if (state.kind !== 'ok') {
+        vscode.window.showErrorMessage(state.kind === 'invalid' ? state.error : 'No profile to update.');
+        return;
+      }
+      const connections = (state.config.connections ?? {}) as Record<string, unknown>;
+      const names = Object.entries(connections).map(([id, value]) => {
+        const record = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+        const label = typeof record.displayName === 'string' && record.displayName.trim() ? record.displayName.trim() : id;
+        return { label: `${label} (${id})`, id };
+      });
+      if (!names.length) {
+        vscode.window.showInformationMessage('No saved connections to remove.');
+        return;
+      }
+      const picked = await vscode.window.showQuickPick(names, { placeHolder: 'Choose a saved connection to remove.' });
+      if (!picked) return;
+      await removeConnection(picked.id);
+    }),
     vscode.commands.registerCommand('moderado.showSessions', async () => {
       const { sessions, invalid } = host.listSessions();
       if (invalid.length) {

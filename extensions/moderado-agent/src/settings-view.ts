@@ -231,8 +231,6 @@ export function settingsPaneHtml(state: SettingsState): string {
   const gateway = state.preset === 'moderado-cloud';
   const currentBaseUrl = state.baseUrl || choice?.storedBaseUrl || choice?.baseUrl || '';
   const normalizedBaseUrl = currentBaseUrl.replace(/\/+$/, '');
-  const loginMethod = state.loginMethod ?? 'public';
-  const needsKey = gateway ? loginMethod !== 'public' : choice?.requiresApiKey ?? true;
   // Per-provider credential state: picking a provider shows whether that one
   // already has a key, rather than the previous provider's.
   const keyStored = choice?.hasCredential ?? state.apiKeyStored;
@@ -250,16 +248,17 @@ export function settingsPaneHtml(state: SettingsState): string {
     ? `<p class="active-line" title="Shared profile: ${escapeHtml(state.profilePath || '~/.moderado/config.json')}">Using <strong>${escapeHtml(active?.displayName ?? state.activeConnectionId)}</strong>${active?.hasCredential ? ' · key stored' : ''}</p>`
     : '';
 
-  const loginField = gateway ? `<label for="settings-login-method">Gateway access</label>
-    <select id="settings-login-method"${disabled}>
-      ${(['public', 'browser', 'manual'] as const).map(method => `<option value="${method}"${method === loginMethod ? ' selected' : ''}>${{ public: 'Public Gateway (paid routes)', browser: 'Browser website key', manual: 'Manual website key' }[method]}</option>`).join('')}
-    </select>` : '';
-  const keyField = `<label for="settings-api-key">API Key${needsKey ? '' : ' (optional)'}</label>
+  // The key box is the whole credential story: type or paste a key and it is
+  // stored and used. A separate "access" control could say "public" while a
+  // key was stored, which silently dropped that key from the profile. Browser
+  // sign-in stays a separate action because it is a different flow.
+  const keyField = `<label for="settings-api-key">API Key</label>
     <input id="settings-api-key" type="password" autocomplete="off" spellcheck="false" maxlength="8192"
            placeholder="${keyStored ? 'Key stored · paste to replace' : 'Paste API key'}" value=""${disabled} />
-    <p class="note">${keyStored ? 'Credential stored. A key is already stored for this provider; this field stays blank. Paste only to replace it.' : 'No credential stored. Keys are stored securely when you save.'}</p>
-    ${!needsKey ? `<p class="note">${gateway ? 'Free Gateway models require a Moderado website API key. Paid routes remain available without one when paid models are enabled.' : 'This local runtime needs no API key.'}</p>` : ''}
-    ${gateway && loginMethod === 'browser' ? `<button id="settings-browser-login" type="button"${disabled}>Sign in with browser</button>` : ''}`;
+    <p class="note">${keyStored ? 'A key is stored for this provider. Paste a new key to replace it.' : 'Paste a key and save. It is stored in Credential Manager and never shown again.'}</p>
+    ${gateway ? '<p class="note">Free Gateway models need a website API key. Paid routes remain available without one when paid models are enabled.</p>'
+      : choice?.requiresApiKey === false ? '<p class="note">This local runtime needs no API key.</p>' : ''}
+    ${gateway ? `<button id="settings-browser-login" type="button"${disabled}>Sign in with browser</button>` : ''}`;
 
   const gatewayEnvironment = gateway ? `<fieldset class="gateway-environment">
     <legend>Gateway environment</legend>
@@ -310,7 +309,6 @@ export function settingsPaneHtml(state: SettingsState): string {
         <select id="settings-provider"${disabled}>${providerOptions(state)}</select>
         ${presetNote}
         ${extra}
-        ${loginField}
         ${keyField}
         ${modelField}
         <div class="row">
@@ -338,7 +336,13 @@ export interface SettingsFormValues {
   displayName: string;
   baseUrl: string;
   modelId?: string;
-  loginMethod: GatewayLoginMethod;
+  /**
+   * How the Gateway authenticates. Absent means the pane did not choose, and
+   * the host keeps whatever the profile already records. A separate control
+   * that could say "public" while a key is stored is how a saved key was
+   * silently dropped from the profile.
+   */
+  loginMethod?: GatewayLoginMethod;
 }
 
 export type ParsedSettings =
@@ -359,9 +363,14 @@ export function parseSettingsForm(message: unknown): ParsedSettings {
   if (['apiKey', 'token', 'authorizationCode', 'credentialReference'].some(field => field in raw)) {
     return { ok: false, error: 'Provider credentials must be entered in the secure editor prompt.' };
   }
-  const loginMethod = raw.loginMethod ?? 'public';
-  if (loginMethod !== 'public' && loginMethod !== 'manual' && loginMethod !== 'browser') {
-    return { ok: false, error: 'Choose a valid Gateway login method.' };
+  // The login method is optional. A pane that did not choose one must not
+  // assert "public", because that would drop a stored key from the profile.
+  let loginMethod: GatewayLoginMethod | undefined;
+  if (raw.loginMethod !== undefined && raw.loginMethod !== null) {
+    if (raw.loginMethod !== 'public' && raw.loginMethod !== 'manual' && raw.loginMethod !== 'browser') {
+      return { ok: false, error: 'Choose a valid Gateway login method.' };
+    }
+    loginMethod = raw.loginMethod;
   }
 
   const preset = typeof raw.preset === 'string' ? raw.preset.trim() : '';
@@ -369,7 +378,6 @@ export function parseSettingsForm(message: unknown): ParsedSettings {
   if (!/^[A-Za-z0-9][A-Za-z0-9:_-]*$/.test(preset)) {
     return { ok: false, error: 'That provider value is not recognised.' };
   }
-
   const displayName = typeof raw.displayName === 'string' ? raw.displayName.trim() : '';
   if (raw.displayName !== undefined && raw.displayName !== null && typeof raw.displayName !== 'string') {
     return { ok: false, error: 'Malformed provider name.' };

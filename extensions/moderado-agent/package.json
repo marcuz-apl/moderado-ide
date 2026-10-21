@@ -54,6 +54,10 @@
         "title": "Moderado: Configure Provider Connection"
       },
       {
+        "command": "moderado.removeConnection",
+        "title": "Moderado: Remove Saved Connection"
+      },
+      {
         "command": "moderado.cancelRun",
         "title": "Moderado: Cancel Current Run"
       },

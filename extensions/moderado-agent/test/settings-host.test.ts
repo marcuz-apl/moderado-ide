@@ -60,7 +60,7 @@ vi.mock('../src/coordination.js', () => ({ updateConfigCoordinated: harness.writ
 import { activate } from '../src/extension.js';
 import { createSession, type StoredSession } from '../src/sessions.js';
 
-const form = { preset: 'moderado-cloud', displayName: '', baseUrl: 'http://127.0.0.1:4788/v1', modelId: 'Exact/Route', loginMethod: 'manual' };
+const form = { preset: 'moderado-cloud', displayName: '', baseUrl: 'http://127.0.0.1:4788/v1', modelId: 'Exact/Route' };
 function send(type: string, values: Record<string, unknown> = {}) { harness.receive({ type, ...values }); }
 const html = () => String(harness.messages.at(-1)?.settings ?? '');
 
@@ -74,7 +74,12 @@ beforeEach(() => {
   harness.prompt.mockResolvedValue('mrd_native-secret');
   harness.browser.mockResolvedValue({ accessToken: 'mrd_browser-secret', expiresAt: Date.now() + 60_000 });
   harness.write.mockImplementation((_path, patch) => {
-    harness.profile = { ...harness.profile, ...patch, connections: { ...(harness.profile.connections as object), ...(patch.connections as object) } };
+    // The real writer serializes to JSON, which drops an undefined value. The
+    // round trip keeps the mock faithful to what actually lands on disk.
+    harness.profile = JSON.parse(JSON.stringify({
+      ...harness.profile, ...patch,
+      connections: { ...(harness.profile.connections as object), ...(patch.connections as object) },
+    }));
     return { written: true };
   });
   vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ object: 'list', data: [
@@ -94,14 +99,14 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe('host-only Settings credentials', () => {
   it('prompts natively for a manual Gateway key and writes only its reference', async () => {
-    send('setProviderKey', form);
+    send('setProviderKey', { ...form, loginMethod: 'manual' });
     await vi.waitFor(() => expect(harness.write).toHaveBeenCalled());
     expect(harness.prompt).toHaveBeenCalledWith(expect.objectContaining({ password: true, ignoreFocusOut: true }));
     expect(harness.keys.get((harness.profile.connections as Record<string, Record<string, string>>)['moderado-cloud']?.credentialReference)).toBe('mrd_native-secret');
     expect(harness.profile).toMatchObject({ defaultModel: 'Exact/Route', connections: { 'moderado-cloud': {
       authMethod: 'manual', credentialReference: expect.stringMatching(/^moderado\/provider\/moderado-cloud-/), defaultModel: 'Exact/Route',
     } } });
-    await vi.waitFor(() => expect(html()).toContain('Credential stored'));
+    await vi.waitFor(() => expect(html()).toContain('A key is stored for this provider'));
     expect(JSON.stringify(harness.messages)).not.toMatch(/mrd_native-secret|moderado\/provider\//);
     expect(JSON.stringify(harness.profile)).not.toContain('mrd_native-secret');
   });
@@ -125,9 +130,43 @@ describe('host-only Settings credentials', () => {
     expect(record.credentialReference).toBeUndefined(); expect(record.credentialExpiresAt).toBeUndefined(); expect(record.apiKey).toBeUndefined();
   });
 
+  it('keeps a stored Gateway key when only the model changes', async () => {
+    // The pane no longer sends an access method, so saving a model choice must
+    // not silently unlink the credential the profile already records.
+    harness.profile = { connections: { 'moderado-cloud': { id: 'moderado-cloud', authMethod: 'manual', credentialReference: 'moderado/provider/moderado-cloud', baseUrl: 'http://127.0.0.1:4788/v1', defaultModel: 'auto' } } };
+    harness.keys.set('moderado/provider/moderado-cloud', 'mrd_stored_secret');
+    send('saveSettings', { ...form, modelId: 'Exact/Route' });
+    await vi.waitFor(() => expect(harness.write).toHaveBeenCalled());
+    const record = (harness.profile.connections as any)['moderado-cloud'];
+    expect(record).toMatchObject({ authMethod: 'manual', credentialReference: 'moderado/provider/moderado-cloud', defaultModel: 'Exact/Route' });
+    expect(harness.keys.get('moderado/provider/moderado-cloud')).toBe('mrd_stored_secret');
+  });
+
+  it('stores a pasted Gateway key without a native prompt', async () => {
+    harness.profile = { connections: {} };
+    send('saveSettings', { ...form, modelId: 'Exact/Route', apiKey: 'mrd_pasted_secret' });
+    await vi.waitFor(() => expect(harness.write).toHaveBeenCalled());
+    expect(harness.prompt).not.toHaveBeenCalled();
+    const record = (harness.profile.connections as any)['moderado-cloud'];
+    expect(record).toMatchObject({ authMethod: 'manual', credentialReference: expect.stringMatching(/^moderado\/provider\/moderado-cloud-/), defaultModel: 'Exact/Route' });
+    expect(harness.keys.get(record.credentialReference)).toBe('mrd_pasted_secret');
+    expect(JSON.stringify(harness.profile)).not.toContain('mrd_pasted_secret');
+  });
+
+  it('removes a saved connection from the shared profile', async () => {
+    harness.profile = { activeConnectionId: 'moderado', connections: {
+      'moderado': { id: 'moderado', displayName: 'Moderado', baseUrl: 'https://modr.alfazen.org/v1' },
+      'nvidia-nim': { id: 'nvidia-nim', baseUrl: 'https://integrate.api.nvidia.com/v1' },
+    } };
+    send('removeConnection', { id: 'moderado' });
+    await vi.waitFor(() => expect(harness.write).toHaveBeenCalled());
+    expect(Object.keys((harness.profile.connections as Record<string, unknown>))).toEqual(['nvidia-nim']);
+    expect(harness.profile.activeConnectionId).toBe('nvidia-nim');
+  });
+
   it('cancellation denies credential/config mutation', async () => {
     harness.prompt.mockResolvedValue(undefined);
-    send('setProviderKey', form);
+    send('setProviderKey', { ...form, loginMethod: 'manual' });
     await vi.waitFor(() => expect(html()).toContain('cancelled'));
     expect(harness.keys.size).toBe(0); expect(harness.write).not.toHaveBeenCalled();
   });
@@ -139,7 +178,7 @@ describe('host-only Settings credentials', () => {
   });
 
   it('blocks native key changes against a corrupt profile', async () => {
-    harness.invalid = true; send('setProviderKey', form);
+    harness.invalid = true; send('setProviderKey', { ...form, loginMethod: 'manual' });
     await vi.waitFor(() => expect(html()).toContain('corrupt profile'));
     expect(harness.prompt).not.toHaveBeenCalled(); expect(harness.write).not.toHaveBeenCalled();
   });
@@ -491,7 +530,7 @@ describe('Features editor preferences', () => {
   });
 
   it('does not show model counts on any Settings page or model tab after discovery', async () => {
-    send('setProviderKey', form);
+    send('setProviderKey', { ...form, loginMethod: 'manual' });
     await vi.waitFor(() => expect(html()).toContain('<option value="Exact/Route"'));
     for (const page of ['api', 'features', 'about']) {
       send('setSettingsPage', { page });
@@ -615,7 +654,7 @@ describe('legacy credential preservation', () => {
     expect(JSON.stringify(harness.messages)).not.toContain('legacy-fixture-key');
   });
   it('saving an existing manual Gateway login keeps its exact credential reference', async () => {
-    send('setProviderKey', form);
+    send('setProviderKey', { ...form, loginMethod: 'manual' });
     await vi.waitFor(() => expect(html()).toContain('<option value="Exact/Route"'));
     const reference = (harness.profile.connections as Record<string, Record<string, string>>)['moderado-cloud'].credentialReference;
     send('saveSettings', form);

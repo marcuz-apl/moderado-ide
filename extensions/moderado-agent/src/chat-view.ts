@@ -479,13 +479,14 @@ ${toolbarHtml(snapshot.historyOpen, snapshot.tokenUsage, snapshot.tokenUsageTitl
     const provider = document.getElementById('settings-provider');
     const displayName = document.getElementById('settings-display-name');
     const baseUrl = document.getElementById('settings-base-url');
-    const loginMethod = document.getElementById('settings-login-method');
     const model = document.getElementById('settings-model');
     return {
       preset: provider ? provider.value : '',
       displayName: displayName ? displayName.value : '',
       baseUrl: baseUrl ? baseUrl.value : '',
-      loginMethod: loginMethod ? loginMethod.value : 'public',
+      // The access method is decided by the key box, not by a separate
+      // control, so the pane does not send one. The host keeps what the
+      // profile already records.
       modelId: model ? model.value : '',
     };
   }
@@ -514,7 +515,6 @@ ${toolbarHtml(snapshot.historyOpen, snapshot.tokenUsage, snapshot.tokenUsageTitl
     const provider = document.getElementById('settings-provider');
     const setKey = document.getElementById('settings-set-key');
     const browserLogin = document.getElementById('settings-browser-login');
-    const loginMethod = document.getElementById('settings-login-method');
     const modelSelect = document.getElementById('settings-model-select');
     const apiKey = document.getElementById('settings-api-key');
     const baseUrl = document.getElementById('settings-base-url');
@@ -543,18 +543,14 @@ ${toolbarHtml(snapshot.historyOpen, snapshot.tokenUsage, snapshot.tokenUsageTitl
     // saved, or it would list the previous provider's models.
     if (refresh) refresh.addEventListener('click', reloadModels);
     if (baseUrl) baseUrl.addEventListener('input', scheduleModels);
-    if (apiKey) apiKey.addEventListener('input', () => {
-      if (apiKey.value && loginMethod && loginMethod.value === 'public') loginMethod.value = 'manual';
-      scheduleModels();
-    });
+    if (apiKey) apiKey.addEventListener('input', scheduleModels);
     if (provider) provider.addEventListener('change', () => {
       clearTimeout(discoveryTimer);
       if (apiKey) apiKey.value = '';
       vscode.postMessage({ type: 'selectPreset', preset: provider.value });
     });
-    if (setKey) setKey.addEventListener('click', () => vscode.postMessage({ type: 'setProviderKey', ...readSettings() }));
-    if (browserLogin) browserLogin.addEventListener('click', () => vscode.postMessage({ type: 'gatewayBrowserLogin', ...readSettings() }));
-    if (loginMethod) loginMethod.addEventListener('change', () => vscode.postMessage({ type: 'setGatewayLoginMethod', ...readSettings() }));
+    if (setKey) setKey.addEventListener('click', () => vscode.postMessage({ type: 'setProviderKey', ...readSettings(), loginMethod: 'manual' }));
+    if (browserLogin) browserLogin.addEventListener('click', () => vscode.postMessage({ type: 'gatewayBrowserLogin', ...readSettings(), loginMethod: 'browser' }));
     for (const field of document.querySelectorAll('[data-preference]')) {
       field.addEventListener('change', () => {
         const value = field.type === 'checkbox' ? field.checked : field.type === 'number' ? Number(field.value) : field.value;

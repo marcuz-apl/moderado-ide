@@ -459,8 +459,8 @@ describe('moderado settings pane', () => {
         { value: 'openrouter', label: 'OpenRouter', description: 'd', requiresApiKey: true, hasCredential: false },
       ],
     }));
-    expect(pane).not.toContain('already stored for this provider');
-    expect(pane).toContain('No credential stored.');
+    expect(pane).not.toContain('A key is stored for this provider');
+    expect(pane).toContain('Paste a key and save.');
   });
 
   it('marks the key as stored for the provider that has one', () => {
@@ -471,9 +471,9 @@ describe('moderado settings pane', () => {
         { value: 'openrouter', label: 'OpenRouter', description: 'd', requiresApiKey: true, hasCredential: false },
       ],
     }));
-    expect(pane).toContain('already stored for this provider');
-    expect(pane).toContain('field stays blank');
-    // The secret is collected by a native host prompt, not an editable field.
+    expect(pane).toContain('A key is stored for this provider');
+    expect(pane).toContain('Paste a new key to replace it.');
+    // The key is collected in an editable masked field.
     expect(pane).toContain('id="settings-api-key"');
     expect(pane).toContain('type="password"');
   });
@@ -594,7 +594,6 @@ describe('moderado settings pane', () => {
     expect(pane).toContain('id="settings-api-key"');
     expect(pane).toContain('needs no API key');
   });
-
   it('shows provider names without a free-model suffix and retains local tags', () => {
     const pane = settingsPaneHtml(settings({ preset: 'ollama', providers: [
       { value: 'nvidia-nim', label: 'NVIDIA NIM', description: 'd', requiresApiKey: true },
@@ -623,7 +622,7 @@ describe('moderado settings pane', () => {
       providers: [{ value: 'nvidia-nim', label: 'NVIDIA NIM', description: 'd', requiresApiKey: true, hasCredential: true }],
     }));
     expect(pane).not.toContain('sk-live-secret');
-    expect(pane).toContain('already stored for this provider');
+    expect(pane).toContain('A key is stored for this provider');
     expect(pane).toContain('type="password"');
     expect(pane).toContain('id="settings-api-key"');
   });
