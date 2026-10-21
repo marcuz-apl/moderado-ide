@@ -9,12 +9,14 @@ describe('Gateway and provider Settings boundary', () => {
   it('presents Gateway access in the unified provider connection flow', () => {
     const choices = buildProviderChoices();
     const gatewayChoice = choices.find((choice) => choice.value === 'moderado-cloud');
-    expect(gatewayChoice?.tag).toBe('Gateway');
+    expect(gatewayChoice?.label).toBe('Moderado');
+    expect(gatewayChoice?.tag).toBeUndefined();
     expect(gatewayChoice?.description).toContain('public access');
 
     const html = settingsPaneHtml(gateway());
     expect(html).toContain('id="settings-provider"');
     expect(html).toContain('value="moderado-cloud"');
+    expect(html).toContain('>Moderado</option>');
     expect(html).toContain('Public Gateway (paid routes)');
     expect(html).toContain('Browser website key');
     expect(html).toContain('Manual website key');

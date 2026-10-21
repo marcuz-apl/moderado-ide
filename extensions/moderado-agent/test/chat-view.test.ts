@@ -255,9 +255,9 @@ describe('chat view', () => {
   });
 
   it('shows the active provider and model in the composer footer', () => {
-    const html = chatHtml(state({ activeProviderName: 'Moderado Gateway', activeModelId: 'auto' }), preview);
+    const html = chatHtml(state({ activeProviderName: 'Moderado', activeModelId: 'auto' }), preview);
     const footer = html.slice(html.indexOf('id="panel-foot"'));
-    expect(footer).toContain('Moderado Gateway');
+    expect(footer).toContain('Moderado');
     expect(footer).toContain('auto');
   });
 
@@ -270,8 +270,8 @@ describe('chat view', () => {
   });
 
   it('preserves an exact pinned route id in the footer context', () => {
-    const snap = viewSnapshot(state({ activeProviderName: 'Moderado Gateway', activeModelId: 'moonshotai/kimi-k3' }), preview);
-    expect(snap.activeContext).toBe('Moderado Gateway · moonshotai/kimi-k3');
+    const snap = viewSnapshot(state({ activeProviderName: 'Moderado', activeModelId: 'moonshotai/kimi-k3' }), preview);
+    expect(snap.activeContext).toBe('Moderado · moonshotai/kimi-k3');
     expect(viewSnapshot(state(), preview).activeContext).toBe('');
   });
 });
@@ -436,14 +436,14 @@ describe('moderado settings pane', () => {
     // profile-path heading, which dominated the pane.
     const pane = settingsPaneHtml(settings({
       profilePath: 'C:\\Users\\marcu\\.moderado\\config.json',
-      activeConnectionId: 'agnes-ai',
+      activeConnectionId: 'example-provider',
       savedConnections: [
-        { id: 'agnes-ai', displayName: 'Agnes AI', kind: 'openai-compatible', baseUrl: 'https://a/v1', hasCredential: true },
+        { id: 'example-provider', displayName: 'Example AI', kind: 'openai-compatible', baseUrl: 'https://a/v1', hasCredential: true },
       ],
     }));
     // One short line, and the path only as a tooltip.
     expect(pane).toContain('class="active-line"');
-    expect(pane).toContain('Using <strong>Agnes AI</strong>');
+    expect(pane).toContain('Using <strong>Example AI</strong>');
     expect(pane).not.toContain('<h3>From');
     expect(pane).not.toContain('class="saved-list"');
     // The path is still discoverable without occupying layout space.

@@ -81,7 +81,7 @@ describe('direct provider model discovery', () => {
 
   it.each([
     ['OpenRouter overrides', { overrides: [{ prompt: '1', completion: '1' }] }],
-    ['OrcaRouter tiers', { tiers: [{ prompt: '1', completion: '1' }] }],
+    ['tiered pricing', { tiers: [{ prompt: '1', completion: '1' }] }],
   ])('keeps models with nested %s pricing but does not classify their cost as free', async (_name, extra) => {
     const models = await fetchDirectModels('https://provider.example/v1', 'key', {
       fetchImpl: async () => Response.json({ object: 'list', data: [

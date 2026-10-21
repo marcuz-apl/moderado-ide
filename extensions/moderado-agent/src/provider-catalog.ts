@@ -14,15 +14,13 @@ export interface DesktopProviderPreset {
 
 export const MODERADO_CLOUD_BASE_URLS = {
   development: 'http://127.0.0.1:4788/v1',
-  production: 'https://mod.alfazen.org/v1',
+  production: 'https://modr.alfazen.org/v1',
 } as const;
 
 export const DESKTOP_PROVIDER_PRESETS: readonly DesktopProviderPreset[] = [
-  { id: 'moderado-cloud', label: 'Moderado Gateway', description: 'Use browser sign-in, a saved key, a new key, or public access. Free routes require a Moderado website API key.', kind: 'openai-compatible', baseUrl: MODERADO_CLOUD_BASE_URLS.production, requiresApiKey: false, defaultModel: 'auto' },
+  { id: 'moderado-cloud', label: 'Moderado', description: 'Use browser sign-in, a saved key, a new key, or public access. Free routes require a Moderado website API key.', kind: 'openai-compatible', baseUrl: MODERADO_CLOUD_BASE_URLS.production, requiresApiKey: false, defaultModel: 'auto' },
   { id: 'nvidia-nim', label: 'NVIDIA NIM', description: 'Free-first routing across NVIDIA hosted models.', kind: 'nvidia-nim', baseUrl: 'https://integrate.api.nvidia.com/v1', requiresApiKey: true, freeCatalog: true },
   { id: 'openrouter', label: 'OpenRouter', description: 'One key for hosted models and free-tier models.', kind: 'openai-compatible', baseUrl: 'https://openrouter.ai/api/v1', requiresApiKey: true },
-  { id: 'agnes-ai', label: 'Agnes AI', description: 'Agnes Flash and Code endpoints.', kind: 'openai-compatible', baseUrl: 'https://apihub.agnes-ai.com/v1', requiresApiKey: true, freeCatalog: true },
-  { id: 'orcarouter', label: 'OrcaRouter', description: 'Adaptive model routing.', kind: 'openai-compatible', baseUrl: 'https://api.orcarouter.ai/v1', requiresApiKey: true, defaultModel: 'orcarouter/free', freeIdSuffixes: ['free'] },
   { id: 'ollama', label: 'Ollama', description: 'Models served locally by Ollama.', kind: 'openai-compatible', baseUrl: 'http://127.0.0.1:11434/v1', requiresApiKey: false, local: true },
   { id: 'lm-studio', label: 'LM Studio', description: 'Models served by the LM Studio local server.', kind: 'openai-compatible', baseUrl: 'http://127.0.0.1:1234/v1', requiresApiKey: false, local: true },
   { id: 'openai-compatible', label: 'Other OpenAI-compatible provider', description: 'Connect any compatible endpoint with its base URL, key, and model ID.', kind: 'openai-compatible', baseUrl: '', requiresApiKey: true },

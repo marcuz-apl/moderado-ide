@@ -64,8 +64,8 @@ describe('Desktop model routing', () => {
 
   it.each(['1', '', 'NaN'])('classifies nonzero or invalid pricing %j as paid before preset evidence', (prompt) => {
     const inventory = [model('model', { pricing: { prompt, completion: '0' } })];
-    expect(makeRouter(inventory, 'agnes-ai').classifyModel('model').accessTier).toBe('paid');
-    expect(() => makeRouter(inventory, 'agnes-ai').selectModel(inventory)).toThrow(NoEligibleModelError);
+    expect(makeRouter(inventory, 'nvidia-nim').classifyModel('model').accessTier).toBe('paid');
+    expect(() => makeRouter(inventory, 'nvidia-nim').selectModel(inventory)).toThrow(NoEligibleModelError);
   });
 
   it('requires separate paid and unknown opt-ins with desktop recovery guidance', () => {

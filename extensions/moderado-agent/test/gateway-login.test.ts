@@ -20,7 +20,7 @@ const callback = (authorizationUrl: string, changes?: (url: URL) => void) => {
 describe('Gateway connection and host-only credential persistence', () => {
   it('builds public access without a secret or reference', () => {
     expect(buildGatewayConnection('public', { baseUrl: 'http://127.0.0.1:4788/v1' })).toEqual({
-      id: 'moderado-cloud', displayName: 'Moderado Gateway', kind: 'openai-compatible',
+      id: 'moderado-cloud', displayName: 'Moderado', kind: 'openai-compatible',
       baseUrl: 'http://127.0.0.1:4788/v1', defaultModel: 'auto', authMethod: 'public',
     });
   });
@@ -63,7 +63,7 @@ describe('Gateway PKCE and callback boundary', () => {
   it('uses the registered client, exact redirect and random S256 PKCE', () => {
     const request = createGatewayOAuthRequest('http://127.0.0.1:51111/callback');
     const authorization = new URL(request.authorizationUrl);
-    expect(authorization.origin + authorization.pathname).toBe('https://mod.alfazen.org/authorize');
+    expect(authorization.origin + authorization.pathname).toBe('https://modr.alfazen.org/authorize');
     expect(authorization.searchParams.get('client_id')).toBe('moderado-cli');
     expect(authorization.searchParams.get('redirect_uri')).toBe(request.redirectUri);
     expect(authorization.searchParams.get('state')).toBe(request.state);
@@ -92,7 +92,7 @@ describe('Gateway token exchange', () => {
     const request = createGatewayOAuthRequest('http://127.0.0.1:51111/callback');
     const start = Date.now();
     const result = await exchangeGatewayOAuthCode('code', request, async (url, options) => {
-      expect(String(url)).toBe('https://mod.alfazen.org/oauth/token');
+      expect(String(url)).toBe('https://modr.alfazen.org/oauth/token');
       expect(options?.redirect).toBe('error');
       expect(options?.method).toBe('POST');
       expect(JSON.parse(String(options?.body))).toEqual({ code: 'code', verifier: request.verifier, client_id: 'moderado-cli', redirect_uri: request.redirectUri });

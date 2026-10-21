@@ -30,8 +30,8 @@ agent in a complete editor. The first complete flow is:
    one through IDE; resolve its key without exposing it in UI messages.
 4. Discover models, select a pinned model or free-first AUTO route, and show
    paid or unknown-cost models only under the same explicit opt-in rules as
-   the pinned Moderado engine. Free Moderado Gateway routes require a valid
-   Moderado website API key; Gateway model listing and paid routes do not.
+   the pinned Moderado engine. Free Moderado routes require a valid
+   Moderado website API key; Moderado model listing and paid routes do not.
 5. Start or resume a workspace session, stream events and usage, inspect a
    proposed diff or command, decide approval, and observe the result.
 6. Close and reopen IDE; the session and selected provider/model remain

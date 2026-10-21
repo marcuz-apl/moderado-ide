@@ -1,6 +1,13 @@
 # Moderado IDE changelog
 
-## [Unreleased] — 2026-10-21
+## [Unreleased] - 2026-10-21
+
+**Feature: Moderado provider rename and production gateway endpoint**
+- **Type**: `feat` / `provider` / `patch`
+- **Key deliverables**:
+  - The built-in provider menu lists the Gateway connection as `Moderado` (previously `Moderado Gateway`), without a redundant `Gateway` tag.
+  - Agnes AI and OrcaRouter are no longer shipped presets; identically named custom or saved connections remain the user's own profile data.
+  - The production Moderado API base URL is `https://modr.alfazen.org/v1`, and browser website-key sign-in plus token exchange use `https://modr.alfazen.org`. The development endpoint stays selectable in API Config.
 
 **Fix: Approval previews, session isolation, and auto-approve categories**
 - **Type**: `fix` / `agent` / `patch`

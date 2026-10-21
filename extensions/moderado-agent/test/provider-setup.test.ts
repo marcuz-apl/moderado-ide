@@ -20,7 +20,7 @@ describe('provider setup parity with the CLI', () => {
     const connection = buildProviderConnection({ preset: 'moderado-cloud', displayName: 'My Gateway' });
     expect(connection.id).toBe('moderado-cloud');
     expect(connection.defaultModel).toBe('auto');
-    expect(connection.baseUrl).toBe('https://mod.alfazen.org/v1');
+    expect(connection.baseUrl).toBe('https://modr.alfazen.org/v1');
     expect(connection.apiKey).toBeUndefined();
     expect(buildProviderConnection({ preset: 'moderado-cloud', apiKey: 'mrd_test', baseUrl: 'http://127.0.0.1:4788/v1' }).apiKey).toBe('mrd_test');
   });
@@ -63,13 +63,13 @@ describe('provider setup parity with the CLI', () => {
   it('uses the preset id as the connection id so free policy resolves', () => {
     // freeModelPolicyFor(connectionId) looks the preset up by connection id. An
     // ad-hoc id silently disables the free-first rule for that provider.
-    expect(buildProviderConnection({ preset: 'agnes-ai', apiKey: 'k', defaultModel: 'm' }).id).toBe('agnes-ai');
+    expect(buildProviderConnection({ preset: 'nvidia-nim', apiKey: 'k', defaultModel: 'm' }).id).toBe('nvidia-nim');
     expect(buildProviderConnection({ preset: 'ollama', defaultModel: 'llama3' }).id).toBe('ollama');
   });
 
   it("applies the preset's default model so the user need not choose one", () => {
-    expect(buildProviderConnection({ preset: 'orcarouter', apiKey: 'k' }).defaultModel)
-      .toBe('orcarouter/free');
+    expect(buildProviderConnection({ preset: 'moderado-cloud' }).defaultModel)
+      .toBe('auto');
   });
 
   it('does not require a key for local runtimes', () => {
@@ -120,9 +120,12 @@ describe('provider setup parity with the CLI', () => {
   it('offers every built-in preset, with a tag and description', () => {
     const choices = buildProviderChoices();
     const values = choices.map((c) => c.value);
-    for (const id of ['nvidia-nim', 'openrouter', 'agnes-ai', 'orcarouter', 'ollama', 'lm-studio', 'openai-compatible']) {
+    for (const id of ['nvidia-nim', 'openrouter', 'ollama', 'lm-studio', 'openai-compatible']) {
       expect(values).toContain(id);
     }
+    // Agnes AI and OrcaRouter are no longer shipped presets.
+    expect(values).not.toContain('agnes-ai');
+    expect(values).not.toContain('orcarouter');
     expect(choices.every((c) => c.label && c.description)).toBe(true);
   });
 
@@ -139,8 +142,6 @@ describe('provider setup parity with the CLI', () => {
     const cases = [
       buildProviderConnection({ preset: 'nvidia-nim', apiKey: 'k' }),
       buildProviderConnection({ preset: 'openrouter', apiKey: 'k', defaultModel: 'm' }),
-      buildProviderConnection({ preset: 'agnes-ai', apiKey: 'k', defaultModel: 'm' }),
-      buildProviderConnection({ preset: 'orcarouter', apiKey: 'k' }),
       buildProviderConnection({ preset: 'ollama', defaultModel: 'llama3' }),
       buildProviderConnection({ preset: 'lm-studio', defaultModel: 'x' }),
       buildProviderConnection({

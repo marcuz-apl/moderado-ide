@@ -4,8 +4,8 @@ import { credentialReference, type CredentialStore } from './credentials.js';
 import { validateProviderBaseUrl, type ProviderConnectionRecord } from './provider-setup.js';
 
 const CLIENT_ID = 'moderado-cli'; // Existing registered Gateway client contract.
-const AUTHORIZE_URL = 'https://mod.alfazen.org/authorize';
-const TOKEN_URL = 'https://mod.alfazen.org/oauth/token';
+const AUTHORIZE_URL = 'https://modr.alfazen.org/authorize';
+const TOKEN_URL = 'https://modr.alfazen.org/oauth/token';
 const TOKEN_LIFETIME_SECONDS = 2_592_000;
 const DEFAULT_TIMEOUT_MS = 120_000;
 
@@ -28,13 +28,13 @@ function validKey(key: unknown): key is string {
 /** Returns display/profile-safe metadata; no secret value is copied. */
 export function buildGatewayConnection(method: GatewayLoginMethod, options: GatewayLoginOptions = {}): GatewayConnection {
   if (!['public', 'manual', 'browser'].includes(method)) throw new Error('Choose a valid Gateway login method.');
-  const baseUrl = validateProviderBaseUrl(options.baseUrl ?? 'https://mod.alfazen.org/v1');
+  const baseUrl = validateProviderBaseUrl(options.baseUrl ?? 'https://modr.alfazen.org/v1');
   if (method !== 'public' && !validKey(options.key)) throw new Error('Enter a valid Gateway key beginning with mrd_.');
   if (method === 'browser' && (typeof options.expiresAt !== 'number' || !Number.isFinite(options.expiresAt) || options.expiresAt <= Date.now())) {
     throw new Error('Gateway browser credential is missing a valid expiry or has expired.');
   }
   return {
-    id: 'moderado-cloud', displayName: 'Moderado Gateway', kind: 'openai-compatible', baseUrl,
+    id: 'moderado-cloud', displayName: 'Moderado', kind: 'openai-compatible', baseUrl,
     defaultModel: 'auto', authMethod: method,
     ...(method !== 'public' ? { credentialReference: credentialReference('moderado-cloud') } : {}),
     ...(method === 'browser' ? { credentialExpiresAt: options.expiresAt } : {}),

@@ -131,18 +131,12 @@ addChecksums([debName, rpmName], 'SHA256SUMS-linux-x64');
 
 const releaseNotes = join(outputRoot, 'release-notes.md');
 writeFileSync(releaseNotes, [
-  `Moderado IDE ${productVersion} fixes a webview startup error, approval-preview and session-isolation defects, and adds faster streamed rendering plus a bounded Windows credential bridge.`,
+  `Moderado IDE ${productVersion} refreshes the built-in provider menu and moves the Moderado provider to its production gateway.`,
   '',
   '### Included',
-  '- Fix the webview JavaScript startup error so Moderado controls respond normally.',
-  '- Show complete diffs for file-write and multi-file patch approvals, and stop leaving unanswerable approval cards.',
-  '- Start a distinct chat from New Session and honor disabled auto-approve categories for read and web tools.',
-  '- Coalesce streamed assistant output and update only the streaming transcript row instead of rebuilding the transcript per token.',
-  '- Cache the RECENT session list and invalidate it on session changes instead of rescanning session files while streaming.',
-  '- Bound Windows Credential Manager bridge operations with a 5 s timeout and kill a hung PowerShell child.',
-  '- Switch the Moderado Gateway between its development and production endpoints in API Config.',
-  '- Improve provider labels and OrcaRouter free-model identification.',
-  '- Add a clearer About card with product information and copyright.',
+  '- Rename the built-in Gateway provider to Moderado.',
+  '- Remove the Agnes AI and OrcaRouter presets from the provider menu.',
+  '- Point the Moderado provider, browser website-key sign-in, and token exchange at https://modr.alfazen.org; the local development endpoint remains selectable in API Config.',
   '- Publish Windows x64, Linux x64, macOS Apple Silicon (arm64), and macOS Intel (x64) packages.',
   '',
   '### Installation notes',
