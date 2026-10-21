@@ -96,6 +96,14 @@ export function createNonce(): string {
   return text;
 }
 
+/** Escape a JSON string for safe embedding inside an HTML <script> tag.
+ *  Replaces </script> and < sequences that the HTML parser would treat as
+ *  tag boundaries even inside a JavaScript string literal.
+ */
+export function escapeForScript(json: string): string {
+  return json.replace(/</g, '\\u003c').replace(/>/g, '\\u003e');
+}
+
 /** Top toolbar: New Session + Sessions before the gear, right aligned. */
 function toolbarHtml(historyOpen: boolean, tokenUsage: string, tokenUsageTitle: string): string {
   return `<div id="panel-bar">
@@ -447,10 +455,10 @@ ${toolbarHtml(snapshot.historyOpen, snapshot.tokenUsage, snapshot.tokenUsageTitl
   // User-pasted keys stay in a transient password input; stored keys never return.
   // Keep the pane mounted until its host-rendered content actually changes.
   const settingsHost = document.getElementById('settings-host');
-  let settingsOpen = ${JSON.stringify(snapshot.settingsOpen)};
-  let renderedSettings = ${JSON.stringify(snapshot.settings)};
+  let settingsOpen = ${escapeForScript(JSON.stringify(snapshot.settingsOpen))};
+  let renderedSettings = ${escapeForScript(JSON.stringify(snapshot.settings))};
   let discoveryTimer;
-  let renderedPreset = ${JSON.stringify(state.settings?.preset ?? '')};
+  let renderedPreset = ${escapeForScript(JSON.stringify(state.settings?.preset ?? ''))};
   // While the pane is open the chat surface is hidden, so settings owns the
   // sidebar instead of sharing it with a half-height transcript.
   function applySettingsVisibility() {
@@ -599,7 +607,7 @@ ${toolbarHtml(snapshot.historyOpen, snapshot.tokenUsage, snapshot.tokenUsageTitl
     historyDraft = input.value;
   });
 
-  function redactGatewayKeys(text: string): string {
+  function redactGatewayKeys(text) {
     // Moderado Gateway keys are mrd_ + base64url. Redact any such token
     // that appears in user input to prevent accidental key leaks.
     return text.replace(/\bmrd_[A-Za-z0-9_-]{20,}\b/g, '[REDACTED Gateway key]');
@@ -626,15 +634,15 @@ ${toolbarHtml(snapshot.historyOpen, snapshot.tokenUsage, snapshot.tokenUsageTitl
     }
   }
   bindAttachments();
-  let renderedAttachments = ${JSON.stringify(snapshot.attachments)};
-  bindApproval(${JSON.stringify(snapshot.pendingId)});
+  let renderedAttachments = ${escapeForScript(JSON.stringify(snapshot.attachments))};
+  bindApproval(${escapeForScript(JSON.stringify(snapshot.pendingId))});
 
   // Snapshots of the last rendered markup, so an update that did not change a
   // section does not rewrite its DOM (which would drop focus or a selection).
-  let renderedRecents = ${JSON.stringify(snapshot.recents)};
-  let renderedHistoryOpen = ${JSON.stringify(snapshot.historyOpen)};
-  let aaHtml = ${JSON.stringify(snapshot.autoApprove)};
-  let renderedContext = ${JSON.stringify(snapshot.activeContext)};
+  let renderedRecents = ${escapeForScript(JSON.stringify(snapshot.recents))};
+  let renderedHistoryOpen = ${escapeForScript(JSON.stringify(snapshot.historyOpen))};
+  let aaHtml = ${escapeForScript(JSON.stringify(snapshot.autoApprove))};
+  let renderedContext = ${escapeForScript(JSON.stringify(snapshot.activeContext))};
 
   function bindRecents() {
     for (const button of document.querySelectorAll('[data-delete-session]')) {
