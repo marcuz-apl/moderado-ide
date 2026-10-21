@@ -20,6 +20,28 @@ describe('hasCompletePreview', () => {
     expect(hasCompletePreview(request({ exactPayload: { targetFile: 'a.md' } }))).toBe(false);
   });
 
+  it('accepts a generated multi-file patch diff without a single target file', () => {
+    const diff = [
+      '--- a/first.txt',
+      '+++ b/first.txt',
+      '@@ -1,1 +1,1 @@',
+      '-first old',
+      '+first new',
+      '--- a/second.txt',
+      '+++ b/second.txt',
+      '@@ -1,1 +1,1 @@',
+      '-second old',
+      '+second new',
+    ].join('\n');
+    expect(hasCompletePreview(request({ toolName: 'apply_patch', exactPayload: { diffPreview: diff } }))).toBe(true);
+  });
+
+  it('still refuses an apply_patch summary that is not a generated diff', () => {
+    expect(hasCompletePreview(request({ toolName: 'apply_patch', exactPayload: { diffPreview: 'Patch 2 files' } }))).toBe(false);
+    expect(hasCompletePreview(request({ toolName: 'apply_patch', exactPayload: { targetFile: 'a.txt', contentPreview: 'x' } }))).toBe(false);
+    expect(hasCompletePreview(request({ toolName: 'apply_patch', exactPayload: {} }))).toBe(false);
+  });
+
   it('requires a command array and cwd to run a command', () => {
     expect(
       hasCompletePreview(

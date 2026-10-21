@@ -549,6 +549,43 @@ describe('AgentHost tool approvals end to end', () => {
       type: 'tool_result', result: expect.objectContaining({ toolName: 'write_file', status: 'denied' }),
     }));
   });
+
+  it('applies a multi-file patch after the human approves the generated diff', async () => {
+    const root = workspace();
+    writeFileSync(join(root, 'first.txt'), 'first old\n');
+    writeFileSync(join(root, 'second.txt'), 'second old\n');
+    const { events, onEvent } = collector();
+    const promptForApproval = vi.fn(async (request: ApprovalRequest) => ({ requestId: request.requestId, status: 'approved' as const }));
+    const fetchImpl = toolThenDone('apply_patch', { edits: [
+      { path: 'first.txt', targetContent: 'first old', replacementContent: 'first new' },
+      { path: 'second.txt', targetContent: 'second old', replacementContent: 'second new' },
+    ] });
+    const host = hostFor(root, fetchImpl, promptForApproval, onEvent);
+
+    await host.startRun({ task: 'Rename both values.', modelId: 'auto' });
+
+    expect(promptForApproval).toHaveBeenCalledTimes(1);
+    const preview = promptForApproval.mock.calls[0][0].exactPayload.diffPreview ?? '';
+    expect(preview).toContain('first.txt');
+    expect(preview).toContain('second.txt');
+    expect(readFileSync(join(root, 'first.txt'), 'utf8')).toBe('first new\n');
+    expect(readFileSync(join(root, 'second.txt'), 'utf8')).toBe('second new\n');
+    expect(events).toContainEqual(expect.objectContaining({
+      type: 'tool_result', result: expect.objectContaining({ toolName: 'apply_patch', status: 'success' }),
+    }));
+  });
+
+  it('still applies a single-file edit after approval', async () => {
+    const root = workspace();
+    writeFileSync(join(root, 'seed.txt'), 'alpha\n');
+    const promptForApproval = vi.fn(async (request: ApprovalRequest) => ({ requestId: request.requestId, status: 'approved' as const }));
+    const host = hostFor(root, toolThenDone('edit_file', { path: 'seed.txt', targetContent: 'alpha', replacementContent: 'beta' }), promptForApproval, () => {});
+
+    await host.startRun({ task: 'Replace alpha.', modelId: 'auto' });
+
+    expect(promptForApproval).toHaveBeenCalledTimes(1);
+    expect(readFileSync(join(root, 'seed.txt'), 'utf8')).toBe('beta\n');
+  });
 });
 
 describe('AgentHost new session', () => {

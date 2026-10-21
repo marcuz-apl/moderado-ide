@@ -37,6 +37,12 @@ export const DEFAULT_APPROVAL_TIMEOUT_MS = 120_000;
 const MAX_PREVIEW_CHARS = 200_000;
 
 /**
+ * A diff emitted by the vendored patch generator (`--- a/<path>` followed by
+ * `+++ b/<path>`). Applied to one file per edit.
+ */
+const GENERATED_DIFF_PREVIEW = /(?:^|\n)--- a\/[^\r\n]+\r?\n\+\+\+ b\/[^\r\n]+\r?\n/;
+
+/**
  * Why an approval was refused. Every refusal path is explicit so the UI can
  * explain itself and tests can assert the exact reason.
  */
@@ -69,7 +75,14 @@ export function deny(requestId: string, reason: DenialReason, detail?: string): 
  */
 export function hasCompletePreview(request: ApprovalRequest): boolean {
   const payload = request.exactPayload;
-  const mutationTools = new Set(['write_file', 'edit_file', 'apply_patch']);
+  if (request.toolName === 'apply_patch') {
+    // The core derives `targetFile` from `arguments.path`, which apply_patch
+    // does not have. Its tool preview resolves every edit in the jail and
+    // emits one generated diff per edited file, so that diff is the complete
+    // proposed change; a summary string is still refused.
+    return GENERATED_DIFF_PREVIEW.test(payload.diffPreview ?? '');
+  }
+  const mutationTools = new Set(['write_file', 'edit_file']);
   if (mutationTools.has(request.toolName)) {
     if (!payload.targetFile?.trim()) return false;
     return !!(payload.diffPreview?.trim() || payload.contentPreview?.trim());
