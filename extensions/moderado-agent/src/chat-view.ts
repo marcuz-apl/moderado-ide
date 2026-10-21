@@ -599,6 +599,12 @@ ${toolbarHtml(snapshot.historyOpen, snapshot.tokenUsage, snapshot.tokenUsageTitl
     historyDraft = input.value;
   });
 
+  function redactGatewayKeys(text: string): string {
+    // Moderado Gateway keys are mrd_ + base64url. Redact any such token
+    // that appears in user input to prevent accidental key leaks.
+    return text.replace(/\bmrd_[A-Za-z0-9_-]{20,}\b/g, '[REDACTED Gateway key]');
+  }
+
   document.getElementById('composer').addEventListener('submit', (event) => {
     event.preventDefault();
     const text = input.value.trim();
@@ -610,7 +616,7 @@ ${toolbarHtml(snapshot.historyOpen, snapshot.tokenUsage, snapshot.tokenUsageTitl
       historyDraft = '';
       savePromptHistory();
     }
-    vscode.postMessage({ type: 'prompt', text });
+    vscode.postMessage({ type: 'prompt', text: redactGatewayKeys(text) });
     input.value = '';
   });
   cancel.addEventListener('click', () => vscode.postMessage({ type: 'cancel' }));
