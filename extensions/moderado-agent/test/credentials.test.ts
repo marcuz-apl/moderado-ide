@@ -65,6 +65,26 @@ describe('editor secret storage', () => {
   });
 });
 
+describe('Windows credential bridge timeout', () => {
+  it('bounds a stalled bridge operation without leaking the failure', async () => {
+    const store = new WindowsCredentialStore(
+      () => new Promise((resolve) => {
+        setTimeout(() => resolve({ stdout: '{"secret":"late"}', stderr: '' }), 50);
+      }),
+      10,
+    );
+    await expect(store.get('moderado/provider/test')).rejects.toThrow(
+      'Windows Credential Manager operation failed. Set the provider environment variable to continue.',
+    );
+  });
+
+  it('rejects an invalid timeout', () => {
+    const run = async () => ({ stdout: '{}', stderr: '' });
+    expect(() => new WindowsCredentialStore(run, 0)).toThrow('Invalid Windows credential bridge timeout.');
+    expect(() => new WindowsCredentialStore(run, 5_001)).toThrow('Invalid Windows credential bridge timeout.');
+  });
+});
+
 describe('Windows credential deletion outcomes', () => {
   it.each([
     ['deleted credential', { ok: true }],

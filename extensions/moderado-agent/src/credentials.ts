@@ -142,7 +142,12 @@ export function credentialManagerAvailable(): boolean {
 export class WindowsCredentialStore implements CredentialStore {
   constructor(
     private readonly run: BridgeRunner = defaultRunner,
-  ) {}
+    private readonly timeoutMs = 5_000,
+  ) {
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > 5_000) {
+      throw new Error('Invalid Windows credential bridge timeout.');
+    }
+  }
 
   async get(reference: string): Promise<string | undefined> {
     const parsed = JSON.parse(await this.invoke('get', reference)) as { secret?: unknown };
@@ -170,12 +175,18 @@ export class WindowsCredentialStore implements CredentialStore {
     reference: string,
     secret?: string,
   ): Promise<string> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      const result = await this.run(
-        'powershell.exe',
-        ['-NoProfile', '-NonInteractive', '-EncodedCommand', encodedBridge()],
-        JSON.stringify({ operation, reference, secret }),
-      );
+      const result = await Promise.race([
+        this.run(
+          'powershell.exe',
+          ['-NoProfile', '-NonInteractive', '-EncodedCommand', encodedBridge()],
+          JSON.stringify({ operation, reference, secret }),
+        ),
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(() => reject(new Error('Timeout.')), this.timeoutMs);
+        }),
+      ]);
       if (!result.stdout.trim()) throw new Error(result.stderr);
       return result.stdout;
     } catch {
@@ -183,6 +194,8 @@ export class WindowsCredentialStore implements CredentialStore {
       throw new Error(
         'Windows Credential Manager operation failed. Set the provider environment variable to continue.',
       );
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
     }
   }
 }
@@ -228,6 +241,8 @@ function encodedBridge(): string {
   return Buffer.from(BRIDGE_SOURCE, 'utf16le').toString('base64');
 }
 
+const BRIDGE_TIMEOUT_MS = 5_000;
+
 const defaultRunner: BridgeRunner = (file, args, input) =>
   new Promise((resolve, reject) => {
     const child = spawn(file, args, {
@@ -237,17 +252,33 @@ const defaultRunner: BridgeRunner = (file, args, input) =>
     });
     let stdout = '';
     let stderr = '';
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const finish = (action: () => void) => {
+      if (settled) return;
+      settled = true;
+      if (timer !== undefined) clearTimeout(timer);
+      action();
+    };
+    // A hung PowerShell must not leave the caller waiting forever. Kill it and
+    // settle once; the store also races this runner as a second guard.
+    timer = setTimeout(() => {
+      child.kill();
+      finish(() => reject(new Error('PowerShell timed out.')));
+    }, BRIDGE_TIMEOUT_MS);
     child.stdout.on('data', (chunk: Buffer) => {
       stdout += chunk.toString();
     });
     child.stderr.on('data', (chunk: Buffer) => {
       stderr += chunk.toString();
     });
-    child.on('error', reject);
+    child.on('error', (error) => finish(() => reject(error)));
     child.on('close', (code) =>
-      code === 0
-        ? resolve({ stdout, stderr })
-        : reject(new Error(stderr || `PowerShell exited with ${code}`)),
+      finish(() =>
+        code === 0
+          ? resolve({ stdout, stderr })
+          : reject(new Error(stderr || `PowerShell exited with ${code}`)),
+      ),
     );
     child.stdin.end(input);
   });
