@@ -11,6 +11,19 @@
   - Turning off Read files or Fetch web content now really requires a human decision for those tools; Plan mode still permits reads.
   - MCP server discovery and trust remain unimplemented (PRD F8).
 
+**Performance: Streamed render coalescing and cached session recents**
+- **Type**: `perf` / `webview` / `build`
+- **Key deliverables**:
+  - Streamed assistant tokens are painted at most once every 60 ms, and only the streaming transcript row is replaced instead of rebuilding every row and re-reading the session list per token.
+  - The RECENT list is cached and invalidated on session create, rename, delete, resume, and show-all, so streaming no longer rescans session files.
+  - The brand welcome state is removed as soon as the transcript has content.
+
+**Fix: Windows credential bridge timeout**
+- **Type**: `fix` / `provider` / `build`
+- **Key deliverables**:
+  - Windows Credential Manager bridge operations are bounded by a 5 s timeout; a stalled `powershell.exe` child is killed and the caller receives the sanitized failure message instead of waiting forever.
+  - A non-numeric, zero, negative, or over-5 s bridge timeout is rejected at construction.
+
 ## [v0.1.31] — 2026-10-10
 
 **Release: Moderado CLI v0.4.10 baseline and unified Gateway access**
