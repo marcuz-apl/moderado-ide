@@ -18,7 +18,7 @@ import {
   resolveCredential,
 } from './credentials.js';
 import { ChatViewState, TranscriptEntry, AutoApproveState, chatHtml, viewSnapshot } from './chat-view.js';
-import { autoApproveDecision, DEFAULT_AUTO_APPROVE } from './auto-approve.js';
+import { autoApproveCategoryForTool, autoApproveDecision, DEFAULT_AUTO_APPROVE } from './auto-approve.js';
 import {
   SettingsState,
   SettingsConnectionView,
@@ -170,6 +170,13 @@ export function activate(context: vscode.ExtensionContext): ModeradoApi {
     approvalTimeoutMs: config().get<number>('approvalTimeoutSeconds', 120) * 1000,
     allowPaid: config().get<boolean>('allowPaidModels', false),
     allowUnknown: config().get<boolean>('allowUnknownModels', false),
+    // Read, search, diff, and web tools do not ask on their own, so the host
+    // adds a gate whenever their category is off. A tool with no known
+    // category is never treated as pre-approved.
+    isAutoApproved: (toolName) => {
+      const category = autoApproveCategoryForTool(toolName);
+      return category !== undefined && autoApprove[category];
+    },
     onEvent: (event: AgentEvent) => {
       output.appendLine(`[${event.type}] ${JSON.stringify(event, redactKey)}`);
       // `approval_request` is not turned into UI state here. The core emits it

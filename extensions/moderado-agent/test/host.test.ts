@@ -497,8 +497,8 @@ describe('AgentHost tool approvals end to end', () => {
     });
   }
 
-  function hostFor(root: string, fetchImpl: typeof fetch, promptForApproval: ConstructorParameters<typeof AgentHost>[0]['promptForApproval'], onEvent: (event: AgentEvent) => void) {
-    return new AgentHost({ workspaceRoot: root, moderadoHome: configuredHome('moderado-cloud', gateway), fetchImpl, onEvent, promptForApproval });
+  function hostFor(root: string, fetchImpl: typeof fetch, promptForApproval: ConstructorParameters<typeof AgentHost>[0]['promptForApproval'], onEvent: (event: AgentEvent) => void, isAutoApproved?: (toolName: string) => boolean) {
+    return new AgentHost({ workspaceRoot: root, moderadoHome: configuredHome('moderado-cloud', gateway), fetchImpl, onEvent, promptForApproval, isAutoApproved });
   }
 
   it('writes a file after the human approves the generated preview', async () => {
@@ -585,6 +585,56 @@ describe('AgentHost tool approvals end to end', () => {
 
     expect(promptForApproval).toHaveBeenCalledTimes(1);
     expect(readFileSync(join(root, 'seed.txt'), 'utf8')).toBe('beta\n');
+  });
+
+  it('asks before a read when the read category is turned off', async () => {
+    const root = workspace();
+    writeFileSync(join(root, 'notes.txt'), 'read me\n');
+    const { events, onEvent } = collector();
+    const promptForApproval = vi.fn(async (request: ApprovalRequest) => ({ requestId: request.requestId, status: 'approved' as const }));
+    // Only the read category is off; everything else keeps the host default.
+    const host = hostFor(root, toolThenDone('read_file', { path: 'notes.txt' }), promptForApproval, onEvent, name => name !== 'read_file');
+
+    await host.startRun({ task: 'Read notes.txt.', modelId: 'auto' });
+
+    expect(promptForApproval).toHaveBeenCalledTimes(1);
+    expect(promptForApproval.mock.calls[0][0].toolName).toBe('read_file');
+    expect(events).toContainEqual(expect.objectContaining({
+      type: 'tool_result', result: expect.objectContaining({ toolName: 'read_file', status: 'success' }),
+    }));
+  });
+
+  it('leaves a read ungated while its category stays enabled', async () => {
+    const root = workspace();
+    writeFileSync(join(root, 'notes.txt'), 'read me\n');
+    const { events, onEvent } = collector();
+    const promptForApproval = vi.fn(async (request: ApprovalRequest) => ({ requestId: request.requestId, status: 'denied' as const }));
+    const host = hostFor(root, toolThenDone('read_file', { path: 'notes.txt' }), promptForApproval, onEvent, () => true);
+
+    await host.startRun({ task: 'Read notes.txt.', modelId: 'auto' });
+
+    expect(promptForApproval).not.toHaveBeenCalled();
+    expect(events).toContainEqual(expect.objectContaining({
+      type: 'tool_result', result: expect.objectContaining({ toolName: 'read_file', status: 'success' }),
+    }));
+  });
+
+  it('keeps reads available in Plan mode when a category is turned off', async () => {
+    const root = workspace();
+    writeFileSync(join(root, 'notes.txt'), 'read me\n');
+    const { events, onEvent } = collector();
+    const promptForApproval = vi.fn(async (request: ApprovalRequest) => ({ requestId: request.requestId, status: 'denied' as const }));
+    const host = hostFor(root, toolThenDone('read_file', { path: 'notes.txt' }), promptForApproval, onEvent, () => false);
+
+    // Plan mode itself denies every approval-required action before the prompt,
+    // so a read gate must not be installed there or planning could not inspect
+    // the workspace at all.
+    await host.startRun({ task: 'Inspect notes.txt.', modelId: 'auto', planMode: true });
+
+    expect(promptForApproval).not.toHaveBeenCalled();
+    expect(events).toContainEqual(expect.objectContaining({
+      type: 'tool_result', result: expect.objectContaining({ toolName: 'read_file', status: 'success' }),
+    }));
   });
 });
 

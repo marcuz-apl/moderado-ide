@@ -36,6 +36,15 @@ export interface AgentHostOptions {
   approvalTimeoutMs?: number;
   nonInteractive?: boolean;
   getPreferences?: () => SettingsPreferences;
+  /**
+   * True when this tool's category may run without asking the human.
+   *
+   * The vendored read and web tools never request approval, so the composer's
+   * category switches would otherwise have no effect. When this returns false
+   * for such a tool, the host adds an approval requirement; it never removes
+   * one. Omitted, the registry keeps its own approval policy.
+   */
+  isAutoApproved?: (toolName: string) => boolean;
   allowPaid?: boolean;
   allowUnknown?: boolean;
   pinnedModelId?: string;
@@ -404,7 +413,7 @@ export class AgentHost implements IApprovalHandler {
       const result = await new AgentLoop().run(input.task, {
         workspaceRoot: this.options.workspaceRoot,
         provider,
-        tools: this.toolsFor(preferences?.webSearchEnabled ?? true),
+        tools: this.toolsFor(preferences?.webSearchEnabled ?? true, input.planMode ?? false),
         skillContext: [
           preferences ? `Respond in ${preferences.preferredLanguage}.` : undefined,
           'For simple conversational questions, answer directly and briefly. Do not volunteer the active model or session details unless asked.',
@@ -547,15 +556,19 @@ export class AgentHost implements IApprovalHandler {
       allowPaid: preferences?.allowPaidModels ?? this.options.allowPaid ?? false, allowUnknown: preferences?.allowUnknownModels ?? this.options.allowUnknown ?? false, requireTools: true });
   }
 
-  private toolsFor(webSearchEnabled: boolean): IToolRegistry {
+  private toolsFor(webSearchEnabled: boolean, planMode: boolean): IToolRegistry {
     const tools = createDefaultToolRegistry();
-    if (webSearchEnabled) return withToolPreviews(tools, this.options.workspaceRoot);
-    return withToolPreviews({
+    const base = webSearchEnabled ? tools : {
       register: tools.register.bind(tools),
       get: (name: string) => name === 'web_search' ? undefined : tools.get(name),
       list: () => tools.list().filter(tool => tool.name !== 'web_search'),
       getDeclarations: () => tools.getDeclarations().filter(tool => tool.name !== 'web_search'),
-    }, this.options.workspaceRoot);
+    };
+    const previewed = withToolPreviews(base, this.options.workspaceRoot);
+    // Plan mode already denies every approval-gated action before the handler
+    // runs. Installing a read gate there would turn "ask before reading" into
+    // "cannot read at all", so the category gates apply to Act-mode runs only.
+    return planMode ? previewed : withApprovalGates(previewed, this.options.isAutoApproved);
   }
 
   private async discoverInventory(resolution: ProviderResolution, signal?: AbortSignal): Promise<{ inventory: ModelInventoryEntry[]; routes?: GatewayRoute[] }> {
@@ -630,6 +643,32 @@ export function withToolPreviews(tools: IToolRegistry, workspaceRoot: string): I
       return tool ? previewing(tool) : undefined;
     },
     list: () => tools.list().map(previewing),
+    getDeclarations: () => tools.getDeclarations(),
+  };
+}
+
+/**
+ * Adds an approval requirement to tools whose auto-approve category is off.
+ *
+ * The read, search, diff, and web tools ship without `requiresApproval`, so
+ * disabling their composer category currently has no effect. This gate only
+ * raises the requirement (never lowers it); tools that already ask keep their
+ * own behavior, and the coordinator still enforces previews and deadlines.
+ */
+export function withApprovalGates(
+  tools: IToolRegistry,
+  isAutoApproved?: (toolName: string) => boolean,
+): IToolRegistry {
+  if (!isAutoApproved) return tools;
+  const gated = (tool: IToolDefinition<any>): IToolDefinition<any> =>
+    tool.requiresApproval || isAutoApproved(tool.name) ? tool : { ...tool, requiresApproval: true };
+  return {
+    register: tools.register.bind(tools),
+    get: (name) => {
+      const tool = tools.get(name);
+      return tool ? gated(tool) : undefined;
+    },
+    list: () => tools.list().map(gated),
     getDeclarations: () => tools.getDeclarations(),
   };
 }

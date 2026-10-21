@@ -196,6 +196,18 @@ describe('default auto-approval', () => {
 
     expect(harness.messages.at(-1)?.pendingId).toBeNull();
   });
+
+  it('gates a category only while it is turned off', () => {
+    const isAutoApproved = harness.agentOptions.isAutoApproved as (toolName: string) => boolean;
+
+    expect(isAutoApproved('read_file')).toBe(true);
+    expect(isAutoApproved('web_search')).toBe(true);
+    send('setAutoApprove', { key: 'readFiles', value: false });
+    expect(isAutoApproved('read_file')).toBe(false);
+    expect(isAutoApproved('web_search')).toBe(true);
+    // A tool with no known category is never treated as pre-approved.
+    expect(isAutoApproved('unlisted_tool')).toBe(false);
+  });
 });
 
 describe('composer run wiring', () => {
