@@ -172,10 +172,11 @@ export function activate(context: vscode.ExtensionContext): ModeradoApi {
     allowUnknown: config().get<boolean>('allowUnknownModels', false),
     onEvent: (event: AgentEvent) => {
       output.appendLine(`[${event.type}] ${JSON.stringify(event, redactKey)}`);
-      if (event.type === 'approval_request') {
-        view.pendingApproval = event.request;
-        render();
-      }
+      // `approval_request` is not turned into UI state here. The core emits it
+      // before the coordinator decides, including for actions this host
+      // auto-approves and actions it refuses for a missing preview. Only
+      // `askHuman` knows whether a human is actually being asked, and it owns
+      // the pending card and its resolver.
       if (event.type === 'usage') {
         view.tokenUsage = {
           usage: event.usage,

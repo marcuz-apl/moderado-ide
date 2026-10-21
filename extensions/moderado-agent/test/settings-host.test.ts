@@ -175,6 +175,27 @@ describe('default auto-approval', () => {
     cancelled.abort();
     await expect(promptForApproval(request('cancelled-1', 'edit_file'), cancelled.signal)).resolves.toBeUndefined();
   });
+
+  it('never paints an approval card for a request it approved automatically', async () => {
+    const promptForApproval = harness.agentOptions.promptForApproval as (
+      request: Record<string, unknown>,
+      signal: AbortSignal,
+    ) => Promise<unknown>;
+    const request = {
+      requestId: 'edit-auto', toolName: 'edit_file', actionSummary: 'Edit file',
+      exactPayload: { targetFile: 'file.txt', diffPreview: 'change' }, timestamp: Date.now(),
+    };
+
+    // The core announces every approval before the handler runs, including the
+    // ones this host approves on its own. That announcement must not paint an
+    // Allow/Deny card: nothing is waiting for the human, and the card used to
+    // linger until the run ended.
+    harness.agentOptions.onEvent({ type: 'approval_request', request, timestamp: Date.now() });
+    await expect(promptForApproval(request, new AbortController().signal))
+      .resolves.toEqual({ requestId: 'edit-auto', status: 'approved' });
+
+    expect(harness.messages.at(-1)?.pendingId).toBeNull();
+  });
 });
 
 describe('composer run wiring', () => {
