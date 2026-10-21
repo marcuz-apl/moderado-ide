@@ -18,7 +18,7 @@
 | Agent packages | Moderado CLI `v0.4.10` (`a3479fff…`, `v0.4.10+2610105`) |
 | Architectures | Linux and Windows x64; macOS x64 and arm64 |
 
-The stable [v0.1.31 release](https://github.com/marcuz-apl/moderado-ide/releases/tag/v0.1.31%2B2610102) was built from commit `f9e4632939d13ec392cbeb9635ffd1806ab782f3` by [workflow run 38081616708](https://github.com/marcuz-apl/moderado-ide/actions/runs/38081616708). Use the manually dispatched [build-and-release workflow](../.github/workflows/build-and-release.yml) with platform `all` for future full releases; partial-platform and custom-source builds remain in Actions for review. For a local Linux build, follow the [Linux build instructions](../README.md#build-the-linux-editor-locally). Windows/Linux cross-home profile sharing is outside this milestone: the two environments have different home directories and do not automatically share a `~/.moderado` profile.
+The stable [v0.1.31 release](https://github.com/marcuz-apl/moderado-ide/releases/tag/v0.1.31%2B261021c) was built from commit `bc1500eb485522088a2fbb855ca6862d511843c2` by [workflow run 39632261922](https://github.com/marcuz-apl/moderado-ide/actions/runs/39632261922). Use the manually dispatched [build-and-release workflow](../.github/workflows/build-and-release.yml) with platform `all` for future full releases; partial-platform and custom-source builds remain in Actions for review. For a local Linux build, follow the [Linux build instructions](../README.md#build-the-linux-editor-locally). Windows/Linux cross-home profile sharing is outside this milestone: the two environments have different home directories and do not automatically share a `~/.moderado` profile.
 
 ## Local Debian installer and WSLg window checks
 

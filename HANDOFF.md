@@ -2,8 +2,8 @@
 
 Updated: 2026-10-21
 Branch: master
-Release source commit: `f9e4632939d13ec392cbeb9635ffd1806ab782f3`
-Status: v0.1.31 is published as the latest stable release. The owner withdrew the v0.1.29 GitHub Release; its source tag remains intact.
+Release source commit: `bc1500eb485522088a2fbb855ca6862d511843c2`
+Status: v0.1.31 is published as the latest stable release (rebuilt tag `v0.1.31+261021c`). The owner withdrew the v0.1.29 GitHub Release; its source tag remains intact.
 
 ## Summary
 
@@ -90,21 +90,18 @@ The next action is for the owner to test the v0.1.30 packages. The 0.1.29 GitHub
 - Verification: focused `npx vitest run test/credentials.test.ts test/chat-view.test.ts test/settings-host.test.ts` passed 134 tests; full `npm test` passed 442 with 4 skipped; `npm run typecheck` passed; `git diff --check` passed. No live provider calls, editor smoke test, build, or release.
 - Owner decision: withdraw the published `v0.1.31+2610102` GitHub Release and rebuild v0.1.31 from this line, keeping the original source tag. The release deletion and four-platform workflow dispatch are blocked until a valid `gh` session is available (see the rebuild entry below).
 
-## 2026-10-21 v0.1.31 rebuild (pending)
+## 2026-10-21 v0.1.31 rebuild published
 
-- The owner chose to withdraw the `v0.1.31+2610102` GitHub Release and rebuild v0.1.31 with the Order 1/2/4 fixes. Per the v0.1.29 precedent, delete the GitHub Release but keep the `v0.1.31+2610102` source tag.
-- `scripts/publish-release.mjs` release notes now describe the approval, session-isolation, streaming, and credential-bridge changes instead of only the original v0.1.31 content.
-- Remaining owner-auth steps:
-  1. `gh auth status` currently reports the default token is invalid. Run `gh auth login -h github.com` or set a valid `GH_TOKEN`.
-  2. Delete only the release (not the tag): `gh release delete "v0.1.31+2610102" --repo marcuz-apl/moderado-ide --yes`.
-  3. Dispatch the four-platform build from this commit: `gh workflow run build-and-release.yml --repo marcuz-apl/moderado-ide --ref master -f platform=all -f source_ref=`.
-- The rebuilt release will use the dispatched commit's VERSION and tag (for example `v0.1.31+261021b`), so the old `+2610102` tag and build remain immutable history.
-- After the workflow publishes, record the new tag, run id, and 19-asset verification, and refresh `PRD.md`, `docs/INSTALL.md`, `docs/ROADMAP.md`, `CHANGELOG.md`, and `HANDOFF.md`.
+- The owner chose to withdraw the `v0.1.31+2610102` GitHub Release and rebuild v0.1.31 with the Order 1/2/4 fixes. Per the v0.1.29 precedent, the GitHub Release was deleted but the `v0.1.31+2610102` source tag was kept.
+- `scripts/publish-release.mjs` release notes describe the approval, session-isolation, streaming, credential-bridge, and 0.1.31 provider-label changes.
+- Completed: full-platform run `39632261922` (`platform=all`, ref `master`, source `bc1500eb485522088a2fbb855ca6862d511843c2`) succeeded across all four build/verify jobs and the publisher.
+- Published [Moderado IDE v0.1.31](https://github.com/marcuz-apl/moderado-ide/releases/tag/v0.1.31%2B261021c) as the latest stable release, tag `v0.1.31+261021c`, 19 assets, non-draft, non-prerelease, published `2026-10-21T17:18:17Z`. The old `+2610102` tag and build remain immutable history.
+- Refreshed `PRD.md`, `docs/INSTALL.md`, `CHANGELOG.md`, and `HANDOFF.md` with the rebuilt tag, source commit, and run id. `docs/ROADMAP.md` cites only the version, so it needed no change.
 
-## 2026-10-21 v0.1.32 provider menu refresh and Moderado production endpoint (unreleased, not pushed)
+## 2026-10-21 v0.1.32 provider menu refresh and Moderado production endpoint (unreleased)
 
 - Owner decisions: the Moderado production base URL is `https://modr.alfazen.org/v1`; the OAuth `authorize` and `oauth/token` endpoints also move to `modr.alfazen.org`; "Moderado - Custom" in the owner's picker is stale saved-connection data (not a code preset), so only Agnes AI and OrcaRouter are removed in code; the Settings picker entry is renamed to `Moderado`.
 - `63385ea` (`v0.1.32+261021d`) `feat: refresh the built-in provider list and point Moderado at modr.alfazen.org`: `provider-catalog.ts` drops the `agnes-ai` and `orcarouter` presets, renames the `moderado-cloud` label to `Moderado`, and sets `MODERADO_CLOUD_BASE_URLS.production` to `https://modr.alfazen.org/v1`; `provider-setup.ts` drops the `Gateway` tag; `gateway-login.ts` moves `AUTHORIZE_URL`, `TOKEN_URL`, and the default base URL to `modr.alfazen.org` and names the saved connection `Moderado`. `README.md`, `PRD.md`, `CHANGELOG.md`, and the `scripts/publish-release.mjs` release notes were updated to match.
 - Verification: focused `npx vitest run` over the seven affected test files passed 200 tests; full `npm test` passed 442 with 4 skipped; `npm run typecheck` passed; `npm run compile` produced `extensions/moderado-agent/dist/` (4x `modr.alfazen.org`, 0x `agnes-ai`/`orcarouter`, `Moderado` label present). No live provider call, editor smoke test, build dispatch, or release.
-- Deliberately not pushed yet: the in-flight `v0.1.31` rebuild's `publish` job (`actions/checkout` with no `ref`) checks out the moving `master` HEAD and runs `scripts/publish-release.mjs` from that tree, so pushing before that job finishes would put these notes into the `v0.1.31` release. Push after run 39632261922 publishes v0.1.31.
-- The owner still has to test the new provider menu before any v0.1.32 release. If the in-flight `v0.1.31` rebuild does not publish, fold the v0.1.31 approval/streaming/credential-bridge fixes back into the release notes before publishing v0.1.32.
+- Pushed to `master` only after run `39632261922` published `v0.1.31+261021c`: the rebuild's `publish` job checks out the moving `master` HEAD, so pushing earlier would have put these notes into the v0.1.31 release. The published v0.1.31 notes are unchanged and correct.
+- The owner still has to test the new provider menu before any v0.1.32 release.

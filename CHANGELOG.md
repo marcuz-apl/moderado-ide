@@ -40,7 +40,7 @@
   - Advance the pinned Moderado contracts/core/tools baseline from v0.4.8 to v0.4.10.
   - Keep Gateway access in the unified Settings → API Config provider flow, with Gateway tagged in the provider list and labeled for public paid access, browser website key, and manual website key.
   - Preserve the free/paid route contract: model listing and paid routes can work without a website key, free routes require one, and Gateway AUTO is labeled unknown cost.
-  - Publish 19 assets from source commit `f9e4632939d13ec392cbeb9635ffd1806ab782f3` (tag `v0.1.31+2610102`); all four platform builds and the release publisher passed.
+  - Publish 19 assets from source commit `bc1500eb485522088a2fbb855ca6862d511843c2` (tag `v0.1.31+261021c`, rebuilt from the withdrawn `v0.1.31+2610102` release); all four platform builds and the release publisher passed.
 
 ## [v0.1.30] — 2026-10-09
 
