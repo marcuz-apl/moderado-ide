@@ -481,6 +481,36 @@ describe('AgentHost approvals', () => {
   });
 });
 
+describe('AgentHost new session', () => {
+  it('starts a distinct session after the user asks for a new one', async () => {
+    const workspaceRoot = workspace();
+    const home = tempDirectory('moderado-home-');
+    const host = new AgentHost({ workspaceRoot, moderadoHome: home, onEvent: () => {}, promptForApproval: async () => undefined });
+
+    const first = await host.startRun({ task: 'First turn.' });
+    host.startNewSession();
+    const second = await host.startRun({ task: 'Second turn.' });
+
+    expect(second.sessionId).not.toBe(first.sessionId);
+    expect(new SessionStore(home).listSessions(workspaceRoot).sessions).toHaveLength(2);
+  });
+
+  it('resumes the recorded session chosen after starting a new one', async () => {
+    const workspaceRoot = workspace();
+    const home = tempDirectory('moderado-home-');
+    const store = new SessionStore(home);
+    const recorded = store.save(createSession(workspaceRoot));
+    const host = new AgentHost({ workspaceRoot, moderadoHome: home, onEvent: () => {}, promptForApproval: async () => undefined });
+
+    host.startNewSession();
+    host.resumeRecordedSession(recorded);
+    const result = await host.startRun({ task: 'Continue the chosen chat.' });
+
+    expect(result.sessionId).toBe(recorded.id);
+    expect(store.listSessions(workspaceRoot).sessions).toHaveLength(1);
+  });
+});
+
 describe('AgentHost session persistence', () => {
   it('persists a turn to the shared profile and resumes it', async () => {
     const root = tempDirectory('moderado-home-');

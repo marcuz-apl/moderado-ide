@@ -241,6 +241,8 @@ export class AgentHost implements IApprovalHandler {
   private running = false;
   private readonly sessions: SessionStore;
   private current: StoredSession | null = null;
+  /** Set by `startNewSession` so the next run does not resume the latest chat. */
+  private newSessionPending = false;
 
   constructor(options: AgentHostOptions) {
     this.options = options;
@@ -269,14 +271,16 @@ export class AgentHost implements IApprovalHandler {
     this.approvals.denyAll('cancelled', reason);
   }
 
-  /** Starts a fresh session: the next run no longer resumes the previous one. */
+  /** Starts a fresh session: the next run creates a chat instead of resuming one. */
   startNewSession(): void {
     this.current = null;
+    this.newSessionPending = true;
   }
 
   /** Resumes a recorded session for the next run; validated by the caller. */
   resumeRecordedSession(session: StoredSession): void {
     this.current = session;
+    this.newSessionPending = false;
   }
 
   /** Remove one recorded chat after the editor has confirmed the user's request. */
@@ -331,11 +335,15 @@ export class AgentHost implements IApprovalHandler {
     this.running = true;
 
     // Resume the supplied session, or the latest for this workspace, or start
-    // a new one. Resuming keeps the conversation the CLI can also read.
+    // a new one. Resuming keeps the conversation the CLI can also read. After
+    // `startNewSession`, skip the latest chat so New Session really is new.
+    const freshSession = () => createSession(this.options.workspaceRoot, { mode: input.planMode ? 'Plan' : 'Execute' });
     const session =
       input.session ??
-      this.sessions.loadLatestSession(this.options.workspaceRoot) ??
-      createSession(this.options.workspaceRoot, { mode: input.planMode ? 'Plan' : 'Execute' });
+      (this.newSessionPending
+        ? freshSession()
+        : this.sessions.loadLatestSession(this.options.workspaceRoot) ?? freshSession());
+    this.newSessionPending = false;
     this.current = session;
 
     try {
