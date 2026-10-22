@@ -675,10 +675,29 @@ describe('moderado settings pane', () => {
     // Ollama and LM Studio authenticate with no key; asking for one implies a
     // requirement that does not exist.
     const pane = settingsPaneHtml(settings({ preset: 'ollama', providers: [
-      { value: 'ollama', label: 'Ollama', description: 'Local.', requiresApiKey: false },
+      { value: 'ollama', label: 'Ollama', description: 'Local.', requiresApiKey: false, local: true },
     ] }));
     expect(pane).toContain('id="settings-api-key"');
     expect(pane).toContain('needs no API key');
+  });
+
+  it('prefills the local runtime key box with the no-key message', () => {
+    // The owner asked for this text in the box. It is a placeholder, not a
+    // value: a filled box would be saved as a credential and would then read
+    // "Key stored", which is not true of a local runtime.
+    for (const preset of ['ollama', 'lm-studio']) {
+      const pane = settingsPaneHtml(settings({ preset, providers: buildProviderChoices() }));
+      expect(pane).toContain('placeholder="Running on local LLM server - No API key is needed"');
+      expect(pane).not.toMatch(/id="settings-api-key"[^>]*value="[^"]+"/);
+      // The box must not also ask for a key to be pasted and saved.
+      expect(pane).not.toContain('Paste a key and save');
+    }
+    // A hosted provider still asks for a key.
+    const hosted = settingsPaneHtml(settings({ preset: 'openrouter', providers: buildProviderChoices() }));
+    expect(hosted).toContain('placeholder="Paste API key"');
+    // The Gateway is not a local runtime, even though it needs no key either.
+    const gateway = settingsPaneHtml(settings({ preset: 'moderado-cloud', providers: buildProviderChoices() }));
+    expect(gateway).toContain('placeholder="Paste API key"');
   });
   it('shows provider names without a free-model suffix and retains local tags', () => {
     const pane = settingsPaneHtml(settings({ preset: 'ollama', providers: [

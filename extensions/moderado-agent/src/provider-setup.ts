@@ -24,6 +24,8 @@ export interface ProviderChoice {
   kind: ProviderConnectionKind;
   /** False for local runtimes and public Gateway access. */
   requiresApiKey: boolean;
+  /** True for a runtime served on the user's own machine. */
+  local: boolean;
 }
 
 export interface ProviderConnectionRecord {
@@ -68,6 +70,7 @@ export function buildProviderChoices(config?: ConnectProvidersConfig): ProviderC
       baseUrl: preset.baseUrl,
       defaultModel: preset.defaultModel,
       requiresApiKey: preset.requiresApiKey,
+      local: preset.local === true,
       tag: preset.local ? 'Local' : undefined,
     }));
 
@@ -81,6 +84,7 @@ export function buildProviderChoices(config?: ConnectProvidersConfig): ProviderC
     defaultModel: provider.defaultModel,
     kind: 'openai-compatible',
     requiresApiKey: true,
+    local: false,
   }));
 
   return [...builtIns, ...custom];
@@ -101,6 +105,7 @@ function findChoice(value: string, config?: ConnectProvidersConfig): ProviderCho
       defaultModel: provider.defaultModel,
       kind: 'openai-compatible',
       requiresApiKey: true,
+      local: false,
     };
   }
   return buildProviderChoices(config).find((choice) => choice.value === value);

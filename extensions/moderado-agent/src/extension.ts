@@ -391,6 +391,7 @@ async function openDiffTab(requestId: string): Promise<void> {
       baseUrl: choice.baseUrl,
       defaultModel: choice.defaultModel,
       requiresApiKey: choice.requiresApiKey,
+      local: choice.local,
       custom: choice.value === 'openai-compatible' || choice.value.startsWith('custom:'),
     }));
 

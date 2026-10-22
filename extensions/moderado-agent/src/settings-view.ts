@@ -47,6 +47,8 @@ export interface SettingsProviderChoice {
   baseUrl?: string;
   defaultModel?: string;
   requiresApiKey: boolean;
+  /** True for a runtime served on the user's own machine. */
+  local?: boolean;
   /** True for the generic "other endpoint" entry, which needs the extra fields. */
   custom?: boolean;
   /**
@@ -261,12 +263,24 @@ export function settingsPaneHtml(state: SettingsState): string {
   // stored and used. A separate "access" control could say "public" while a
   // key was stored, which silently dropped that key from the profile. Browser
   // sign-in stays a separate action because it is a different flow.
+  // A local runtime runs on the user's own machine and needs no key at all,
+  // so its box says so instead of asking for one.
+  const localRuntime = choice?.local === true;
+  const keyPlaceholder = keyStored
+    ? 'Key stored · paste to replace'
+    : localRuntime
+      ? 'Running on local LLM server - No API key is needed'
+      : 'Paste API key';
+  const keyNote = keyStored
+    ? 'A key is stored for this provider. Paste a new key to replace it.'
+    : localRuntime
+      ? 'This local runtime needs no API key.'
+      : 'Paste a key and save. It is stored in Credential Manager and never shown again.';
   const keyField = `<label for="settings-api-key">API Key</label>
     <input id="settings-api-key" type="password" autocomplete="off" spellcheck="false" maxlength="8192"
-           placeholder="${keyStored ? 'Key stored · paste to replace' : 'Paste API key'}" value=""${disabled} />
-    <p class="note">${keyStored ? 'A key is stored for this provider. Paste a new key to replace it.' : 'Paste a key and save. It is stored in Credential Manager and never shown again.'}</p>
-    ${gateway ? '<p class="note">Free Gateway models need a website API key. Sign in with browser to get API Key</p>'
-      : choice?.requiresApiKey === false ? '<p class="note">This local runtime needs no API key.</p>' : ''}
+           placeholder="${keyPlaceholder}" value=""${disabled} />
+    <p class="note">${keyNote}</p>
+    ${gateway ? '<p class="note">Free Gateway models need a website API key. Sign in with browser to get API Key</p>' : ''}
     ${gateway ? `<button id="settings-browser-login" type="button"${disabled}>Sign in with browser</button>` : ''}`;
 
   const gatewayEnvironment = gateway ? `<fieldset class="gateway-environment">

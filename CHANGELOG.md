@@ -2,6 +2,13 @@
 
 ## [Unreleased] - 2026-10-21
 
+**Fix: the local runtime key box says no key is needed**
+- **Type**: `fix` / `provider` / `patch`
+- **Key deliverables**:
+  - The API Key box of `Ollama - Local` and `LM Studio - Local` reads `Running on local LLM server - No API key is needed` instead of `Paste API key`, so the box says what the local runtime actually needs.
+  - The message is the box's placeholder, not a filled value. A filled box would be saved as a credential and would then read `Key stored`, which is not true of a local runtime that never needed a key.
+  - The contradictory `Paste a key and save. It is stored in Credential Manager…` line is gone for a local runtime. The Moderado Gateway keeps `Paste API key`, because it is not a local runtime even though it needs no key either.
+
 **Feature: Moderado replies render as Markdown**
 - **Type**: `feat` / `chat` / `patch`
 - **Key deliverables**:

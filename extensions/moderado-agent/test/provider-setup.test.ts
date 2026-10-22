@@ -162,6 +162,17 @@ describe('provider setup parity with the CLI', () => {
     expect(byId.get('lm-studio')?.requiresApiKey).toBe(false);
   });
 
+  it('flags which presets run on the user own machine', () => {
+    // The settings pane tells a local runtime that it needs no key. The
+    // Gateway needs no key either, but it is not a local runtime, so the flag
+    // must not be derived from `requiresApiKey`.
+    const byId = new Map(buildProviderChoices().map((c) => [c.value, c]));
+    expect(byId.get('ollama')?.local).toBe(true);
+    expect(byId.get('lm-studio')?.local).toBe(true);
+    expect(byId.get('moderado-cloud')?.local).toBe(false);
+    expect(byId.get('nvidia-nim')?.local).toBe(false);
+  });
+
   it('honours connectProviders.enabled and .custom from the shared profile', () => {
     const choices = buildProviderChoices({
       enabled: ['ollama'],
