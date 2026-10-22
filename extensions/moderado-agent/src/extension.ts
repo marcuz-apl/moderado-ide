@@ -22,6 +22,7 @@ import { autoApproveCategoryForTool, autoApproveDecision, DEFAULT_AUTO_APPROVE }
 import {
   SettingsState,
   SettingsConnectionView,
+  SettingsModel,
   emptySettings,
   parseSettingsForm,
   parseSettingsSubmission,
@@ -38,6 +39,7 @@ import {
 } from './provider-setup.js';
 import type { ConnectProvidersConfig } from './provider-setup.js';
 import { discoverModelOptions } from './model-discovery.js';
+import { CatalogCache, catalogKey } from './catalog-cache.js';
 import { DesktopOpenAIAdapter } from './provider-transport.js';
 import { DesktopModelRouter } from './model-router.js';
 import { fetchGatewayRoutes } from './provider-discovery.js';
@@ -100,6 +102,11 @@ export function activate(context: vscode.ExtensionContext): ModeradoApi {
   const credentialStore = credentialManagerAvailable() ? new WindowsCredentialStore() : new EditorCredentialStore(context.secrets);
   let discoveryRequest = 0;
   let discoveryAbort: AbortController | undefined;
+  /**
+   * The catalog each endpoint returned, kept for the session so switching
+   * provider shows the list at once instead of waiting for the provider again.
+   */
+  const catalogCache = new CatalogCache<SettingsModel>();
   let settingsBusy = false;
   let loginAbort: AbortController | undefined;
   /** Auto-approve categories enabled by default; command execution stays opt-in. */
@@ -509,10 +516,22 @@ async function openDiffTab(requestId: string): Promise<void> {
     if (form.modelId) settings.defaultModel = form.modelId;
   }
 
-  /** Discover a pending connection without requiring or revealing a new key. */
-  async function loadModelsForPreset(preset: string, pending?: SettingsFormValues & { apiKey?: string }): Promise<void> {
+  /**
+   * Discover a pending connection without requiring or revealing a new key.
+   *
+   * The catalog an endpoint returned is kept for the session, so switching
+   * provider shows the list at once instead of waiting for the provider to
+   * answer again. A stale entry is refreshed in the background, so the pane
+   * never waits for a refresh it does not need.
+   */
+  async function loadModelsForPreset(
+    preset: string,
+    pending?: SettingsFormValues & { apiKey?: string },
+    options: { force?: boolean } = {},
+  ): Promise<void> {
     const request = ++discoveryRequest;
-    discoveryAbort?.abort();
+    // The previous request is left to finish. Aborting it would drop the
+    // pooled connection, and the next request would pay for DNS and TLS again.
     const controller = new AbortController();
     discoveryAbort = controller;
     settings.open = true;
@@ -541,41 +560,75 @@ async function openDiffTab(requestId: string): Promise<void> {
       render();
       return;
     }
-    settings.status = 'Loading free models…';
-    render();
 
     const discoveryForm = { baseUrl: settings.baseUrl, displayName: settings.displayName, loginMethod: settings.loginMethod };
     const sensitiveValues: string[] = [];
-    const result = await discoverModelOptions(async () => {
-      const baseUrl = discoveryForm.baseUrl;
-      const knownBaseUrl = typeof stored?.baseUrl === 'string' ? stored.baseUrl : choice?.baseUrl;
-      const endpointChanged = !knownBaseUrl || baseUrl.replace(/\/+$/, '') !== knownBaseUrl.replace(/\/+$/, '');
-      const apiKey = pending?.apiKey || (discoveryForm.loginMethod === 'public' && preset === 'moderado-cloud' || endpointChanged
-        ? undefined : await storedKey(presetConnectionId(preset), stored));
-      if (controller.signal.aborted) return [];
-      if (apiKey) sensitiveValues.push(apiKey);
-      if (choice?.requiresApiKey && !apiKey) throw new Error('Paste an API key to load free models.');
-      // A public catalog may work without a stored credential.
-      const connection = buildDiscoveryConnection({ preset, apiKey, storedBaseUrl: baseUrl,
-        displayName: discoveryForm.displayName, defaultModel: currentModel }, readConnectProviders(profile));
-      if (request === discoveryRequest && choice) { choice.hasCredential = settings.apiKeyStored; choice.storedBaseUrl = connection.baseUrl; }
-      const routes = connection.id === 'moderado-cloud' ? await fetchGatewayRoutes(connection.baseUrl, { signal: controller.signal }) : undefined;
-      const inventory = routes ? routes.map(route => ({ id: route.id, object: 'model' as const, owned_by: route.owned_by ?? route.provider ?? 'moderado-cloud',
-        ...(route.capabilities.includes('tools') || route.capabilities.includes('tool_calling') ? { supported_parameters: ['tools'] } : {}) }))
-        : await new DesktopOpenAIAdapter({ id: connection.id, name: connection.displayName, baseUrl: connection.baseUrl, apiKey }).discoverModels(controller.signal);
-      const router = new DesktopModelRouter({ providerId: connection.id, inventory,
-        gatewayAccess: routes ? new Map(routes.flatMap(route => route.access ? [[route.id, route.access] as const] : [])) : undefined,
-        allowPaid: settings.allowPaid ?? false,
-        allowUnknown: settings.allowUnknown ?? false, requireTools: true });
-      return [{ id: 'auto', accessTier: 'unknown', isFree: false, toolSupport: 'supported' }, ...inventory.map(entry => {
-        const classification = router.classifyModel(entry.id);
-        const route = routes?.find(item => item.id === entry.id);
-        return { id: entry.id, accessTier: classification.accessTier, toolSupport: classification.toolSupport,
-          isFree: classification.accessTier === 'free_trial' || classification.accessTier === 'local',
-          ownedBy: entry.owned_by, ...(route ? { provider: route.provider, capabilities: route.capabilities, dataNote: route.data_note } : {}) };
-      })];
-    }, MODEL_DISCOVERY_TIMEOUT_MS, sensitiveValues);
+
+    /** Ask the endpoint for its catalog and classify what came back. */
+    const fetchCatalog = async (): Promise<{ models: SettingsModel[]; status: string }> => {
+      const result = await discoverModelOptions(async () => {
+        const baseUrl = discoveryForm.baseUrl;
+        const knownBaseUrl = typeof stored?.baseUrl === 'string' ? stored.baseUrl : choice?.baseUrl;
+        const endpointChanged = !knownBaseUrl || baseUrl.replace(/\/+$/, '') !== knownBaseUrl.replace(/\/+$/, '');
+        const apiKey = pending?.apiKey || (discoveryForm.loginMethod === 'public' && preset === 'moderado-cloud' || endpointChanged
+          ? undefined : await storedKey(presetConnectionId(preset), stored));
+        if (controller.signal.aborted) return [];
+        if (apiKey) sensitiveValues.push(apiKey);
+        if (choice?.requiresApiKey && !apiKey) throw new Error('Paste an API key to load free models.');
+        // A public catalog may work without a stored credential.
+        const connection = buildDiscoveryConnection({ preset, apiKey, storedBaseUrl: baseUrl,
+          displayName: discoveryForm.displayName, defaultModel: currentModel }, readConnectProviders(profile));
+        if (request === discoveryRequest && choice) { choice.hasCredential = settings.apiKeyStored; choice.storedBaseUrl = connection.baseUrl; }
+        const routes = connection.id === 'moderado-cloud' ? await fetchGatewayRoutes(connection.baseUrl, { signal: controller.signal }) : undefined;
+        const inventory = routes ? routes.map(route => ({ id: route.id, object: 'model' as const, owned_by: route.owned_by ?? route.provider ?? 'moderado-cloud',
+          ...(route.capabilities.includes('tools') || route.capabilities.includes('tool_calling') ? { supported_parameters: ['tools'] } : {}) }))
+          : await new DesktopOpenAIAdapter({ id: connection.id, name: connection.displayName, baseUrl: connection.baseUrl, apiKey }).discoverModels(controller.signal);
+        const router = new DesktopModelRouter({ providerId: connection.id, inventory,
+          gatewayAccess: routes ? new Map(routes.flatMap(route => route.access ? [[route.id, route.access] as const] : [])) : undefined,
+          allowPaid: settings.allowPaid ?? false,
+          allowUnknown: settings.allowUnknown ?? false, requireTools: true });
+        return [{ id: 'auto', accessTier: 'unknown', isFree: false, toolSupport: 'supported' }, ...inventory.map(entry => {
+          const classification = router.classifyModel(entry.id);
+          const route = routes?.find(item => item.id === entry.id);
+          return { id: entry.id, accessTier: classification.accessTier, toolSupport: classification.toolSupport,
+            isFree: classification.accessTier === 'free_trial' || classification.accessTier === 'local',
+            ownedBy: entry.owned_by, ...(route ? { provider: route.provider, capabilities: route.capabilities, dataNote: route.data_note } : {}) };
+        })];
+      }, MODEL_DISCOVERY_TIMEOUT_MS, sensitiveValues);
+      return { models: result.models, status: result.status };
+    };
+
+    const cacheKey = catalogKey(presetConnectionId(preset), discoveryForm.baseUrl);
+    const cached = catalogCache.get(cacheKey);
+    // A pasted key is not the credential the cached catalog came from, so that
+    // catalog has to be fetched again.
+    const force = options.force === true || pending?.apiKey !== undefined;
+    if (cached && !force) {
+      settings.models = sortFreeFirst(cached.models);
+      settings.defaultModel = pickDefaultModel(settings.models, currentModel);
+      settings.status = '';
+      render();
+      if (catalogCache.isFresh(cacheKey)) return;
+      // Stale: refresh in the background, without blanking the list.
+      void (async () => {
+        const result = await fetchCatalog();
+        if (request !== discoveryRequest || !settings.open) return;
+        if (result.models.length > 0) {
+          catalogCache.set(cacheKey, result.models);
+          settings.models = sortFreeFirst(result.models);
+          settings.defaultModel = pickDefaultModel(settings.models, currentModel);
+        }
+        settings.status = result.status;
+        render();
+      })();
+      return;
+    }
+
+    settings.status = 'Loading free models…';
+    render();
+    const result = await fetchCatalog();
     if (request !== discoveryRequest || !settings.open) return;
+    if (result.models.length > 0) catalogCache.set(cacheKey, result.models);
     settings.models = sortFreeFirst(result.models);
     settings.defaultModel = pickDefaultModel(settings.models, currentModel);
     settings.status = result.status;
@@ -591,7 +644,8 @@ async function openDiffTab(requestId: string): Promise<void> {
     const parsed = parseSettingsSubmission(message);
     settings.open = true;
     if (!parsed.ok) { settings.status = parsed.error; render(); return; }
-    await loadModelsForPreset(parsed.value.preset, parsed.value);
+    // An explicit reload, and a pasted key, must reach the provider again.
+    await loadModelsForPreset(parsed.value.preset, parsed.value, { force: true });
   }
 
   /** Points an existing profile connection at being active. */
@@ -771,7 +825,8 @@ async function openDiffTab(requestId: string): Promise<void> {
       if (!result.written) { settings.status = result.conflict?.reason ?? result.reason ?? 'Could not save the settings.'; render(); return; }
       void chatView?.webview.postMessage({ type: 'providerSaved' });
       await loadSettingsState('Saved.', { skipModels: true });
-      await loadModelsForPreset(settings.preset);
+      // The connection may now carry a different key, so ask again.
+      await loadModelsForPreset(settings.preset, undefined, { force: true });
       if (settings.open) {
         settings.status = `Settings saved. ${settings.status ?? ''}`.trim();
         render();

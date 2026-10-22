@@ -2,6 +2,14 @@
 
 ## [Unreleased] - 2026-10-21
 
+**Feature: the provider model list is cached per endpoint**
+- **Type**: `feat` / `provider` / `patch`
+- **Key deliverables**:
+  - Switching provider in API Config now shows the model list at once. The catalog an endpoint returned is kept for the session, so switching back to a provider no longer waits for that provider to answer again.
+  - A cached list older than five minutes is refreshed in the background, without blanking the list. The explicit `Reload models` action, a pasted key, and an edited Base URL always reach the provider.
+  - A discovery that is no longer wanted is no longer aborted, so the extension host keeps its pooled connection and the next request does not pay for DNS and TLS again.
+  - The cache lives in the extension host only. It holds public model metadata, never a credential, and is never written to the shared profile.
+
 **Fix: the local runtime key box says no key is needed**
 - **Type**: `fix` / `provider` / `patch`
 - **Key deliverables**:

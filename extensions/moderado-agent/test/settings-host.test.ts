@@ -95,7 +95,7 @@ beforeEach(() => {
     onDidDispose: vi.fn(),
   });
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 describe('host-only Settings credentials', () => {
   it('prompts natively for a manual Gateway key and writes only its reference', async () => {
@@ -354,6 +354,67 @@ describe('host-owned composer attachments', () => {
     expect(String(harness.messages.at(-1)?.attachments)).toBe(chips);
     send('removeAttachment', { id });
     expect(String(harness.messages.at(-1)?.attachments)).toBe('');
+  });
+});
+
+
+describe('provider catalog cache', () => {
+  /** Opens the pane, which is what loads the provider list. */
+  async function openPane(): Promise<void> {
+    send('openApiConfig');
+    await vi.waitFor(() => expect(html()).toContain('Ollama - Local'));
+    // The pane opens on the Moderado provider, which asks for its catalog.
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
+    vi.mocked(fetch).mockClear();
+  }
+
+  it('shows the known list when switching back, without asking the provider again', async () => {
+    await openPane();
+    send('selectPreset', { preset: 'ollama' });
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:11434/v1/models', expect.anything());
+
+    send('selectPreset', { preset: 'lm-studio' });
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+
+    vi.mocked(fetch).mockClear();
+    send('selectPreset', { preset: 'ollama' });
+    // The Ollama catalog is already known, so the provider is not asked again.
+    await vi.waitFor(() => expect(html()).toContain('Exact/Route'));
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('refreshes a stale catalog in the background, without blanking the list', async () => {
+    await openPane();
+    send('selectPreset', { preset: 'ollama' });
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    vi.mocked(fetch).mockClear();
+    // Six minutes later the catalog is stale: it is shown at once, and the
+    // provider is asked again in the background.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(Date.now() + 6 * 60_000);
+    send('selectPreset', { preset: 'ollama' });
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
+    expect(html()).toContain('Exact/Route');
+    vi.useRealTimers();
+  });
+
+  it('asks the provider again when the user reloads', async () => {
+    await openPane();
+    send('selectPreset', { preset: 'ollama' });
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    vi.mocked(fetch).mockClear();
+    send('refreshModels', { preset: 'ollama', baseUrl: 'http://127.0.0.1:11434/v1', modelId: 'auto' });
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+  });
+
+  it('asks again when the endpoint changes', async () => {
+    await openPane();
+    send('selectPreset', { preset: 'ollama' });
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    vi.mocked(fetch).mockClear();
+    send('refreshModels', { preset: 'ollama', baseUrl: 'http://127.0.0.1:9999/v1', modelId: 'auto' });
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:9999/v1/models', expect.anything()));
   });
 });
 
