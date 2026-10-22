@@ -1,29 +1,32 @@
 #!/bin/sh
-# Corrects the semver part of VERSION when the final commit message calls for
-# a bump (e.g. `feat:` bumps p) that pre-commit could not see: at pre-commit
-# time an editor-driven commit has no message yet, so pre-commit only ever
-# advances the daily build counter. Staging a fix in commit-msg would be too
-# late (the commit tree is already snapshotted), so this hook amends with
-# --no-verify and never recurses. It is a no-op when the semver part already
-# moved (manual bump) or the message maps to a build-only bump.
+# Applies a semver bump when the final commit message calls for one.
+#
+# pre-commit cannot do this: it runs before Git writes the commit message, so
+# the only message it can read belongs to the previous commit. pre-commit
+# therefore only advances the daily build counter, and this hook moves the
+# semver from the real message and amends the commit so the tree carries the
+# same identifier as the subject.
+#
+# The amend runs with --no-verify, which skips pre-commit and commit-msg but
+# NOT post-commit, so ALFAZEN_VERSION_AMEND marks the nested run to stop it
+# from bumping a second time.
 HOOKDIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 . "$HOOKDIR/versionlib.sh"
 
-git rev-parse --verify --quiet HEAD~1 >/dev/null 2>&1 || exit 0
-[ "$(git rev-list --parents -n 1 HEAD | tr -d '\r' | wc -w)" -eq 2 ] || exit 0
+# A nested amend must not bump again.
+[ "${ALFAZEN_VERSION_AMEND:-0}" = 1 ] && exit 0
 
-parent=$(git show "HEAD~1:$VERSION_FILE" 2>/dev/null | tr -d '\r\n\t ') || exit 0
+# A merge commit has more than one parent: leave its version alone. A root
+# commit has none, and is still bumped.
+[ "$(git rev-list --parents -n 1 HEAD | tr -d '\r' | wc -w)" -ge 3 ] && exit 0
+
 head_id=$(read_version) || exit 0
 validate_identifier "$head_id" || exit 0
-case "$parent" in v*.*.*+*) ;; *) exit 0 ;; esac
+hver=${head_id%+*}
+hbuild=${head_id#*+}
 
 bump=$(detect_bump_type "$(git log -1 --format=%B HEAD)")
 [ "$bump" = build ] && exit 0
-
-pver=${parent%+*}
-hver=${head_id%+*}
-hbuild=${head_id#*+}
-[ "$hver" = "$pver" ] || exit 0
 
 case "$bump" in
   major_requires_approval|major)
@@ -34,7 +37,15 @@ case "$bump" in
     bump=major ;;
 esac
 
-newver=$(bump_semver "$pver" "$bump") || exit 1
+# pre-commit never moves the semver, so the current semver is still the one to
+# bump. The parent only confirms it was not already moved by an earlier amend.
+if git rev-parse --verify --quiet HEAD~1 >/dev/null 2>&1; then
+  parent=$(git show "HEAD~1:$VERSION_FILE" 2>/dev/null | tr -d '\r\n\t ') || exit 0
+  case "$parent" in v*.*.*+*) ;; *) exit 0 ;; esac
+  [ "$hver" = "${parent%+*}" ] || exit 0
+fi
+
+newver=$(bump_semver "$hver" "$bump") || exit 1
 new="$newver+$hbuild"
 validate_identifier "$new" || exit 1
 printf '%s\n' "$new" > "$VERSION_FILE"
@@ -45,14 +56,14 @@ git add -- "$VERSION_FILE"
 tmp="$PWD/.git/ALFAZEN_MSG_EDITMSG"
 git log -1 --format=%B HEAD | awk -v stamp="$new" '
   !done && $0 !~ /^#/ {
-    sub(/^v[0-9]+\.[0-9]+\.[0-9]+[+-][0-9A-Za-z]+ /, "")
+    sub(/^v[0-9]+\.[0-9]+\.[0-9]+[+-][0-9][0-9][0-9][0-9][0-9][0-9][0-9a-zA-Z] /, "")
     print stamp " " $0
     done = 1
     next
   }
   { print }
 ' > "$tmp"
-git commit --amend --no-verify -F "$tmp" -- "$VERSION_FILE" >/dev/null 2>&1
+ALFAZEN_VERSION_AMEND=1 git commit --amend --no-verify -F "$tmp" -- "$VERSION_FILE" >/dev/null 2>&1
 st=$?
 rm -f -- "$tmp"
 exit $st

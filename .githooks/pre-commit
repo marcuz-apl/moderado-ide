@@ -1,19 +1,21 @@
 #!/bin/sh
+# Advances the daily build counter and stages VERSION.
+#
+# The commit message is NOT known here. Git writes COMMIT_EDITMSG only after
+# this hook has run, so anything read from that file belongs to the *previous*
+# commit and must never decide the semver: a "fix:" following a "feat:" would
+# otherwise inherit the feat and bump the patch.
+#
+# This hook therefore only ever advances the build counter, which is always
+# safe. post-commit reads the real message and moves the semver when it calls
+# for a bump.
 HOOKDIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 . "$HOOKDIR/versionlib.sh"
 
 old=$(read_version)
 validate_identifier "$old"
 
-msgfile=${1:-$(git rev-parse --git-path COMMIT_EDITMSG)}
-msg=""
-if [ -n "$msgfile" ] && [ -f "$msgfile" ]; then
-  msg=$(cat "$msgfile")
-fi
-
-bump=$(detect_bump_type "$msg") || exit 1
-
-new=$(next_identifier "$old" "$(utc_yymmdd)" "$bump") || exit 1
+new=$(next_identifier "$old" "$(utc_yymmdd)" build) || exit 1
 
 printf '%s\n' "$new" > "$VERSION_FILE"
 git add -- "$VERSION_FILE"
