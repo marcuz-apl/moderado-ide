@@ -191,6 +191,15 @@ The next action is for the owner to test the v0.1.30 packages. The 0.1.29 GitHub
 - `test/chat-view.test.ts` gained a case that the local runtimes carry the message, that the box holds no value, that the "Paste a key and save" line is gone, and that the Gateway and a hosted provider still say "Paste API key". `test/provider-setup.test.ts` gained a case for the `local` flag. The existing local-runtime case was updated to set `local: true` on its provider literal, which is the shape the host now sends.
 - Verification: full `npm test` passed 487 with 4 skipped across 22 files; `npm run typecheck` passed; `npm run compile` produced `extensions/moderado-agent/dist/` at 589 KiB. No live provider call, editor smoke test, build dispatch, or release.
 
+### Session management: chat search
+
+- `extensions/moderado-agent/src/session-search.ts` is new and pure: `searchChats(chats, query)` matches the chat's displayed title and the text of every message, case-insensitively, and returns matches newest first with a one-line snippet around the match.
+- The search asks for a term with `showInputBox` and then lists the matches. That is deliberate: the quick pick can only filter the fields it is handed, and handing it every chat's whole text would load the entire history into the panel on every open.
+- Snippets collapse whitespace and keep 60 characters on each side, with ellipses, so a match inside a long message stays one readable line.
+- Entry points: the `Search` button in the RECENT header (rendered only when there are recents) posting `searchChats`, and the `moderado.searchChats` command.
+- Tests: seven cases in `test/session-search.test.ts` and three host cases in `test/settings-host.test.ts` (a body match resumes the chat, a dismissed question searches nothing, a term matching nothing is reported). The mock `AgentHost` now records `resumeRecordedSession`.
+- Verification: `npx vitest run test/settings-host.test.ts test/session-search.test.ts test/chat-view.test.ts` passed 157; typecheck passed.
+
 ### Session management: chat export
 
 - `extensions/moderado-agent/src/session-export.ts` is new and pure: `sessionMarkdown(session, title, now)` and `chatFileName(title, now)`. It reads the stored session, so the export is exactly what the shared history holds.

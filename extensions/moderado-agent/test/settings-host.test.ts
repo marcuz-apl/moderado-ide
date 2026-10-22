@@ -12,7 +12,7 @@ const harness = vi.hoisted(() => ({
   finalMessage: null as string | null,
   workspaceRoot: '', windows: true, fileDialog: vi.fn(), contextPicker: vi.fn(), findFiles: vi.fn(), errors: vi.fn(),
   prompt: vi.fn(), browser: vi.fn(), write: vi.fn(), openExternal: vi.fn(), clipboard: [] as string[],
-  commands: new Map<string, (...args: unknown[]) => unknown>(), saveDialog: vi.fn(), written: [] as { path: string; text: string }[], info: vi.fn(),
+  commands: new Map<string, (...args: unknown[]) => unknown>(), saveDialog: vi.fn(), written: [] as { path: string; text: string }[], info: vi.fn(), resumed: '',
   workspaceTitles: new Map<string, unknown>(), listCalls: 0,
 }));
 vi.mock('vscode', () => ({
@@ -39,6 +39,7 @@ vi.mock('../src/host.js', () => ({ AgentHost: class {
   get session() { return harness.histories.find(session => session.id === harness.currentId) ?? null; }
   get isRunning() { return false; }
   deleteSession(id: string) { harness.deleted(id); harness.histories = harness.histories.filter(session => session.id !== id); return true; }
+  resumeRecordedSession(session: StoredSession) { harness.resumed = session.id; }
   startNewSession() { harness.currentId = ''; }
   async discoverModels() { return []; }
   async startRun(input: Record<string, unknown>) {
@@ -73,7 +74,7 @@ beforeEach(() => {
   harness.configValues.clear();
   harness.configUpdate.mockImplementation(async (key: string, value: unknown) => { harness.configValues.set(key, value); });
   harness.windows = true; harness.histories = []; harness.currentId = ''; harness.confirm.mockResolvedValue('Delete'); harness.workspaceTitles.clear(); harness.listCalls = 0;
-  harness.commands.clear(); harness.written.length = 0; harness.saveDialog.mockResolvedValue(undefined);
+  harness.commands.clear(); harness.written.length = 0; harness.saveDialog.mockResolvedValue(undefined); harness.resumed = '';
   vi.clearAllMocks(); harness.messages = []; harness.keys.clear(); harness.profile = {}; harness.invalid = false; harness.runs = []; harness.finalMessage = null;
   harness.prompt.mockResolvedValue('mrd_native-secret');
   harness.clipboard.length = 0;
@@ -606,6 +607,49 @@ describe('chat export', () => {
     expect(harness.saveDialog).not.toHaveBeenCalled();
     expect(harness.written).toHaveLength(0);
     expect(harness.info).toHaveBeenCalledWith(expect.stringContaining('no chat to export'));
+  });
+});
+
+describe('chat search', () => {
+  it('finds a chat by what was said in it and resumes it', async () => {
+    const session = {
+      ...createSession(harness.workspaceRoot),
+      messages: [
+        { role: 'user' as const, content: 'Why does the deploy fail?' },
+        { role: 'assistant' as const, content: 'The LOGIN step is missing a secret.' },
+      ],
+    };
+    harness.histories = [session];
+    harness.prompt.mockResolvedValue('login');
+    harness.contextPicker.mockImplementation(async (items: { id: string }[]) => items[0]);
+
+    await harness.commands.get('moderado.searchChats')?.();
+
+    const items = harness.contextPicker.mock.calls[0][0] as { id: string; detail: string }[];
+    expect(items[0].id).toBe(session.id);
+    expect(items[0].detail).toContain('LOGIN step');
+    expect(harness.resumed).toBe(session.id);
+  });
+
+  it('asks before searching and stops when the question is dismissed', async () => {
+    harness.histories = [{ ...createSession(harness.workspaceRoot), messages: [{ role: 'user', content: 'anything' }] }];
+    harness.prompt.mockResolvedValue(undefined);
+
+    send('searchChats');
+    await vi.waitFor(() => expect(harness.prompt).toHaveBeenCalled());
+
+    expect(harness.contextPicker).not.toHaveBeenCalled();
+    expect(harness.resumed).toBe('');
+  });
+
+  it('reports a term that matches nothing instead of showing an empty list', async () => {
+    harness.histories = [{ ...createSession(harness.workspaceRoot), messages: [{ role: 'user', content: 'anything' }] }];
+    harness.prompt.mockResolvedValue('kubernetes');
+
+    await harness.commands.get('moderado.searchChats')?.();
+
+    expect(harness.contextPicker).not.toHaveBeenCalled();
+    expect(harness.info).toHaveBeenCalledWith(expect.stringContaining('kubernetes'));
   });
 });
 

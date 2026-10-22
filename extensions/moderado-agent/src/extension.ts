@@ -7,6 +7,7 @@ import { IDE_VERSION } from './ide-version.js';
 import { AgentEvent, ApprovalRequest } from '@moderado/contracts';
 import { AgentHost, RunOutcome, COMPACTED_STATUS_PREFIX } from './host.js';
 import { chatFileName, sessionMarkdown } from './session-export.js';
+import { searchChats } from './session-search.js';
 import { RawDecision } from './approval.js';
 import { configPath, readConfig } from './profile.js';
 import { updateConfigCoordinated } from './coordination.js';
@@ -1072,6 +1073,10 @@ async function openDiffTab(requestId: string): Promise<void> {
       void exportCurrentChat();
       return;
     }
+    if (msg.type === 'searchChats') {
+      void searchRecordedChats();
+      return;
+    }
     if (msg.type === 'openSettings') {
       void openSettingsPane();
       return;
@@ -1252,6 +1257,7 @@ async function openDiffTab(requestId: string): Promise<void> {
       await removeConnection(picked.id);
     }),
     vscode.commands.registerCommand('moderado.exportChat', () => exportCurrentChat()),
+    vscode.commands.registerCommand('moderado.searchChats', () => searchRecordedChats()),
     vscode.commands.registerCommand('moderado.showSessions', async () => {
       const { sessions, invalid } = host.listSessions();
       if (invalid.length) {
@@ -1374,6 +1380,49 @@ async function openDiffTab(requestId: string): Promise<void> {
     } catch {
       void vscode.window.showErrorMessage('Could not delete this chat. Stop any active run and check the history files.');
     }
+  }
+
+  /**
+   * Searches recorded chats by name and by what was said in them, then resumes
+   * the chosen one.
+   *
+   * The term is asked for first because the quick pick can only filter the
+   * fields it is given, and sending every chat's whole text to the picker would
+   * mean loading the entire history into the panel.
+   */
+  async function searchRecordedChats(): Promise<void> {
+    const term = await vscode.window.showInputBox({
+      prompt: 'Search your recorded chats by name or text',
+      placeHolder: 'login bug',
+      ignoreFocusOut: true,
+    });
+    if (term === undefined) return;
+    const { sessions } = host.listSessions();
+    const matches = searchChats(
+      sessions.map((session) => ({
+        id: session.id,
+        title: savedSessionTitle(session.id) || firstLineOf(session) || 'Untitled session',
+        updatedAt: session.updatedAt,
+        messages: session.messages,
+      })),
+      term,
+    );
+    if (!matches.length) {
+      void vscode.window.showInformationMessage(
+        term.trim() ? `No recorded chat in this workspace matches "${term.trim()}".` : 'No recorded chats for this workspace yet.',
+      );
+      return;
+    }
+    const picked = await vscode.window.showQuickPick(
+      matches.map((match) => ({
+        label: match.title,
+        description: match.titleMatch ? 'name matches' : '',
+        detail: match.snippet,
+        id: match.id,
+      })),
+      { placeHolder: `${matches.length} chat(s) found`, ignoreFocusOut: true },
+    );
+    if (picked) resumeSession(picked.id);
   }
 
   /**

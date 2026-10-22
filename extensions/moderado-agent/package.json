@@ -70,6 +70,10 @@
         "title": "Moderado: Export Chat as Markdown"
       },
       {
+        "command": "moderado.searchChats",
+        "title": "Moderado: Search Chats"
+      },
+      {
         "command": "moderado.togglePlanMode",
         "title": "Moderado: Toggle Plan Mode"
       }

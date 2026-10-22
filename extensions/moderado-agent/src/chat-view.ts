@@ -151,7 +151,7 @@ function recentsHtml(state: ChatViewState): string {
     )
     .join('');
   return `<section class="recents">
-    <header class="section-head"><span>RECENT</span><button id="view-all-sessions" type="button">View All &rsaquo;</button></header>
+    <header class="section-head"><span>RECENT</span><button id="search-chats" type="button">Search</button><button id="view-all-sessions" type="button">View All &rsaquo;</button></header>
     ${rows}
   </section>`;
 }
@@ -680,6 +680,8 @@ document.getElementById('export-chat').addEventListener('click', () => vscode.po
     }
     const all = document.getElementById('view-all-sessions');
     if (all) all.addEventListener('click', () => vscode.postMessage({ type: 'showSessions' }));
+ const search = document.getElementById('search-chats');
+ if (search) search.addEventListener('click', () => vscode.postMessage({ type: 'searchChats' }));
   }
   bindRecents();
 

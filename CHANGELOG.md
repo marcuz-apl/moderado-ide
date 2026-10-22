@@ -2,6 +2,13 @@
 
 ## [Unreleased] - 2026-10-21
 
+**Feature: search recorded chats by name or text**
+- **Type**: `feat` / `chat` / `patch`
+- **Key deliverables**:
+  - `Moderado: Search Chats`, or the `Search` button in the RECENT header, asks for a term and lists every recorded chat in this workspace whose name or messages contain it, newest first.
+  - Each result shows the line that matched, so a chat is recognisable without opening it. Picking one resumes that chat.
+  - A term that matches nothing is reported, and dismissing the question searches nothing.
+
 **Feature: export a chat as Markdown**
 - **Type**: `feat` / `chat` / `patch`
 - **Key deliverables**:
