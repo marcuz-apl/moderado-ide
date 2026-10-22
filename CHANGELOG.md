@@ -18,6 +18,12 @@
   - The Gateway key note reads "Free Gateway models need a website API key. Sign in with browser to get API Key".
   - The selected model no longer shows the `Provider:` and `Owner:` rows. Capabilities and the route's own note remain.
 
+**Fix: token usage beside the title, and clearer local runtime labels**
+- **Type**: `fix` / `provider` / `patch`
+- **Key deliverables**:
+  - The task token usage (`In: … | Out: … | Total: … | Rate: … tok/s`) now sits on the left of the top bar, directly beside the `MODERADO` title, at a larger font. The session, history, and settings buttons stay right-aligned.
+  - The API Provider menu lists the local runtimes as `Ollama - Local` and `LM Studio - Local`.
+
 **Feature: Moderado provider rename and production gateway endpoint**
 - **Type**: `feat` / `provider` / `patch`
 - **Key deliverables**:

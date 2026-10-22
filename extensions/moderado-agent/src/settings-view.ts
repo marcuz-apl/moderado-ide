@@ -123,7 +123,7 @@ function providerOptions(state: SettingsState): string {
   return state.providers
     .map(
       (choice) =>
-        `<option value="${escapeHtml(choice.value)}"${choice.value === state.preset ? ' selected' : ''}>${escapeHtml(choice.tag ? `${choice.label} · ${choice.tag}` : choice.label)}</option>`,
+        `<option value="${escapeHtml(choice.value)}"${choice.value === state.preset ? ' selected' : ''}>${escapeHtml(choice.tag ? `${choice.label} - ${choice.tag}` : choice.label)}</option>`,
     )
     .join('');
 }

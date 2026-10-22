@@ -232,8 +232,9 @@ body { font-family: var(--vscode-font-family); font-size: 13px; color: var(--vsc
   #panel-bar { display: flex; align-items: center; justify-content: flex-end; gap: 0.15rem; padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--vscode-panel-border); flex: 0 0 auto; }
   #panel-bar button { padding: 0.2rem 0.4rem; line-height: 1; border-radius: 3px; font-size: 1rem; opacity: 0.85; }
   #panel-bar button:hover { background: var(--vscode-toolbar-hoverBackground); opacity: 1; }
-  .brand-title { flex: 0 0 auto; margin-right: auto; font-size: 0.7rem; letter-spacing: 0.06em; }
-  .token-usage { flex: 0 1 auto; min-width: 0; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; margin-right: 0.25rem; font-size: 0.62rem; opacity: 0.75; }
+  .brand-title { flex: 0 0 auto; font-size: 0.7rem; letter-spacing: 0.06em; }
+  .token-usage { flex: 0 1 auto; min-width: 0; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; margin: 0 0.5rem 0 0; font-size: 0.72rem; opacity: 0.85; }
+  #panel-bar button:first-of-type { margin-left: auto; }
   /* Scrollable middle: welcome state, recents, transcript. */
   #scroll { flex: 1; overflow-y: auto; min-height: 0; padding: 0.5rem 0.75rem; }
   .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 2rem 0 1.5rem; }

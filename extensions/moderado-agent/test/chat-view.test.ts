@@ -9,6 +9,7 @@ import {
   SettingsState,
   emptySettings,
 } from '../src/settings-view.js';
+import { buildProviderChoices } from '../src/provider-setup.js';
 
 const preview = () => 'preview';
 
@@ -298,6 +299,18 @@ describe('moderado settings pane', () => {
     expect(html.indexOf('id="panel-bar"')).toBeLessThan(html.indexOf('id="scroll"'));
     expect(html).not.toMatch(/#open-settings\s*\{[^}]*float:/);
     expect(html.indexOf('id="open-settings"')).toBeLessThan(html.indexOf('id="scroll"'));
+  });
+
+  it('keeps the token usage on the left, next to the Moderado title', () => {
+    // The title used margin-right:auto, which pushed the usage to the far
+    // right. The usage belongs beside the title; the buttons stay right-aligned.
+    const html = chatHtml(state(), preview);
+    expect(html.indexOf('class="brand-title"')).toBeLessThan(html.indexOf('id="token-usage"'));
+    expect(html).not.toMatch(/\.brand-title\s*\{[^}]*margin-right:\s*auto/);
+    expect(html).toMatch(/#panel-bar button:first-of-type\s*\{[^}]*margin-left:\s*auto/);
+    // The usage reads from the left and is larger than before.
+    expect(html).toMatch(/\.token-usage\s*\{[^}]*text-align:\s*left/);
+    expect(html).toMatch(/\.token-usage\s*\{[^}]*font-size:\s*0\.72rem/);
   });
 
   it('places the single sessions icon immediately before Settings in the top bar', () => {
@@ -601,7 +614,13 @@ describe('moderado settings pane', () => {
     ] }));
     expect(pane).toContain('>NVIDIA NIM</option>');
     expect(pane).not.toContain('Free Models');
-    expect(pane).toContain('Ollama · Local');
+    expect(pane).toContain('Ollama - Local');
+  });
+
+  it('labels the local runtimes Ollama - Local and LM Studio - Local', () => {
+    const pane = settingsPaneHtml(settings({ preset: 'ollama', providers: buildProviderChoices() }));
+    expect(pane).toContain('>Ollama - Local</option>');
+    expect(pane).toContain('>LM Studio - Local</option>');
   });
 
   it('offers a masked write-only key input', () => {
