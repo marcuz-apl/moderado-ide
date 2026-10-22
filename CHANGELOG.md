@@ -2,13 +2,14 @@
 
 ## [Unreleased] - 2026-10-21
 
-**Chore: one product name, Moderado**
+**Chore: retire the "Moderado Cloud" product name**
 - **Type**: `chore` / `provider` / `patch`
 - **Key deliverables**:
-  - Every IDE-owned surface that carried a retired product name now says `Moderado`: the provider picker, the API key rejection message, the API Config environment toggle, the key redaction marker, and the design documents.
-  - The IDE-owned base URL constant is `MODERADO_BASE_URLS`.
+  - The old product name no longer appears in any IDE-owned surface. The provider picker, the Settings pane, the chat surface, and the Gateway rejection messages are covered by `test/branding.test.ts`.
+  - The IDE-owned base URL constant is now `MODERADO_BASE_URLS`.
   - The `moderado-cloud` connection id and the `moderado/provider/moderado-cloud` Credential Manager reference are unchanged: both are the shared profile contract with the Moderado CLI.
-  - The retired names still exist in the vendored CLI snapshot (`vendor/moderado/**`). That snapshot is a hash-pinned copy of the pinned upstream commit, so the strings are removed by a separate CLI change that is then re-vendored.
+  - The old name still exists in the vendored CLI snapshot (`vendor/moderado/**`). That snapshot is a hash-pinned copy of the pinned upstream commit, so the strings are removed by a separate CLI change that is then re-vendored.
+  - "Moderado Gateway" names the gateway service and is unchanged.
 
 **Feature: Moderado provider rename and production gateway endpoint**
 - **Type**: `feat` / `provider` / `patch`

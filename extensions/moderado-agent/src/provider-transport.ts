@@ -148,7 +148,7 @@ export class DesktopOpenAIAdapter implements IProviderAdapter {
           // needs one; with a key, the key itself was refused, and telling the
           // user to enter a key sends them to the wrong place.
           throw new AuthenticationError(this.config.apiKey
-            ? 'Moderado rejected this API key. Open Moderado Settings to sign in again or enter a current key.'
+            ? 'The Moderado Gateway rejected this API key. Open Moderado Settings to sign in again or enter a current key.'
             : 'Free Gateway models require a valid Moderado website API key. Open Moderado Settings to sign in or enter a key.', 401);
         }
         throw statusError(response.status, retry && /^\d+$/.test(retry) ? Number(retry) : undefined);

@@ -262,7 +262,7 @@ export function settingsPaneHtml(state: SettingsState): string {
 
   const gatewayEnvironment = gateway ? `<fieldset class="gateway-environment">
     <legend>Gateway environment</legend>
-    <div class="mode-toggle" role="group" aria-label="Moderado environment">
+    <div class="mode-toggle" role="group" aria-label="Moderado Gateway environment">
       <button type="button" data-gateway-mode data-base-url="${MODERADO_BASE_URLS.development}" aria-pressed="${normalizedBaseUrl === MODERADO_BASE_URLS.development}">Dev</button>
       <button type="button" data-gateway-mode data-base-url="${MODERADO_BASE_URLS.production}" aria-pressed="${normalizedBaseUrl === MODERADO_BASE_URLS.production}">Prod</button>
     </div>
