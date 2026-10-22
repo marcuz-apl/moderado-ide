@@ -28,7 +28,7 @@
 - **Type**: `feat` / `provider` / `patch`
 - **Key deliverables**:
   - The `Auto-approve:` row now carries each privilege toggle directly, in front of its category, so the user reaches the approval settings without clicking to open a panel first. The row is no longer a click-to-expand control.
-  - The caveat that enabled actions run without asking is a popup on a warning mark beside the label, so it takes no room in the row.
+  - The caveat that enabled actions run without asking is a popup on a warning mark beside the label, so it takes no room in the row. The popup is drawn by the webview itself, because a webview renders no native title tooltip.
 
 **Feature: Moderado provider rename and production gateway endpoint**
 - **Type**: `feat` / `provider` / `patch`

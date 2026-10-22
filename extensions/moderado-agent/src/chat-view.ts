@@ -186,7 +186,7 @@ function autoApproveHtml(auto: AutoApproveState): string {
     + 'Enabled actions run without asking. Turn a category off to require approval.';
   return `<div class="aa" id="auto-approve">
     <div class="aa-row">
-      <span class="aa-warn" role="img" tabindex="0" aria-label="${escapeHtml(warning)}" title="${escapeHtml(warning)}">&#9888;</span>
+      <span class="aa-warn" role="img" tabindex="0" aria-label="${escapeHtml(warning)}" data-warning="${escapeHtml(warning)}">&#9888;</span>
       <span class="aa-title">Auto-approve:</span>
       <div class="aa-items">${items}</div>
     </div>
@@ -252,7 +252,10 @@ body { font-family: var(--vscode-font-family); font-size: 13px; color: var(--vsc
   .aa-row { display: flex; align-items: center; flex-wrap: wrap; gap: 0.3rem 0.75rem; padding: 0.5rem 0.75rem; font-size: 0.8rem; }
   .aa-title { flex: 0 0 auto; opacity: 0.85; }
   .aa-items { display: flex; align-items: center; flex-wrap: wrap; gap: 0.3rem 0.75rem; }
-  .aa-warn { flex: 0 0 auto; color: var(--vscode-editorWarning-foreground); opacity: 0.9; cursor: help; }
+  .aa-warn { position: relative; flex: 0 0 auto; color: var(--vscode-editorWarning-foreground); opacity: 0.9; cursor: help; }
+  /* A webview draws no native title tooltip, so the warning is its own popup. */
+  .aa-warn::after { content: attr(data-warning); position: absolute; left: 0; bottom: 135%; z-index: 20; width: 17rem; max-width: calc(100vw - 2rem); padding: 0.45rem 0.6rem; border: 1px solid var(--vscode-editorHoverWidget-border, var(--vscode-panel-border)); border-radius: 4px; background: var(--vscode-editorHoverWidget-background, var(--vscode-editor-background)); color: var(--vscode-editorHoverWidget-foreground, var(--vscode-foreground)); font-size: 0.75rem; line-height: 1.4; text-align: left; white-space: normal; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); opacity: 0; visibility: hidden; pointer-events: none; }
+  .aa-warn:hover::after, .aa-warn:focus-visible::after { opacity: 1; visibility: visible; }
   .aa-item { display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; cursor: pointer; }
   .aa-box { accent-color: var(--vscode-focusBorder); }
   /* Composer */

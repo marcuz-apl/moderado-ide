@@ -416,7 +416,12 @@ describe('moderado settings pane', () => {
     const html = chatHtml(state(), preview);
     expect(html).not.toContain('aa-note');
     expect(html).toContain('&#9888;');
-    expect(html).toMatch(/class="aa-warn"[^>]*title="[^"]*Turn a category off to require approval\./);
+    // A webview draws no native title tooltip, so the mark carries the text
+    // and the stylesheet turns it into a popup on hover and on focus.
+    expect(html).not.toMatch(/class="aa-warn"[^>]*\stitle=/);
+    expect(html).toMatch(/class="aa-warn"[^>]*data-warning="[^"]*Turn a category off to require approval\./);
+    expect(html).toMatch(/\.aa-warn::after\s*\{[^}]*content:\s*attr\(data-warning\)/);
+    expect(html).toMatch(/\.aa-warn:hover::after[^{]*\{[^}]*opacity:\s*1/);
     // The mark sits with the label, ahead of the categories.
     const row = html.slice(html.indexOf('<div class="aa" id="auto-approve">'));
     expect(row.indexOf('aa-warn')).toBeLessThan(row.indexOf('aa-title'));
