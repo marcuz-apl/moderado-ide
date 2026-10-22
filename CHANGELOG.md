@@ -2,6 +2,11 @@
 
 ## [Unreleased] - 2026-10-21
 
+**Fix: code in the chat is monospace**
+- **Type**: `fix` / `chat` / `patch`
+- **Key deliverables**:
+  - Code in a reply and in the approval preview now uses the editor's code font instead of the interface font. The chat previously set `font-family: inherit` on `pre`, so every snippet was rendered in the proportional interface font.
+
 **Feature: the chat transcript tells the request from the reply**
 - **Type**: `feat` / `chat` / `patch`
 - **Key deliverables**:

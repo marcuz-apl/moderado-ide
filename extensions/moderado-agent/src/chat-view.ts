@@ -285,7 +285,7 @@ body { font-family: var(--vscode-font-family); font-size: 13px; color: var(--vsc
      the panel canvas and the full reading surface. */
   li.user { border-left-color: var(--vscode-focusBorder); background: var(--vscode-textBlockQuote-background, var(--vscode-list-inactiveSelectionBackground, transparent)); border-radius: 0 4px 4px 0; margin: 0.4rem 0 0.4rem 1rem; padding: 0.35rem 0.6rem; }
   .who { font-size: 0.72rem; text-transform: uppercase; opacity: 0.7; }
-  pre { white-space: pre-wrap; word-break: break-word; margin: 0.2rem 0 0; font-family: inherit; }
+  pre { white-space: pre-wrap; word-break: break-word; margin: 0.2rem 0 0; font-family: var(--vscode-editor-font-family, monospace); }
   .approval { border: 1px solid var(--vscode-focusBorder); padding: 0.75rem; margin-top: 1rem; border-radius: 4px; }
   .approval h2 { font-size: 1rem; margin: 0 0 0.4rem; }
   /* Visually hidden, still read by a screen reader. Repeated with the .settings

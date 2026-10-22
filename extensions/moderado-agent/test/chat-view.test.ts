@@ -436,6 +436,13 @@ describe('moderado settings pane', () => {
     expect(html).toContain('id="auto-approve"');
   });
 
+  it('shows code in a monospace font', () => {
+    // A reply's code and the approval preview are code, not prose.
+    const pre = cssRule(chatHtml(state(), preview), 'pre');
+    expect(pre).toMatch(/font-family:\s*var\(--vscode-editor-font-family,\s*monospace\)/);
+    expect(pre).not.toMatch(/font-family:\s*inherit/);
+  });
+
   it('shows the auto-approve warning as a popup on an exclamation mark', () => {
     // The warning must not occupy the row: it is a popup on the mark.
     const html = chatHtml(state(), preview);
