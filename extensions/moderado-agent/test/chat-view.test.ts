@@ -443,6 +443,28 @@ describe('moderado settings pane', () => {
     expect(pre).not.toMatch(/font-family:\s*inherit/);
   });
 
+  it('renders a Moderado reply as Markdown but leaves the request and tool output plain', () => {
+    const reply = transcriptEntryHtml({ kind: 'assistant', label: 'Moderado', text: '**done**' });
+    expect(reply).toContain('<div class="md">');
+    expect(reply).toContain('<strong>done</strong>');
+    // The user's own input is literal: brackets and stars must stay literal.
+    const request = transcriptEntryHtml({ kind: 'user', label: 'You', text: '**not bold**' });
+    expect(request).toContain('<pre>**not bold**</pre>');
+    expect(request).not.toContain('<strong>');
+    // Tool output is machine output and stays plain text.
+    const tool = transcriptEntryHtml({ kind: 'tool', label: 'Tool', text: '**not bold**' });
+    expect(tool).toContain('<pre>**not bold**</pre>');
+  });
+
+  it('styles a rendered reply for the narrow chat panel', () => {
+    const html = chatHtml(state(), preview);
+    // Code blocks scroll sideways rather than wrapping into a narrow column.
+    expect(cssRule(html, '.md pre')).toMatch(/overflow-x:\s*auto/);
+    expect(cssRule(html, '.md code')).toMatch(/font-family/);
+    // The list items inside a reply must not inherit the transcript's accent.
+    expect(cssRule(html, '.md li')).toMatch(/border-left:\s*none/);
+  });
+
   it('shows the auto-approve warning as a popup on an exclamation mark', () => {
     // The warning must not occupy the row: it is a popup on the mark.
     const html = chatHtml(state(), preview);

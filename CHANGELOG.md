@@ -2,6 +2,14 @@
 
 ## [Unreleased] - 2026-10-21
 
+**Feature: Moderado replies render as Markdown**
+- **Type**: `feat` / `chat` / `patch`
+- **Key deliverables**:
+  - A reply is rendered as Markdown: headings, paragraphs, lists, fenced code, block quotes, rules, links, and inline emphasis. The user's own input, tool output, and errors stay plain text, so the request and the machine output keep reading as literal text.
+  - The renderer escapes every literal character, emits only a fixed set of tags, and links only `http`, `https`, and `mailto` targets. Model output therefore cannot inject markup, an event handler, or a script into the chat.
+  - An image in a reply cannot load, because the chat's content security policy allows no remote resource. It is shown as a link to the image instead.
+  - The reply's styles are sized for the narrow sidebar: a compact heading scale, and code blocks that scroll sideways instead of wrapping into an unreadable column.
+
 **Fix: code in the chat is monospace**
 - **Type**: `fix` / `chat` / `patch`
 - **Key deliverables**:

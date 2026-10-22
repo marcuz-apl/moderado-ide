@@ -2,6 +2,7 @@ import type { AttachmentDescriptor } from './attachments.js';
 import { DEFAULT_AUTO_APPROVE } from './auto-approve.js';
 import type { ApprovalRequest, UsageEvent } from '@moderado/contracts';
 import { escapeHtml } from './html.js';
+import { renderMarkdown } from './markdown.js';
 import { settingsPaneHtml, SettingsState, emptySettings } from './settings-view.js';
 
 export { escapeHtml } from './html.js';
@@ -285,6 +286,29 @@ body { font-family: var(--vscode-font-family); font-size: 13px; color: var(--vsc
      the panel canvas and the full reading surface. */
   li.user { border-left-color: var(--vscode-focusBorder); background: var(--vscode-textBlockQuote-background, var(--vscode-list-inactiveSelectionBackground, transparent)); border-radius: 0 4px 4px 0; margin: 0.4rem 0 0.4rem 1rem; padding: 0.35rem 0.6rem; }
   .who { font-size: 0.72rem; text-transform: uppercase; opacity: 0.7; }
+  /* A rendered reply. The heading scale is compact because the chat is a
+     narrow sidebar, and a code block scrolls sideways instead of wrapping into
+     an unreadable column. */
+  .md { margin-top: 0.2rem; }
+  .md > :first-child { margin-top: 0; }
+  .md p { margin: 0 0 0.5rem; }
+  .md h1, .md h2, .md h3, .md h4, .md h5, .md h6 { margin: 0.6rem 0 0.3rem; line-height: 1.35; font-weight: 600; }
+  .md h1 { font-size: 1.05rem; }
+  .md h2 { font-size: 0.98rem; }
+  .md h3 { font-size: 0.92rem; }
+  .md h4, .md h5, .md h6 { font-size: 0.87rem; opacity: 0.9; }
+  .md ul, .md ol { margin: 0 0 0.5rem; padding-left: 1.15rem; }
+  .md li { border-left: none; margin: 0.15rem 0; padding-left: 0; }
+  .md li > p { margin: 0 0 0.3rem; }
+  .md a { color: var(--vscode-textLink-foreground); text-decoration: none; }
+  .md a:hover { text-decoration: underline; }
+  .md code { font-family: var(--vscode-editor-font-family, monospace); font-size: 0.92em; padding: 0.05rem 0.25rem; border-radius: 3px; background: var(--vscode-textBlockQuote-background, var(--vscode-editor-inactiveSelectionBackground, rgba(128, 128, 128, 0.15))); }
+  .md pre { margin: 0.45rem 0; padding: 0.5rem 0.6rem; border: 1px solid var(--vscode-panel-border); border-radius: 4px; background: var(--vscode-textBlockQuote-background, var(--vscode-editor-inactiveSelectionBackground, rgba(128, 128, 128, 0.1))); white-space: pre; word-break: normal; overflow-x: auto; }
+  .md pre code { padding: 0; border-radius: 0; background: none; font-size: 0.88rem; }
+  .md blockquote { margin: 0.45rem 0; padding: 0.1rem 0 0.1rem 0.6rem; border-left: 3px solid var(--vscode-panel-border); opacity: 0.9; }
+  .md hr { border: none; border-top: 1px solid var(--vscode-panel-border); margin: 0.6rem 0; }
+  .md del { opacity: 0.65; }
+  .md .md-image { font-style: italic; opacity: 0.85; }
   pre { white-space: pre-wrap; word-break: break-word; margin: 0.2rem 0 0; font-family: var(--vscode-editor-font-family, monospace); }
   .approval { border: 1px solid var(--vscode-focusBorder); padding: 0.75rem; margin-top: 1rem; border-radius: 4px; }
   .approval h2 { font-size: 1rem; margin: 0 0 0.4rem; }
@@ -785,7 +809,13 @@ ${toolbarHtml(snapshot.historyOpen, snapshot.tokenUsage, snapshot.tokenUsageTitl
 
 /** Escaped HTML for one transcript row, shared by full and delta updates. */
 export function transcriptEntryHtml(entry: TranscriptEntry): string {
-  return `<li class="${escapeHtml(entry.kind)}"><span class="who">${escapeHtml(entry.label)}</span><pre>${escapeHtml(entry.text)}</pre></li>`;
+  const label = `<span class="who">${escapeHtml(entry.label)}</span>`;
+  // Only a reply is Markdown. The user's own input is literal text, and tool
+  // output and errors are machine output that should keep looking like it.
+  if (entry.kind === 'assistant') {
+    return `<li class="${escapeHtml(entry.kind)}">${label}<div class="md">${renderMarkdown(entry.text)}</div></li>`;
+  }
+  return `<li class="${escapeHtml(entry.kind)}">${label}<pre>${escapeHtml(entry.text)}</pre></li>`;
 }
 
 export function viewSnapshot(
