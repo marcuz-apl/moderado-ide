@@ -80,6 +80,13 @@
           "description": "Seconds a human approval request stays open before it is denied. A closed view, timeout, or cancellation denies the action.",
           "maximum": 600
         },
+        "moderado.contextBudgetTokens": {
+          "type": "number",
+          "default": 48000,
+          "minimum": 4000,
+          "maximum": 200000,
+          "description": "Tokens a prompt may take before the oldest turns of a long chat are summarised to fit the model. The saved chat keeps every message."
+        },
         "moderado.allowPaidModels": {
           "type": "boolean",
           "default": false,
