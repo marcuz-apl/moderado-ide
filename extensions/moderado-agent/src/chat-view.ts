@@ -286,6 +286,11 @@ body { font-family: var(--vscode-font-family); font-size: 13px; color: var(--vsc
      the panel canvas and the full reading surface. */
   li.user { border-left-color: var(--vscode-focusBorder); background: var(--vscode-textBlockQuote-background, var(--vscode-list-inactiveSelectionBackground, transparent)); border-radius: 0 4px 4px 0; margin: 0.4rem 0 0.4rem 1rem; padding: 0.35rem 0.6rem; }
   .who { font-size: 0.72rem; text-transform: uppercase; opacity: 0.7; }
+  .entry-head { display: flex; align-items: center; gap: 0.4rem; }
+  /* The actions stay out of the way until the row is hovered or focused, so
+     the transcript still reads as prose. */
+  .entry-action { padding: 0 0.2rem; font-size: 0.68rem; opacity: 0; color: var(--vscode-textLink-foreground); }
+  li:hover .entry-action, .entry-action:focus-visible { opacity: 0.9; }
   /* A rendered reply. The heading scale is compact because the chat is a
      narrow sidebar, and a code block scrolls sideways instead of wrapping into
      an unreadable column. */
@@ -676,6 +681,52 @@ ${toolbarHtml(snapshot.historyOpen, snapshot.tokenUsage, snapshot.tokenUsageTitl
   }
   bindRecents();
 
+  // Copy and edit are per-entry actions. Delegation keeps them working after a
+  // streamed row is replaced, which a rewrite does on every token.
+  transcript.addEventListener('click', (event) => {
+    const target = event.target;
+    const button = target instanceof Element ? target.closest('[data-entry-action]') : null;
+    if (!button) return;
+    const row = button.closest('li');
+    const body = row ? row.querySelector('.md') || row.querySelector('pre') : null;
+    // The rendered row holds the text verbatim; reading it back gives the
+    // reader exactly what is on screen, with no HTML in it.
+    const text = body ? body.textContent : '';
+    if (button.getAttribute('data-entry-action') === 'copy') {
+      // The clipboard is the host's, not the webview's: the host is what a
+      // webview policy may always reach.
+      vscode.postMessage({ type: 'copyToClipboard', text });
+      button.textContent = 'Copied';
+      setTimeout(() => { button.textContent = 'Copy'; }, 1200);
+      return;
+    }
+    // Edit puts the user's own words back in the composer, where they can be
+    // changed and sent again. The transcript itself is not rewritten.
+    input.value = text;
+    historyIndex = promptHistory.length;
+    input.focus();
+    input.setSelectionRange(text.length, text.length);
+  });
+
+  // The selection a reader holds while a reply streams in.
+  let heldUpdate = null;
+  /** True when the reader has selected text inside the transcript. */
+  function selectionInTranscript() {
+    const selection = document.getSelection();
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0) return false;
+    return transcript.contains(selection.getRangeAt(0).commonAncestorContainer);
+  }
+  function applyHeldUpdate() {
+    if (!heldUpdate || selectionInTranscript()) return;
+    const next = heldUpdate;
+    heldUpdate = null;
+    if (next.type === 'delta') applyDelta(next); else applyUpdate(next);
+  }
+  document.addEventListener('selectionchange', applyHeldUpdate);
+
+  // The last rows written, so an update that changed nothing leaves the DOM be.
+  let renderedRows = ${escapeForScript(JSON.stringify(snapshot.rows))};
+
   // Updates are applied to the live DOM. Rebuilding the document here would
   // discard whatever the user is currently typing and steal focus.
   window.addEventListener('message', (event) => {
@@ -685,22 +736,30 @@ ${toolbarHtml(snapshot.historyOpen, snapshot.tokenUsage, snapshot.tokenUsageTitl
       if (field) field.value = '';
       return;
     }
-    // A streamed token updates one entry instead of rebuilding every row. The
-    // host has already escaped the entry HTML; this message only carries the
-    // entry that changed.
-    if (update && update.type === 'delta') {
-      const index = Number.isInteger(update.index) ? update.index : -1;
-      if (index < 0) return;
-      const pinned = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight <= 24;
-      const entry = transcript.children[index];
-      if (entry) entry.outerHTML = update.html;
-      else if (index === transcript.children.length) transcript.insertAdjacentHTML('beforeend', update.html);
-      const empty = document.querySelector('.empty-state');
-      if (empty) empty.remove();
-      if (pinned) scroll.scrollTop = scroll.scrollHeight;
-      return;
-    }
-    if (!update || update.type !== 'update') return;
+    if (!update || (update.type !== 'delta' && update.type !== 'update')) return;
+    // A rewrite replaces the nodes, which takes the reader's selection with it.
+    // While a selection is held inside the transcript the update is kept and
+    // applied once it is released, so text stays selected while a reply streams.
+    if (selectionInTranscript()) { heldUpdate = update; return; }
+    if (update.type === 'delta') applyDelta(update); else applyUpdate(update);
+  });
+
+  /** A streamed token updates one entry instead of rebuilding every row. */
+  function applyDelta(update) {
+    const index = Number.isInteger(update.index) ? update.index : -1;
+    if (index < 0) return;
+    const pinned = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight <= 24;
+    const entry = transcript.children[index];
+    if (entry) entry.outerHTML = update.html;
+    else if (index === transcript.children.length) transcript.insertAdjacentHTML('beforeend', update.html);
+    renderedRows = transcript.innerHTML;
+    const empty = document.querySelector('.empty-state');
+    if (empty) empty.remove();
+    if (pinned) scroll.scrollTop = scroll.scrollHeight;
+  }
+
+  /** Applies a full snapshot. The host has already escaped the row HTML. */
+  function applyUpdate(update) {
     const tokenUsage = document.getElementById('token-usage');
     if (tokenUsage) {
       tokenUsage.textContent = update.tokenUsage ?? '';
@@ -710,7 +769,12 @@ ${toolbarHtml(snapshot.historyOpen, snapshot.tokenUsage, snapshot.tokenUsageTitl
     // earlier output must not be dragged back down by the next streamed token,
     // so the tail is only followed when it was already in view.
     const pinned = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight <= 24;
-    transcript.innerHTML = update.rows;
+    // Rows that did not change are left alone; replacing them would also drop
+    // a selection and every row's hover state for no reason.
+    if (update.rows !== renderedRows) {
+      renderedRows = update.rows;
+      transcript.innerHTML = update.rows;
+    }
     // The welcome state is a sibling of the transcript, so writing rows does
     // not remove it. Drop it as soon as the first entry exists.
     if (update.empty === false) {
@@ -801,7 +865,7 @@ ${toolbarHtml(snapshot.historyOpen, snapshot.tokenUsage, snapshot.tokenUsageTitl
       if (node) node.classList.toggle('on', Boolean(on));
     }
     if (pinned) scroll.scrollTop = scroll.scrollHeight;
-  });
+  }
 </script>
 </body>
 </html>`;
@@ -810,12 +874,20 @@ ${toolbarHtml(snapshot.historyOpen, snapshot.tokenUsage, snapshot.tokenUsageTitl
 /** Escaped HTML for one transcript row, shared by full and delta updates. */
 export function transcriptEntryHtml(entry: TranscriptEntry): string {
   const label = `<span class="who">${escapeHtml(entry.label)}</span>`;
+  // Copy is offered on every row, because a reply, a command's output and an
+  // error are all things a reader wants to reuse. Only the user's own message
+  // can be edited, so that is the one row that also gets an edit action.
+  const edit = entry.kind === 'user'
+    ? '<button type="button" class="entry-action" data-entry-action="edit">Edit</button>'
+    : '';
+  const actions = `<button type="button" class="entry-action" data-entry-action="copy">Copy</button>${edit}`;
+  const head = `<div class="entry-head">${label}${actions}</div>`;
   // Only a reply is Markdown. The user's own input is literal text, and tool
   // output and errors are machine output that should keep looking like it.
   if (entry.kind === 'assistant') {
-    return `<li class="${escapeHtml(entry.kind)}">${label}<div class="md">${renderMarkdown(entry.text)}</div></li>`;
+    return `<li class="${escapeHtml(entry.kind)}">${head}<div class="md">${renderMarkdown(entry.text)}</div></li>`;
   }
-  return `<li class="${escapeHtml(entry.kind)}">${label}<pre>${escapeHtml(entry.text)}</pre></li>`;
+  return `<li class="${escapeHtml(entry.kind)}">${head}<pre>${escapeHtml(entry.text)}</pre></li>`;
 }
 
 export function viewSnapshot(

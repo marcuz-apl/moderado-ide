@@ -58,6 +58,14 @@ const MODEL_DISCOVERY_TIMEOUT_MS = 20_000;
 /** Streamed tokens are painted at most this often. */
 const STREAM_RENDER_INTERVAL_MS = 60;
 
+/**
+ * The most text one transcript row may copy.
+ *
+ * The renderer sends the text it is already showing, so this only bounds a
+ * payload that a compromised renderer could invent.
+ */
+const CLIPBOARD_MAX_CHARS = 200_000;
+
 export interface ModeradoApi {
   /** Starts one bounded agent turn. Any mutation still requires human approval. */
   startRun(task: string, options?: { planMode?: boolean }): Promise<RunOutcome>;
@@ -1025,6 +1033,12 @@ async function openDiffTab(requestId: string): Promise<void> {
       // Chat History resume: validate the id, load that session's transcript,
       // and resume it for the next run. Invalid ids are reported, not opened.
       resumeSession(msg.id);
+      return;
+    }
+    if (msg.type === 'copyToClipboard' && typeof msg.text === 'string') {
+      // The clipboard belongs to the host, so the renderer asks rather than
+      // writing it itself. Bounded, and never echoed back into the view.
+      if (msg.text.length <= CLIPBOARD_MAX_CHARS) void vscode.env.clipboard.writeText(msg.text);
       return;
     }
     if (msg.type === 'openSettings') {

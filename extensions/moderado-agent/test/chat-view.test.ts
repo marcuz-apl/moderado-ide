@@ -465,6 +465,43 @@ describe('moderado settings pane', () => {
     expect(cssRule(html, '.md li')).toMatch(/border-left:\s*none/);
   });
 
+  it('offers copy on every row and edit only on the user row', () => {
+    const reply = transcriptEntryHtml({ kind: 'assistant', label: 'Moderado', text: 'done' });
+    expect(reply).toContain('data-entry-action="copy"');
+    expect(reply).not.toContain('data-entry-action="edit"');
+    // The user's own request is the only row that can be edited.
+    const request = transcriptEntryHtml({ kind: 'user', label: 'You', text: 'do it' });
+    expect(request).toContain('data-entry-action="copy"');
+    expect(request).toContain('data-entry-action="edit"');
+    // Machine output is copyable but not editable.
+    const tool = transcriptEntryHtml({ kind: 'tool', label: 'Tool', text: 'out' });
+    expect(tool).toContain('data-entry-action="copy"');
+    expect(tool).not.toContain('data-entry-action="edit"');
+  });
+
+  it('keeps the entry actions out of the way until the row is used', () => {
+    const html = chatHtml(state(), preview);
+    expect(cssRule(html, '.entry-action')).toMatch(/opacity:\s*0/);
+    expect(html).toMatch(/li:hover \.entry-action[^{]*\{[^}]*opacity:\s*0\.9/);
+    // A selected row must survive the hover leaving it, so the action is also
+    // reachable from the keyboard.
+    expect(html).toMatch(/\.entry-action:focus-visible[^{]*\{[^}]*opacity:\s*0\.9/);
+  });
+
+  it('leaves a selection alone while a reply streams', () => {
+    const html = chatHtml(state(), preview);
+    // The renderer detects a selection inside the transcript and holds the
+    // update instead of replacing the nodes under it.
+    expect(html).toContain('function selectionInTranscript()');
+    expect(html).toContain('heldUpdate = update');
+    expect(html).toContain("document.addEventListener('selectionchange', applyHeldUpdate)");
+    // Rows that did not change are not rewritten at all.
+    expect(html).toContain('update.rows !== renderedRows');
+    // A streamed row keeps its actions because the handler is delegated.
+    expect(html).toContain("transcript.addEventListener('click'");
+    expect(html).toContain("vscode.postMessage({ type: 'copyToClipboard', text })");
+  });
+
   it('shows the auto-approve warning as a popup on an exclamation mark', () => {
     // The warning must not occupy the row: it is a popup on the mark.
     const html = chatHtml(state(), preview);

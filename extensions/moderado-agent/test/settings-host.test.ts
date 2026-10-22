@@ -11,7 +11,7 @@ const harness = vi.hoisted(() => ({
   runs: [] as Record<string, unknown>[],
   finalMessage: null as string | null,
   workspaceRoot: '', windows: true, fileDialog: vi.fn(), contextPicker: vi.fn(), findFiles: vi.fn(), errors: vi.fn(),
-  prompt: vi.fn(), browser: vi.fn(), write: vi.fn(), openExternal: vi.fn(),
+  prompt: vi.fn(), browser: vi.fn(), write: vi.fn(), openExternal: vi.fn(), clipboard: [] as string[],
   workspaceTitles: new Map<string, unknown>(), listCalls: 0,
 }));
 vi.mock('vscode', () => ({
@@ -25,7 +25,7 @@ vi.mock('vscode', () => ({
   workspace: { get workspaceFolders() { return [{ uri: { fsPath: harness.workspaceRoot } }]; }, findFiles: harness.findFiles,
     getConfiguration: () => ({ get: (key: string, fallback: unknown) => harness.configValues.has(key) ? harness.configValues.get(key) : fallback, update: harness.configUpdate }) },
   commands: { registerCommand: () => ({ dispose: vi.fn() }) },
-  env: { openExternal: harness.openExternal }, Uri: { parse: (url: string) => url, file: (fsPath: string) => ({ fsPath, scheme: 'file' }) },
+  env: { openExternal: harness.openExternal, clipboard: { writeText: async (text: string) => { harness.clipboard.push(text); } } }, Uri: { parse: (url: string) => url, file: (fsPath: string) => ({ fsPath, scheme: 'file' }) },
   RelativePattern: class { constructor(public base: unknown, public pattern: string) {} },
 }));
 vi.mock('../src/profile.js', async original => ({ ...await original<typeof import('../src/profile.js')>(), configPath: () => 'isolated/config.json',
@@ -72,6 +72,7 @@ beforeEach(() => {
   harness.windows = true; harness.histories = []; harness.currentId = ''; harness.confirm.mockResolvedValue('Delete'); harness.workspaceTitles.clear(); harness.listCalls = 0;
   vi.clearAllMocks(); harness.messages = []; harness.keys.clear(); harness.profile = {}; harness.invalid = false; harness.runs = []; harness.finalMessage = null;
   harness.prompt.mockResolvedValue('mrd_native-secret');
+  harness.clipboard.length = 0;
   harness.browser.mockResolvedValue({ accessToken: 'mrd_browser-secret', expiresAt: Date.now() + 60_000 });
   harness.write.mockImplementation((_path, patch) => {
     // The real writer serializes to JSON, which drops an undefined value. The
@@ -357,6 +358,23 @@ describe('host-owned composer attachments', () => {
   });
 });
 
+
+describe('transcript copy', () => {
+  it('copies a transcript row through the host clipboard', () => {
+    send('copyToClipboard', { text: 'A reply the owner wants to keep' });
+    expect(harness.clipboard).toEqual(['A reply the owner wants to keep']);
+  });
+
+  it('refuses a payload bigger than one transcript row can be', () => {
+    send('copyToClipboard', { text: 'x'.repeat(200_001) });
+    expect(harness.clipboard).toEqual([]);
+  });
+
+  it('ignores a copy request whose text is not text', () => {
+    send('copyToClipboard', { text: { evil: true } });
+    expect(harness.clipboard).toEqual([]);
+  });
+});
 
 describe('provider catalog cache', () => {
   /** Opens the pane, which is what loads the provider list. */

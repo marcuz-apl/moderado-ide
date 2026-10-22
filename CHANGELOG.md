@@ -2,6 +2,14 @@
 
 ## [Unreleased] - 2026-10-21
 
+**Feature: transcript rows can be copied, and the user's own message reused**
+- **Type**: `feat` / `chat` / `patch`
+- **Key deliverables**:
+  - Every transcript row now carries a `Copy` action, and a row of the user's own message also carries `Edit`. `Edit` puts that text back in the composer, focused, with the caret at the end, so it can be changed and sent again. The transcript itself is not rewritten.
+  - Copy goes through the extension host (`vscode.env.clipboard.writeText`) rather than `navigator.clipboard`, and the payload is bounded before it reaches the clipboard.
+  - A reply no longer wipes the reader's selection. The renderer holds an incoming `update` or `delta` while text is selected inside the transcript and applies it when the selection is released, and it leaves the transcript alone when the rows did not change.
+  - The row actions are delegated on the transcript container, so a streamed row that gets replaced keeps working actions.
+
 **Feature: the provider model list is cached per endpoint**
 - **Type**: `feat` / `provider` / `patch`
 - **Key deliverables**:

@@ -191,6 +191,17 @@ The next action is for the owner to test the v0.1.30 packages. The 0.1.29 GitHub
 - `test/chat-view.test.ts` gained a case that the local runtimes carry the message, that the box holds no value, that the "Paste a key and save" line is gone, and that the Gateway and a hosted provider still say "Paste API key". `test/provider-setup.test.ts` gained a case for the `local` flag. The existing local-runtime case was updated to set `local: true` on its provider literal, which is the shape the host now sends.
 - Verification: full `npm test` passed 487 with 4 skipped across 22 files; `npm run typecheck` passed; `npm run compile` produced `extensions/moderado-agent/dist/` at 589 KiB. No live provider call, editor smoke test, build dispatch, or release.
 
+### Transcript copy and edit
+
+- The owner reported that a past message of theirs could not be copied or edited, and that a model's output could not be copied.
+- The cause was not a blocked selection: there is no `user-select: none` in the panel. `applyUpdate` assigned `transcript.innerHTML` on every `update` message and the delta path replaced a row with `outerHTML`, so any selection was destroyed under the reader, including mid-drag. Selection was also impossible while a reply was streaming, which is exactly when output is usually wanted.
+- `chat-view.ts` now renders each row as a head with the label and its actions, then the body. `Copy` is on every row, because a reply, a command's output and an error are all things a reader reuses. `Edit` is only on the user's own row. Both are text-only buttons with `data-entry-action`, delegated on `#transcript`, so a row that a streamed token replaces keeps working actions.
+- `Edit` reads the rendered row's `textContent`, which is the text exactly as displayed, and puts it in the composer with the caret at the end. It does not rewrite the transcript, so no turn is silently removed from the record.
+- The clipboard is the host's: the renderer posts `copyToClipboard` and `extension.ts` calls `vscode.env.clipboard.writeText`, bounded by `CLIPBOARD_MAX_CHARS` (200 000). The payload is never echoed back into the view. `navigator.clipboard` was rejected because a webview's permission for it is not reliable under this CSP.
+- Selection is preserved by holding rather than by restoring: `selectionInTranscript()` checks whether the selection's common ancestor is inside `#transcript`, and while it is, an incoming `update` or `delta` is kept in `heldUpdate` and applied on `selectionchange` once the selection is released. Rows are also only rewritten when `update.rows` differs from the last rows written, so an unrelated update no longer drops a selection or a row's hover state.
+- Tests: three cases in `test/chat-view.test.ts` for the per-kind actions, the hover-reveal CSS, and the hold-and-delegate behaviour in the emitted script; three host cases in `test/settings-host.test.ts` for the clipboard write, the size bound, and a non-string payload. `test/webview-script.test.ts` parses the emitted script and passes.
+- Verification: full `npm test` passed 503 with 4 skipped across 23 files; `npm run typecheck` passed; `npm run compile` produced `extensions/moderado-agent/dist/` at 595 KiB. No live provider call, editor smoke test, build dispatch, or release.
+
 ### Provider catalog cache
 
 - The owner reported that switching back to a provider took a while to bring up the free model list, and asked whether the gateway's response time was the cause.
