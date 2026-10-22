@@ -95,6 +95,35 @@ describe('Gateway and provider Settings boundary', () => {
     expect(settingsPaneHtml({ ...gateway(), loginMethod: 'browser' })).toContain('id="settings-browser-login"');
   });
 
+  it('offers no Paid tab for the Gateway, which handles free routes only', () => {
+    const html = settingsPaneHtml({ ...gateway(), allowPaid: true, models: [
+      { id: 'owner/free-route', accessTier: 'free_trial', isFree: true },
+      { id: 'owner/paid-route', accessTier: 'paid', isFree: false },
+    ] });
+    expect(html).not.toContain('data-tab="paid"');
+    expect(html).not.toContain('>Paid</button>');
+    expect(html).toContain('data-tab="free"');
+    // A paid route is not offered and cannot be counted as listed.
+    expect(html).not.toContain('owner/paid-route');
+    expect(html).toContain('owner/free-route');
+  });
+
+  it('points the Gateway key note at browser sign-in', () => {
+    const html = settingsPaneHtml({ ...gateway(), apiKeyStored: false });
+    expect(html).toContain('Free Gateway models need a website API key. Sign in with browser to get API Key');
+  });
+
+  it('omits the provider and owner rows under the selected model', () => {
+    const html = settingsPaneHtml({ ...gateway(), defaultModel: 'owner/Exact:Route', models: [
+      { id: 'owner/Exact:Route', accessTier: 'free_trial', isFree: true, provider: 'owner',
+        ownedBy: 'someone', capabilities: ['tools'] },
+    ] });
+    expect(html).not.toContain('Provider:');
+    expect(html).not.toContain('Owner:');
+    // The remaining route metadata is still shown.
+    expect(html).toContain('Capabilities: tools');
+  });
+
   it('preserves route IDs and escapes every Gateway metadata field', () => {
     const html = settingsPaneHtml({ ...gateway(), modelTab: 'free', defaultModel: 'owner/Exact:Route', models: [
       { id: 'auto', accessTier: 'free_trial', isFree: true },
@@ -105,7 +134,10 @@ describe('Gateway and provider Settings boundary', () => {
     expect(html).toContain('<option value="auto"');
     expect(html).toContain('★ owner/Exact:Route</option>');
     expect(html).not.toContain('free_trial');
-    for (const value of ['&lt;provider&gt;', '&lt;owner&gt;', '&lt;tools&gt;', '&lt;script&gt;bad&lt;/script&gt;']) expect(html).toContain(value);
+    // The provider and owner rows are gone, so their values are not rendered.
+    expect(html).not.toContain('&lt;provider&gt;');
+    expect(html).not.toContain('&lt;owner&gt;');
+    for (const value of ['&lt;tools&gt;', '&lt;script&gt;bad&lt;/script&gt;']) expect(html).toContain(value);
     expect(html).not.toContain('<script>bad</script>');
     expect(html).toContain('id="settings-model-select"');
     expect(html).not.toContain('settings-model-search');

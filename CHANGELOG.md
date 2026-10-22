@@ -11,6 +11,13 @@
   - The old name still exists in the vendored CLI snapshot (`vendor/moderado/**`). That snapshot is a hash-pinned copy of the pinned upstream commit and changes only when the pinned revision is advanced. The CLI repository is a separate project and is never edited from this one.
   - "Moderado Gateway" names the gateway service and is unchanged.
 
+**Feature: the Moderado Gateway serves free routes only**
+- **Type**: `feat` / `provider` / `patch`
+- **Key deliverables**:
+  - API Config drops the `Paid` tab for the Moderado Gateway and never offers it a paid route, because Moderado does not handle paid models. The `Free` tab and `AUTO` remain, and the `Allow paid models` preference still applies to the other providers.
+  - The Gateway key note reads "Free Gateway models need a website API key. Sign in with browser to get API Key".
+  - The selected model no longer shows the `Provider:` and `Owner:` rows. Capabilities and the route's own note remain.
+
 **Feature: Moderado provider rename and production gateway endpoint**
 - **Type**: `feat` / `provider` / `patch`
 - **Key deliverables**:

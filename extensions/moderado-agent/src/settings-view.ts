@@ -137,6 +137,11 @@ function displayModelName(modelId: string): string {
   return modelId.replace(/\s*--\s*free[_ ]trial\s*$/i, '');
 }
 
+/** Moderado handles free routes only, so its picker has no Paid tab. */
+function gatewayFreeOnly(state: SettingsState): boolean {
+  return state.preset === 'moderado-cloud';
+}
+
 /**
  * One `<option>` per model, keeping the provider's model name intact.
  *
@@ -155,13 +160,19 @@ function modelOptions(state: SettingsState): string {
 }
 
 function eligibleModels(state: SettingsState): SettingsModel[] {
+  // Moderado handles free routes only, so paid and unclassified routes are not
+  // offered for it at all.
+  if (gatewayFreeOnly(state)) {
+    return state.models.filter((model) => model.id === 'auto' || model.isFree || model.accessTier === 'local');
+  }
   return state.models.filter(model => model.id === 'auto' || model.isFree || model.accessTier === 'local'
     || (model.accessTier === 'paid' && state.allowPaid) || (model.accessTier === 'unknown' && state.allowUnknown));
 }
 
 /** True when the Paid tab is selected; Free is the default. */
 function paidTab(state: SettingsState): boolean {
-  return state.modelTab === 'paid';
+  // Moderado has no Paid tab, so it is never on one.
+  return !gatewayFreeOnly(state) && state.modelTab === 'paid';
 }
 
 /** Models shown in the drop-down: Free shows free + AUTO, Paid shows paid. */
@@ -194,8 +205,6 @@ function selectedModelDetails(state: SettingsState): string {
   if (!model) return '';
   return `<div class="selected-model-details">
     ${model.id === 'auto' ? `<p class="note">${state.preset === 'moderado-cloud' ? 'Gateway selects the route and may select a free or paid route.' : 'Ranks eligible models and permits fallback.'}</p>` : ''}
-    ${model.provider ? `<p class="note">Provider: ${escapeHtml(model.provider)}</p>` : ''}
-    ${model.ownedBy ? `<p class="note">Owner: ${escapeHtml(model.ownedBy)}</p>` : ''}
     ${model.capabilities?.length ? `<p class="note">Capabilities: ${escapeHtml(model.capabilities.join(', '))}</p>` : ''}
     ${model.dataNote ? `<p class="note">${escapeHtml(model.dataNote)}</p>` : ''}
   </div>`;
@@ -256,7 +265,7 @@ export function settingsPaneHtml(state: SettingsState): string {
     <input id="settings-api-key" type="password" autocomplete="off" spellcheck="false" maxlength="8192"
            placeholder="${keyStored ? 'Key stored · paste to replace' : 'Paste API key'}" value=""${disabled} />
     <p class="note">${keyStored ? 'A key is stored for this provider. Paste a new key to replace it.' : 'Paste a key and save. It is stored in Credential Manager and never shown again.'}</p>
-    ${gateway ? '<p class="note">Free Gateway models need a website API key. Paid routes remain available without one when paid models are enabled.</p>'
+    ${gateway ? '<p class="note">Free Gateway models need a website API key. Sign in with browser to get API Key</p>'
       : choice?.requiresApiKey === false ? '<p class="note">This local runtime needs no API key.</p>' : ''}
     ${gateway ? `<button id="settings-browser-login" type="button"${disabled}>Sign in with browser</button>` : ''}`;
 
@@ -280,7 +289,7 @@ export function settingsPaneHtml(state: SettingsState): string {
   const modelField = `<h3>Model</h3>
     <div class="tab-row">
       <button type="button" data-tab="free" class="${paidTab(state) ? '' : 'on'}">Free</button>
-      <button type="button" data-tab="paid" class="${paidTab(state) ? 'on' : ''}">Paid</button>
+      ${gatewayFreeOnly(state) ? '' : `<button type="button" data-tab="paid" class="${paidTab(state) ? 'on' : ''}">Paid</button>`}
     </div>
     <label for="settings-model-select">Model</label>
     <select id="settings-model-select"${disabled}>${modelOptions(state)}</select>
