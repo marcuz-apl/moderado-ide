@@ -118,11 +118,13 @@ Use the Cline screenshots as interaction references, not pixel targets:
 
 - Chat remains in the Moderado activity-bar sidebar, with recent sessions,
   task composer, active workspace/provider/model context, and Plan/Build mode.
-- Settings groups Moderado Gateway login and direct provider configuration.
-  Gateway offers public, browser, and manual-key choices. Direct providers
-  include the four hosted presets, two local runtimes, and custom endpoint.
-- Manual Gateway and direct-provider keys are entered through native host-side
-  password prompts. The webview shows only whether a credential is stored.
+- Settings groups Moderado login and direct provider configuration.
+  The Gateway offers one editable key box plus browser website-key sign-in.
+  Direct providers include the four hosted presets, two local runtimes, and
+  custom endpoint.
+- Gateway and direct-provider keys are entered in a masked key box and stored
+  in Credential Manager by the host. The webview shows only whether a
+  credential is stored, never its value.
 - The model picker supports Gateway `auto` plus searchable Gateway routes, and
   direct-provider AUTO plus the existing Recommended/Free list organization.
   Provider, model, cost class, and available catalog notes are shown without

@@ -2,7 +2,7 @@ import { defaultSettingsPreferences, settingsFeaturesHtml, type SettingsPreferen
 import { settingsAboutHtml } from './settings-about.js';
 import { escapeHtml } from './html.js';
 import { validateProviderBaseUrl } from './provider-setup.js';
-import { MODERADO_CLOUD_BASE_URLS } from './provider-catalog.js';
+import { MODERADO_BASE_URLS } from './provider-catalog.js';
 import type { GatewayLoginMethod } from './gateway-login.js';
 
 /**
@@ -262,9 +262,9 @@ export function settingsPaneHtml(state: SettingsState): string {
 
   const gatewayEnvironment = gateway ? `<fieldset class="gateway-environment">
     <legend>Gateway environment</legend>
-    <div class="mode-toggle" role="group" aria-label="Moderado Gateway environment">
-      <button type="button" data-gateway-mode data-base-url="${MODERADO_CLOUD_BASE_URLS.development}" aria-pressed="${normalizedBaseUrl === MODERADO_CLOUD_BASE_URLS.development}">Dev</button>
-      <button type="button" data-gateway-mode data-base-url="${MODERADO_CLOUD_BASE_URLS.production}" aria-pressed="${normalizedBaseUrl === MODERADO_CLOUD_BASE_URLS.production}">Prod</button>
+    <div class="mode-toggle" role="group" aria-label="Moderado environment">
+      <button type="button" data-gateway-mode data-base-url="${MODERADO_BASE_URLS.development}" aria-pressed="${normalizedBaseUrl === MODERADO_BASE_URLS.development}">Dev</button>
+      <button type="button" data-gateway-mode data-base-url="${MODERADO_BASE_URLS.production}" aria-pressed="${normalizedBaseUrl === MODERADO_BASE_URLS.production}">Prod</button>
     </div>
   </fieldset>` : '';
 

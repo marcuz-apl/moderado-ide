@@ -81,9 +81,9 @@ describe('webview inline script', () => {
     }), preview));
   });
 
-  it('redacts a Gateway key pasted into the composer', () => {
+  it('redacts a Moderado key pasted into the composer', () => {
     const script = scriptOf(chatHtml(state(), preview));
     expect(script).toContain('redactGatewayKeys');
-    expect(script).toContain('REDACTED Gateway key');
+    expect(script).toContain('REDACTED Moderado key');
   });
 });

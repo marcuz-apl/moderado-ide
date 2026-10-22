@@ -15,7 +15,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a Cline-inspired GUI for Moderado Gateway and direct provider model selection, with Desktop-owned transport and routing that follows CLI `v0.4.8` behavior.
+**Goal:** Add a Cline-inspired GUI for Moderado and direct provider model selection, with Desktop-owned transport and routing that follows CLI `v0.4.8` behavior.
 
 **Architecture:** Keep the pinned `@moderado/contracts`, `@moderado/core`, and `@moderado/tools` packages and the shared agent loop. Add Desktop-owned provider catalog, auth, model discovery, HTTP/SSE transport, and a `Router` subclass injected into the existing host boundary. Pass the saved GUI model choice to each run so Gateway `auto`, pinned Gateway routes, direct-provider AUTO, and direct-provider pins have distinct behavior.
 
@@ -73,7 +73,7 @@
 **Interfaces:**
 
 - `DesktopProviderPreset`: `{ id: string; label: string; kind: 'nvidia-nim' | 'openai-compatible'; baseUrl: string; requiresApiKey: boolean; freeCatalog?: boolean; freeIdSuffixes?: readonly string[]; local?: boolean }`.
-- `DESKTOP_PROVIDER_PRESETS`: NVIDIA NIM, OpenRouter, Agnes AI, OrcaRouter, Ollama, LM Studio, custom OpenAI-compatible, and Moderado Gateway.
+- `DESKTOP_PROVIDER_PRESETS`: NVIDIA NIM, OpenRouter, Agnes AI, OrcaRouter, Ollama, LM Studio, custom OpenAI-compatible, and Moderado.
 - `isDesktopFreeModel(entry, providerId)`: recognizes zero-priced entries, explicit provider free catalogs, OrcaRouter's exact trailing `free` segment, and local models; nonzero or invalid price always returns false.
 - `buildProviderChoices` and `buildProviderConnection` continue to be the Settings-facing functions but read Desktop-owned preset data.
 
@@ -198,7 +198,7 @@ Test the exact `/chat/completions` URL, bearer header without exposing the key, 
 it('sends the selected route ID unchanged', async () => {
   let body: Record<string, unknown> | undefined;
   const adapter = new DesktopOpenAIAdapter({
-    id: 'moderado-cloud', name: 'Moderado Gateway', baseUrl: 'https://mod.alfazen.org/v1',
+    id: 'moderado-cloud', name: 'Moderado', baseUrl: 'https://mod.alfazen.org/v1',
     fetchImpl: async (_url, init) => {
       body = JSON.parse(String(init?.body));
       return new Response('data: [DONE]\n\n', { headers: { 'content-type': 'text/event-stream' } });
@@ -415,7 +415,7 @@ git commit -m "feat: route Desktop runs through selected models"
 **Interfaces:**
 
 - Settings form message remains a validated host boundary and adds `loginMethod: 'public' | 'browser' | 'manual'` plus Gateway URL where applicable.
-- Rendered provider list shows Moderado Gateway, NVIDIA NIM, OpenRouter, Agnes AI, OrcaRouter, Ollama, LM Studio, and custom OpenAI-compatible endpoint.
+- Rendered provider list shows Moderado, NVIDIA NIM, OpenRouter, Agnes AI, OrcaRouter, Ollama, LM Studio, and custom OpenAI-compatible endpoint.
 - Gateway model cards show `auto` plus every validated route as Free, with provider/owner/capability/data note from the response.
 - Direct-provider choices include an `AUTO · Free-first` entry. Choosing it leaves `pinnedModelId` unset so the Desktop router can rank and fall back; selecting a model pins it.
 - Direct provider model cards show Desktop classification; paid/unknown models appear only under existing opt-in policy.
@@ -432,7 +432,7 @@ import { emptySettings, settingsPaneHtml } from '../src/settings-view.js';
 it('escapes Gateway route metadata and labels the owner-confirmed catalog Free', () => {
   const state = {
     ...emptySettings(), open: true, preset: 'moderado-cloud',
-    providers: [{ value: 'moderado-cloud', label: 'Moderado Gateway', description: 'Gateway', requiresApiKey: false }],
+    providers: [{ value: 'moderado-cloud', label: 'Moderado', description: 'Gateway', requiresApiKey: false }],
     models: [{ id: 'gateway/route', accessTier: 'free_trial', isFree: true, dataNote: '<script>bad</script>' }],
     defaultModel: 'gateway/route',
   };
@@ -491,8 +491,8 @@ Test the active provider/model footer with HTML escaping, Gateway `auto`, exact 
 
 ```ts
 it('shows the active provider and model in the composer context', () => {
-  const html = chatHtml({ transcript: [], running: false, pendingApproval: null, planMode: false, activeProviderName: 'Moderado Gateway', activeModelId: 'auto' });
-  expect(html).toContain('Moderado Gateway');
+  const html = chatHtml({ transcript: [], running: false, pendingApproval: null, planMode: false, activeProviderName: 'Moderado', activeModelId: 'auto' });
+  expect(html).toContain('Moderado');
   expect(html).toContain('auto');
 });
 ```

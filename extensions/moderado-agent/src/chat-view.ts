@@ -604,9 +604,9 @@ ${toolbarHtml(snapshot.historyOpen, snapshot.tokenUsage, snapshot.tokenUsageTitl
   });
 
   function redactGatewayKeys(text) {
-    // Moderado Gateway keys are mrd_ + base64url. Redact any such token
+    // Moderado keys are mrd_ + base64url. Redact any such token
     // that appears in user input to prevent accidental key leaks.
-    return text.replace(/\bmrd_[A-Za-z0-9_-]{20,}\b/g, '[REDACTED Gateway key]');
+    return text.replace(/\bmrd_[A-Za-z0-9_-]{20,}\b/g, '[REDACTED Moderado key]');
   }
 
   document.getElementById('composer').addEventListener('submit', (event) => {

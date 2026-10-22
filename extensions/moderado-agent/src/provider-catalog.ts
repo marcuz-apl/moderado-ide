@@ -12,13 +12,13 @@ export interface DesktopProviderPreset {
   local?: boolean;
 }
 
-export const MODERADO_CLOUD_BASE_URLS = {
+export const MODERADO_BASE_URLS = {
   development: 'http://127.0.0.1:4788/v1',
   production: 'https://modr.alfazen.org/v1',
 } as const;
 
 export const DESKTOP_PROVIDER_PRESETS: readonly DesktopProviderPreset[] = [
-  { id: 'moderado-cloud', label: 'Moderado', description: 'Use browser sign-in, a saved key, a new key, or public access. Free routes require a Moderado website API key.', kind: 'openai-compatible', baseUrl: MODERADO_CLOUD_BASE_URLS.production, requiresApiKey: false, defaultModel: 'auto' },
+  { id: 'moderado-cloud', label: 'Moderado', description: 'Use browser sign-in, a saved key, a new key, or public access. Free routes require a Moderado website API key.', kind: 'openai-compatible', baseUrl: MODERADO_BASE_URLS.production, requiresApiKey: false, defaultModel: 'auto' },
   { id: 'nvidia-nim', label: 'NVIDIA NIM', description: 'Free-first routing across NVIDIA hosted models.', kind: 'nvidia-nim', baseUrl: 'https://integrate.api.nvidia.com/v1', requiresApiKey: true, freeCatalog: true },
   { id: 'openrouter', label: 'OpenRouter', description: 'One key for hosted models and free-tier models.', kind: 'openai-compatible', baseUrl: 'https://openrouter.ai/api/v1', requiresApiKey: true },
   { id: 'ollama', label: 'Ollama', description: 'Models served locally by Ollama.', kind: 'openai-compatible', baseUrl: 'http://127.0.0.1:11434/v1', requiresApiKey: false, local: true },
