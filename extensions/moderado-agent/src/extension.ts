@@ -1077,6 +1077,10 @@ async function openDiffTab(requestId: string): Promise<void> {
       void searchRecordedChats();
       return;
     }
+    if (msg.type === 'branchChat') {
+      branchCurrentChat();
+      return;
+    }
     if (msg.type === 'openSettings') {
       void openSettingsPane();
       return;
@@ -1258,6 +1262,7 @@ async function openDiffTab(requestId: string): Promise<void> {
     }),
     vscode.commands.registerCommand('moderado.exportChat', () => exportCurrentChat()),
     vscode.commands.registerCommand('moderado.searchChats', () => searchRecordedChats()),
+    vscode.commands.registerCommand('moderado.branchChat', () => branchCurrentChat()),
     vscode.commands.registerCommand('moderado.showSessions', async () => {
       const { sessions, invalid } = host.listSessions();
       if (invalid.length) {
@@ -1383,6 +1388,28 @@ async function openDiffTab(requestId: string): Promise<void> {
   }
 
   /**
+   * Branches the current chat into a new session and opens it.
+   *
+   * The original is left exactly as it was, so the branch can be taken in a
+   * different direction without losing the conversation it came from.
+   */
+  function branchCurrentChat(): void {
+    if (host.isRunning) {
+      void vscode.window.showInformationMessage('Stop the current run before branching this chat.');
+      return;
+    }
+    let fork;
+    try {
+      fork = host.forkSession();
+    } catch {
+      void vscode.window.showErrorMessage('Could not branch this chat. Start a chat first, or check that the history folder is writable.');
+      return;
+    }
+    invalidateRecents();
+    resumeSession(fork.id, 'Branched into a new chat. The original is unchanged.');
+  }
+
+  /**
    * Searches recorded chats by name and by what was said in them, then resumes
    * the chosen one.
    *
@@ -1455,7 +1482,7 @@ async function openDiffTab(requestId: string): Promise<void> {
   }
 
   /** Resumes a recorded session in the panel: transcript + next-run session. */
-  function resumeSession(id: string): void {
+  function resumeSession(id: string, note?: string): void {
     if (!/^[0-9a-fA-F-]{1,64}$/.test(id)) {
       void vscode.window.showErrorMessage('That session id is not recognised.');
       return;
@@ -1482,7 +1509,7 @@ async function openDiffTab(requestId: string): Promise<void> {
       .slice(-200);
     invalidateRecents();
     render();
-    void vscode.window.showInformationMessage(`Resumed session ${found.id.slice(0, 8)}.`);
+    void vscode.window.showInformationMessage(note ?? `Resumed session ${found.id.slice(0, 8)}.`);
   }
 
   function firstLineOf(session: { messages: { role: string; content?: unknown }[] }): string {

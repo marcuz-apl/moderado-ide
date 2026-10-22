@@ -171,6 +171,36 @@ describe('Desktop provider host integration', () => {
     expect(host.listSessions().sessions).toHaveLength(0);
   });
 
+  it('branches a chat into a new session and leaves the original untouched', () => {
+    const workspaceRoot = workspace();
+    const home = configuredHome('unused', {});
+    const store = new SessionStore(home);
+    const messages = [
+      { role: 'user' as const, content: 'Start here.' },
+      { role: 'assistant' as const, content: 'Answered.' },
+    ];
+    const session = store.save({ ...createSession(workspaceRoot), messages });
+    const host = new AgentHost({ workspaceRoot, moderadoHome: home, onEvent: () => {}, promptForApproval: async () => undefined });
+    host.resumeRecordedSession(session);
+
+    const fork = host.forkSession();
+
+    expect(fork.id).not.toBe(session.id);
+    expect(fork.messages).toEqual(messages);
+    // Both chats exist on disk, and the source still reads exactly as it did.
+    const stored = store.listSessions(workspaceRoot).sessions;
+    expect(stored).toHaveLength(2);
+    expect(stored.find((item) => item.id === session.id)?.messages).toEqual(messages);
+    expect(stored.find((item) => item.id === fork.id)?.messages).toEqual(messages);
+    // The branch starts its own cost accounting.
+    expect(fork.usage.available).toBeFalsy();
+  });
+
+  it('refuses to branch when there is no chat', () => {
+    const host = new AgentHost({ workspaceRoot: workspace(), moderadoHome: configuredHome('unused', {}), onEvent: () => {}, promptForApproval: async () => undefined });
+    expect(() => host.forkSession()).toThrow(/no chat to branch/i);
+  });
+
   it('refuses chat deletion during an active run even after cancellation', async () => {
     const workspaceRoot = workspace();
     const home = configuredHome('moderado-cloud', { baseUrl: 'http://127.0.0.1:4788/v1' });

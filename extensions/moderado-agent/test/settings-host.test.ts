@@ -12,7 +12,7 @@ const harness = vi.hoisted(() => ({
   finalMessage: null as string | null,
   workspaceRoot: '', windows: true, fileDialog: vi.fn(), contextPicker: vi.fn(), findFiles: vi.fn(), errors: vi.fn(),
   prompt: vi.fn(), browser: vi.fn(), write: vi.fn(), openExternal: vi.fn(), clipboard: [] as string[],
-  commands: new Map<string, (...args: unknown[]) => unknown>(), saveDialog: vi.fn(), written: [] as { path: string; text: string }[], info: vi.fn(), resumed: '',
+  commands: new Map<string, (...args: unknown[]) => unknown>(), saveDialog: vi.fn(), written: [] as { path: string; text: string }[], info: vi.fn(), resumed: '', running: false,
   workspaceTitles: new Map<string, unknown>(), listCalls: 0,
 }));
 vi.mock('vscode', () => ({
@@ -37,7 +37,13 @@ vi.mock('../src/host.js', () => ({ AgentHost: class {
   constructor(options: unknown) { harness.agentOptions = options; }
   listSessions() { harness.listCalls += 1; return { sessions: harness.histories, invalid: [] }; }
   get session() { return harness.histories.find(session => session.id === harness.currentId) ?? null; }
-  get isRunning() { return false; }
+  get isRunning() { return harness.running; }
+  forkSession() {
+    const source = harness.histories.find(session => session.id === harness.currentId);
+    const fork = { ...createSession(harness.workspaceRoot), messages: source ? [...source.messages] : [] };
+    harness.histories = [fork, ...harness.histories];
+    return fork;
+  }
   deleteSession(id: string) { harness.deleted(id); harness.histories = harness.histories.filter(session => session.id !== id); return true; }
   resumeRecordedSession(session: StoredSession) { harness.resumed = session.id; }
   startNewSession() { harness.currentId = ''; }
@@ -74,7 +80,7 @@ beforeEach(() => {
   harness.configValues.clear();
   harness.configUpdate.mockImplementation(async (key: string, value: unknown) => { harness.configValues.set(key, value); });
   harness.windows = true; harness.histories = []; harness.currentId = ''; harness.confirm.mockResolvedValue('Delete'); harness.workspaceTitles.clear(); harness.listCalls = 0;
-  harness.commands.clear(); harness.written.length = 0; harness.saveDialog.mockResolvedValue(undefined); harness.resumed = '';
+  harness.commands.clear(); harness.written.length = 0; harness.saveDialog.mockResolvedValue(undefined); harness.resumed = ''; harness.running = false;
   vi.clearAllMocks(); harness.messages = []; harness.keys.clear(); harness.profile = {}; harness.invalid = false; harness.runs = []; harness.finalMessage = null;
   harness.prompt.mockResolvedValue('mrd_native-secret');
   harness.clipboard.length = 0;
@@ -650,6 +656,33 @@ describe('chat search', () => {
 
     expect(harness.contextPicker).not.toHaveBeenCalled();
     expect(harness.info).toHaveBeenCalledWith(expect.stringContaining('kubernetes'));
+  });
+});
+
+describe('chat branching', () => {
+  it('opens a copy of the chat and keeps the original in the history', async () => {
+    const session = { ...createSession(harness.workspaceRoot), messages: [{ role: 'user' as const, content: 'Start here.' }] };
+    harness.histories = [session]; harness.currentId = session.id;
+
+    await harness.commands.get('moderado.branchChat')?.();
+
+    expect(harness.histories).toHaveLength(2);
+    expect(harness.histories.some((item) => item.id === session.id)).toBe(true);
+    expect(harness.resumed).toBe(harness.histories[0].id);
+    expect(harness.resumed).not.toBe(session.id);
+    expect(harness.info).toHaveBeenCalledWith(expect.stringContaining('Branched'));
+  });
+
+  it('refuses to branch during an active run', async () => {
+    const session = { ...createSession(harness.workspaceRoot), messages: [{ role: 'user' as const, content: 'Start here.' }] };
+    harness.histories = [session]; harness.currentId = session.id; harness.running = true;
+
+    send('branchChat');
+    await vi.waitFor(() => expect(harness.info).toHaveBeenCalled());
+
+    expect(harness.histories).toHaveLength(1);
+    expect(harness.resumed).toBe('');
+    expect(harness.info).toHaveBeenCalledWith(expect.stringContaining('Stop the current run'));
   });
 });
 

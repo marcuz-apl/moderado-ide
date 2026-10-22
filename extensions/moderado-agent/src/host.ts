@@ -317,11 +317,31 @@ export class AgentHost implements IApprovalHandler {
     return deleted;
   }
 
+  /**
+   * Copies the current chat into a new session, leaving the original untouched.
+   *
+   * A branch starts from the same conversation, so an experiment that goes
+   * wrong can be abandoned without editing the chat it came from. Its cost
+   * accounting starts at zero: the history it carries has already been paid for
+   * and counting it twice would inflate both chats.
+   */
+  forkSession(): StoredSession {
+    if (this.controller || this.running) throw new Error('A chat cannot be branched while a run is active.');
+    const source = this.current;
+    if (!source) throw new Error('There is no chat to branch.');
+    const fork = createSession(this.options.workspaceRoot, {
+      providerId: source.providerId,
+      providerName: source.providerName,
+      modelId: source.modelId,
+      mode: source.mode,
+    });
+    return this.sessions.save({ ...fork, messages: source.messages.map((message) => ({ ...message })) });
+  }
+
   /** Denies pending approvals, e.g. when the chat view is disposed. */
   dispose(): void {
     this.cancel('The Moderado view was closed.');
   }
-
   /**
    * The core's approval entry point. Routed through the coordinator so the
    * returned decision id is matched, a real deadline is enforced, and a missing

@@ -191,6 +191,15 @@ The next action is for the owner to test the v0.1.30 packages. The 0.1.29 GitHub
 - `test/chat-view.test.ts` gained a case that the local runtimes carry the message, that the box holds no value, that the "Paste a key and save" line is gone, and that the Gateway and a hosted provider still say "Paste API key". `test/provider-setup.test.ts` gained a case for the `local` flag. The existing local-runtime case was updated to set `local: true` on its provider literal, which is the shape the host now sends.
 - Verification: full `npm test` passed 487 with 4 skipped across 22 files; `npm run typecheck` passed; `npm run compile` produced `extensions/moderado-agent/dist/` at 589 KiB. No live provider call, editor smoke test, build dispatch, or release.
 
+### Session management: branching
+
+- `AgentHost.forkSession()` copies `this.current` into a fresh session: new id, new timestamps, the same provider, model and mode, and a copy of every message. It writes through `SessionStore.save`, so the record is validated like any other.
+- The original is never touched, so a branch can be abandoned without losing the conversation it came from. The fork's usage starts empty rather than copying the source's: its history has already been paid for, and copying the totals would count it twice.
+- Branching is refused while a run is active (same rule as deleting), and with no current chat.
+- Entry points: a top-bar button (`#branch-chat`, posting `branchChat`) and the `moderado.branchChat` command. `resumeSession(id, note?)` gained an optional note so the branch reports "Branched into a new chat. The original is unchanged." instead of the generic resume message.
+- Tests: two host cases in `test/host.test.ts` (the fork shares the messages, both records exist on disk, the source is unchanged, and a host with no chat refuses) and two in `test/settings-host.test.ts` (the command opens the copy and keeps the original; an active run is refused). The mock host now implements `forkSession` and a settable `isRunning`.
+- Verification: `npx vitest run test/settings-host.test.ts test/chat-view.test.ts test/host.test.ts` passed 216; typecheck passed.
+
 ### Session management: chat search
 
 - `extensions/moderado-agent/src/session-search.ts` is new and pure: `searchChats(chats, query)` matches the chat's displayed title and the text of every message, case-insensitively, and returns matches newest first with a one-line snippet around the match.

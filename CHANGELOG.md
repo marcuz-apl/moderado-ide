@@ -2,6 +2,14 @@
 
 ## [Unreleased] - 2026-10-21
 
+**Feature: branch a chat**
+- **Type**: `feat` / `chat` / `patch`
+- **Key deliverables**:
+  - `Moderado: Branch This Chat`, or the branch button in the top bar, copies the current conversation into a new chat and opens it.
+  - The original is left exactly as it was, so a different direction can be explored without losing the chat it came from.
+  - A branch starts its own cost accounting at zero; the history it carries has already been paid for, so counting it twice would inflate both chats.
+  - Branching is refused while a run is active.
+
 **Feature: search recorded chats by name or text**
 - **Type**: `feat` / `chat` / `patch`
 - **Key deliverables**:

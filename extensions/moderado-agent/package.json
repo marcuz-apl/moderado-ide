@@ -74,6 +74,10 @@
         "title": "Moderado: Search Chats"
       },
       {
+        "command": "moderado.branchChat",
+        "title": "Moderado: Branch This Chat"
+      },
+      {
         "command": "moderado.togglePlanMode",
         "title": "Moderado: Toggle Plan Mode"
       }
