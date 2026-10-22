@@ -1,10 +1,12 @@
 import { z } from 'zod';
+import { join } from 'node:path';
 import { createContextAttachment, createFileAttachment, preparePrompt, type DraftAttachment } from './attachments.js';
 import * as vscode from 'vscode';
 import { defaultSettingsPreferences, parsePreferenceChange, type SettingsPreferences } from './settings-preferences.js';
 import { IDE_VERSION } from './ide-version.js';
 import { AgentEvent, ApprovalRequest } from '@moderado/contracts';
 import { AgentHost, RunOutcome, COMPACTED_STATUS_PREFIX } from './host.js';
+import { chatFileName, sessionMarkdown } from './session-export.js';
 import { RawDecision } from './approval.js';
 import { configPath, readConfig } from './profile.js';
 import { updateConfigCoordinated } from './coordination.js';
@@ -1066,6 +1068,10 @@ async function openDiffTab(requestId: string): Promise<void> {
       if (msg.text.length <= CLIPBOARD_MAX_CHARS) void vscode.env.clipboard.writeText(msg.text);
       return;
     }
+    if (msg.type === 'exportChat') {
+      void exportCurrentChat();
+      return;
+    }
     if (msg.type === 'openSettings') {
       void openSettingsPane();
       return;
@@ -1245,6 +1251,7 @@ async function openDiffTab(requestId: string): Promise<void> {
       if (!picked) return;
       await removeConnection(picked.id);
     }),
+    vscode.commands.registerCommand('moderado.exportChat', () => exportCurrentChat()),
     vscode.commands.registerCommand('moderado.showSessions', async () => {
       const { sessions, invalid } = host.listSessions();
       if (invalid.length) {
@@ -1366,6 +1373,35 @@ async function openDiffTab(requestId: string): Promise<void> {
       render();
     } catch {
       void vscode.window.showErrorMessage('Could not delete this chat. Stop any active run and check the history files.');
+    }
+  }
+
+  /**
+   * Exports the current chat as a Markdown file.
+   *
+   * The destination is chosen by the user in the editor's own save dialog; the
+   * export never writes anywhere the user did not name, and a chat with no
+   * messages is reported rather than turned into an empty file.
+   */
+  async function exportCurrentChat(): Promise<void> {
+    const session = host.session;
+    if (!session || !session.messages.length) {
+      void vscode.window.showInformationMessage('There is no chat to export yet.');
+      return;
+    }
+    const title = savedSessionTitle(session.id) || firstLineOf(session) || 'Untitled chat';
+    const target = await vscode.window.showSaveDialog({
+      defaultUri: vscode.Uri.file(join(workspaceRoot, chatFileName(title))),
+      filters: { Markdown: ['md'] },
+      saveLabel: 'Export',
+      title: 'Export chat as Markdown',
+    });
+    if (!target) return;
+    try {
+      await vscode.workspace.fs.writeFile(target, new TextEncoder().encode(sessionMarkdown(session, title)));
+      void vscode.window.showInformationMessage(`Exported "${title}" to ${target.fsPath}.`);
+    } catch {
+      void vscode.window.showErrorMessage('Could not write the export file. Choose another location and try again.');
     }
   }
 

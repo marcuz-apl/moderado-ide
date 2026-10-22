@@ -66,6 +66,10 @@
         "title": "Moderado: Show Recorded Sessions"
       },
       {
+        "command": "moderado.exportChat",
+        "title": "Moderado: Export Chat as Markdown"
+      },
+      {
         "command": "moderado.togglePlanMode",
         "title": "Moderado: Toggle Plan Mode"
       }

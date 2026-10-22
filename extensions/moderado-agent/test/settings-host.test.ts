@@ -12,6 +12,7 @@ const harness = vi.hoisted(() => ({
   finalMessage: null as string | null,
   workspaceRoot: '', windows: true, fileDialog: vi.fn(), contextPicker: vi.fn(), findFiles: vi.fn(), errors: vi.fn(),
   prompt: vi.fn(), browser: vi.fn(), write: vi.fn(), openExternal: vi.fn(), clipboard: [] as string[],
+  commands: new Map<string, (...args: unknown[]) => unknown>(), saveDialog: vi.fn(), written: [] as { path: string; text: string }[], info: vi.fn(),
   workspaceTitles: new Map<string, unknown>(), listCalls: 0,
 }));
 vi.mock('vscode', () => ({
@@ -20,11 +21,13 @@ vi.mock('vscode', () => ({
     createOutputChannel: () => ({ appendLine: vi.fn(), dispose: vi.fn() }),
     registerWebviewViewProvider: (_id: string, provider: unknown) => { harness.provider = provider; return { dispose: vi.fn() }; },
     showInputBox: harness.prompt, showOpenDialog: harness.fileDialog, showQuickPick: harness.contextPicker,
-    showErrorMessage: harness.errors, showWarningMessage: harness.confirm,
+    showSaveDialog: harness.saveDialog,
+    showErrorMessage: harness.errors, showWarningMessage: harness.confirm, showInformationMessage: harness.info,
   },
   workspace: { get workspaceFolders() { return [{ uri: { fsPath: harness.workspaceRoot } }]; }, findFiles: harness.findFiles,
+    fs: { writeFile: async (uri: { fsPath: string }, data: Uint8Array) => { harness.written.push({ path: uri.fsPath, text: new TextDecoder().decode(data) }); } },
     getConfiguration: () => ({ get: (key: string, fallback: unknown) => harness.configValues.has(key) ? harness.configValues.get(key) : fallback, update: harness.configUpdate }) },
-  commands: { registerCommand: () => ({ dispose: vi.fn() }) },
+  commands: { registerCommand: (id: string, handler: (...args: unknown[]) => unknown) => { harness.commands.set(id, handler); return { dispose: vi.fn() }; } },
   env: { openExternal: harness.openExternal, clipboard: { writeText: async (text: string) => { harness.clipboard.push(text); } } }, Uri: { parse: (url: string) => url, file: (fsPath: string) => ({ fsPath, scheme: 'file' }) },
   RelativePattern: class { constructor(public base: unknown, public pattern: string) {} },
 }));
@@ -70,6 +73,7 @@ beforeEach(() => {
   harness.configValues.clear();
   harness.configUpdate.mockImplementation(async (key: string, value: unknown) => { harness.configValues.set(key, value); });
   harness.windows = true; harness.histories = []; harness.currentId = ''; harness.confirm.mockResolvedValue('Delete'); harness.workspaceTitles.clear(); harness.listCalls = 0;
+  harness.commands.clear(); harness.written.length = 0; harness.saveDialog.mockResolvedValue(undefined);
   vi.clearAllMocks(); harness.messages = []; harness.keys.clear(); harness.profile = {}; harness.invalid = false; harness.runs = []; harness.finalMessage = null;
   harness.prompt.mockResolvedValue('mrd_native-secret');
   harness.clipboard.length = 0;
@@ -556,6 +560,54 @@ describe('saved provider and history workflows', () => {
   });
 });
 
+
+describe('chat export', () => {
+  const chat = (messages: StoredSession['messages']): StoredSession => ({ ...createSession(harness.workspaceRoot), messages });
+
+  it('writes the current chat as Markdown to the file the user chose', async () => {
+    const session = chat([
+      { role: 'user', content: 'Fix the login bug.' },
+      { role: 'assistant', content: 'Found it in auth.ts.' },
+    ]);
+    harness.histories = [session]; harness.currentId = session.id;
+    harness.workspaceTitles.set(`moderado.sessionTitle.${session.id}`, 'Login bug');
+    harness.saveDialog.mockResolvedValue({ fsPath: join(harness.workspaceRoot, 'login.md') });
+
+    await harness.commands.get('moderado.exportChat')?.();
+
+    expect(harness.written).toHaveLength(1);
+    expect(harness.written[0].path).toBe(join(harness.workspaceRoot, 'login.md'));
+    expect(harness.written[0].text).toContain('# Login bug');
+    expect(harness.written[0].text).toContain('Fix the login bug.');
+    expect(harness.written[0].text).toContain('Found it in auth.ts.');
+    const dialog = harness.saveDialog.mock.calls[0][0] as { defaultUri: { fsPath: string } };
+    // The suggested name comes from the chat's name and is a Markdown file.
+    expect(dialog.defaultUri.fsPath).toContain('moderado-');
+    expect(dialog.defaultUri.fsPath.endsWith('.md')).toBe(true);
+  });
+
+  it('writes nothing when the save dialog is dismissed', async () => {
+    const session = chat([{ role: 'user', content: 'Keep me.' }]);
+    harness.histories = [session]; harness.currentId = session.id;
+    harness.saveDialog.mockResolvedValue(undefined);
+
+    send('exportChat');
+    await vi.waitFor(() => expect(harness.saveDialog).toHaveBeenCalled());
+
+    expect(harness.written).toHaveLength(0);
+  });
+
+  it('reports an empty chat instead of exporting a stub', async () => {
+    const session = createSession(harness.workspaceRoot);
+    harness.histories = [session]; harness.currentId = session.id;
+
+    await harness.commands.get('moderado.exportChat')?.();
+
+    expect(harness.saveDialog).not.toHaveBeenCalled();
+    expect(harness.written).toHaveLength(0);
+    expect(harness.info).toHaveBeenCalledWith(expect.stringContaining('no chat to export'));
+  });
+});
 
 describe('API Config secure save boundaries', () => {
   it('clears an old optional key reference when saving a changed endpoint', async () => {

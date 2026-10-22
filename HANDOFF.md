@@ -191,6 +191,15 @@ The next action is for the owner to test the v0.1.30 packages. The 0.1.29 GitHub
 - `test/chat-view.test.ts` gained a case that the local runtimes carry the message, that the box holds no value, that the "Paste a key and save" line is gone, and that the Gateway and a hosted provider still say "Paste API key". `test/provider-setup.test.ts` gained a case for the `local` flag. The existing local-runtime case was updated to set `local: true` on its provider literal, which is the shape the host now sends.
 - Verification: full `npm test` passed 487 with 4 skipped across 22 files; `npm run typecheck` passed; `npm run compile` produced `extensions/moderado-agent/dist/` at 589 KiB. No live provider call, editor smoke test, build dispatch, or release.
 
+### Session management: chat export
+
+- `extensions/moderado-agent/src/session-export.ts` is new and pure: `sessionMarkdown(session, title, now)` and `chatFileName(title, now)`. It reads the stored session, so the export is exactly what the shared history holds.
+- The destination is the editor's own save dialog. The extension writes only the file the user names, with `workspace.fs.writeFile`, and suggests `moderado-<date>-<slug>.md` inside the workspace. The slug collapses anything that is not a lowercase letter or digit, so a hostile title cannot escape the chosen folder.
+- Tool output is fenced with a fence wider than any backtick run it contains, so a tool result can never close the block early. System messages are dropped: they are prompt scaffolding. Non-text content is marked rather than silently omitted.
+- Entry points: a toolbar button (`#export-chat`, posting `exportChat`) and the `moderado.exportChat` command, both landing on `exportCurrentChat()`.
+- Tests: seven cases in `test/session-export.test.ts` and three host cases in `test/settings-host.test.ts` (writes to the chosen path with the title's default name, writes nothing when dismissed, reports an empty chat). The `vscode` mock now captures command handlers (`harness.commands`), resolves `showSaveDialog`, and records `workspace.fs.writeFile`.
+- Verification: `npx vitest run test/session-export.test.ts test/settings-host.test.ts test/chat-view.test.ts` passed 147; typecheck passed.
+
 ### Session management: context compaction
 
 - The owner asked for session management functions, naming compaction. Investigation confirmed there was none anywhere: `host.ts` passed the whole stored transcript as `conversationHistory` on every turn, the engine only bounds `policy.maxSteps`, and nothing in the IDE consumed the `progress` events the engine already emits. A long chat therefore grew until the provider refused it.

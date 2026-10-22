@@ -109,7 +109,8 @@ function toolbarHtml(historyOpen: boolean, tokenUsage: string, tokenUsageTitle: 
     <strong class="brand-title">MODERADO</strong>
     <span id="token-usage" class="token-usage" title="${escapeHtml(tokenUsageTitle)}" aria-label="Token consumption">${escapeHtml(tokenUsage)}</span>
     <button id="new-session" type="button" title="New session" aria-label="New session">&#65291;</button>
-    <button id="toggle-history" type="button" title="Sessions" aria-label="Sessions" aria-pressed="${historyOpen ? 'true' : 'false'}">&#128340;</button>
+    <button id="export-chat" type="button" title="Export chat" aria-label="Export chat">&#8681;</button>
+<button id="toggle-history" type="button" title="Sessions" aria-label="Sessions" aria-pressed="${historyOpen ? 'true' : 'false'}">&#128340;</button>
     <button id="open-settings" type="button" title="Moderado settings" aria-label="Moderado settings">&#9881;</button>
   </div>`;
 }
@@ -606,6 +607,7 @@ ${toolbarHtml(snapshot.historyOpen, snapshot.tokenUsage, snapshot.tokenUsageTitl
 
   document.getElementById('new-session').addEventListener('click', () => vscode.postMessage({ type: 'newSession' }));
   document.getElementById('toggle-history').addEventListener('click', () => vscode.postMessage({ type: 'toggleHistory' }));
+document.getElementById('export-chat').addEventListener('click', () => vscode.postMessage({ type: 'exportChat' }));
   document.getElementById('open-settings').addEventListener('click', () => vscode.postMessage({ type: 'openSettings' }));
   document.getElementById('active-ctx').addEventListener('click', () => vscode.postMessage({ type: 'openApiConfig' }));
   document.getElementById('mode-plan').addEventListener('click', () => vscode.postMessage({ type: 'setMode', mode: 'Plan' }));

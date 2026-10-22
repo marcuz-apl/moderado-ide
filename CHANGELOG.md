@@ -2,6 +2,14 @@
 
 ## [Unreleased] - 2026-10-21
 
+**Feature: export a chat as Markdown**
+- **Type**: `feat` / `chat` / `patch`
+- **Key deliverables**:
+  - A chat can be saved as a Markdown file from the toolbar's export button or `Moderado: Export Chat as Markdown`.
+  - The destination is chosen in the editor's own save dialog and suggested as `moderado-<date>-<chat name>.md`; the extension writes only the file the user names.
+  - The export carries the chat name, date, model and mode, then every user, model and tool turn. System prompt scaffolding is left out; tool output is fenced so it cannot break the document.
+  - An empty chat is reported instead of producing an empty file.
+
 **Feature: long chats are summarised to fit the model's context window**
 - **Type**: `feat` / `agent` / `patch`
 - **Key deliverables**:
