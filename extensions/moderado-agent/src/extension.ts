@@ -66,6 +66,24 @@ const STREAM_RENDER_INTERVAL_MS = 60;
  */
 const CLIPBOARD_MAX_CHARS = 200_000;
 
+/**
+ * The name the composer footer shows for the workspace.
+ *
+ * A window with no folder open has no workspace name, and the extension host's
+ * working directory is then the editor's own install folder: its name is a host
+ * path and, on a stock editor, another vendor's brand. The footer names the
+ * product rather than showing that path.
+ */
+export function workspaceFolderLabel(
+  folder: { name?: string; uri: { fsPath: string } } | undefined,
+  workspaceRoot: string,
+): string {
+  if (!folder) return 'Moderado IDE';
+  const name = (folder.name ?? '').trim();
+  if (name) return name;
+  return workspaceRoot.split(/[\\/]/).filter(Boolean).pop() ?? 'Moderado IDE';
+}
+
 export interface ModeradoApi {
   /** Starts one bounded agent turn. Any mutation still requires human approval. */
   startRun(task: string, options?: { planMode?: boolean }): Promise<RunOutcome>;
@@ -130,8 +148,9 @@ export function activate(context: vscode.ExtensionContext): ModeradoApi {
 
   // Prefer the real editor workspace root so a session directory matches what the
   // CLI would derive for the same folder.
+  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
   const workspaceRoot =
-    vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    workspaceFolder?.uri.fsPath ?? process.cwd();
 
   const draftAttachments = new Map<string, DraftAttachment>();
   let pickingAttachments = false;
@@ -146,7 +165,7 @@ export function activate(context: vscode.ExtensionContext): ModeradoApi {
     settings,
     autoApprove,
     recents: [],
-    workspaceLabel: workspaceRoot.split(/[\\/]/).pop() ?? '',
+    workspaceLabel: workspaceFolderLabel(workspaceFolder, workspaceRoot),
   };
 
   /**

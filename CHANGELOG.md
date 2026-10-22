@@ -2,6 +2,13 @@
 
 ## [Unreleased] - 2026-10-21
 
+**Fix: the composer footer names the workspace, not the editor's install folder**
+- **Type**: `fix` / `chat` / `build`
+- **Key deliverables**:
+  - A window with no folder open showed the extension host's working directory in the footer, which is the editor's own install folder, so the row read `Microsoft VS Code`. It now reads `Moderado IDE` there.
+  - With a folder open the row still names that folder (`moderado-ide`), taken from the folder's display name rather than from its path.
+  - `workspaceFolderLabel` is a pure function, so the three cases are covered by unit tests instead of only by the rendered pane.
+
 **Feature: transcript rows can be copied, and the user's own message reused**
 - **Type**: `feat` / `chat` / `patch`
 - **Key deliverables**:

@@ -57,7 +57,7 @@ vi.mock('../src/gateway-login.js', async (original) => {
   return { ...actual, authorizeGatewayInBrowser: harness.browser };
 });
 vi.mock('../src/coordination.js', () => ({ updateConfigCoordinated: harness.write }));
-import { activate } from '../src/extension.js';
+import { activate, workspaceFolderLabel } from '../src/extension.js';
 import { createSession, type StoredSession } from '../src/sessions.js';
 
 const form = { preset: 'moderado-cloud', displayName: '', baseUrl: 'http://127.0.0.1:4788/v1', modelId: 'Exact/Route' };
@@ -358,6 +358,31 @@ describe('host-owned composer attachments', () => {
   });
 });
 
+
+describe('workspace label', () => {
+  it('names the folder while a folder is open', () => {
+    expect(workspaceFolderLabel(
+      { name: 'moderado-ide', uri: { fsPath: 'E:\\projects\\moderado-ide' } },
+      'E:\\projects\\moderado-ide',
+    )).toBe('moderado-ide');
+  });
+
+  it('falls back to the folder name in the path when the folder has none', () => {
+    expect(workspaceFolderLabel(
+      { uri: { fsPath: '/home/owner/projects/moderado-ide' } },
+      '/home/owner/projects/moderado-ide',
+    )).toBe('moderado-ide');
+  });
+
+  it('names the product instead of the editor install folder with no folder open', () => {
+    // With no folder open the host's working directory is the editor's own
+    // install folder, so the footer must not read that name.
+    expect(workspaceFolderLabel(
+      undefined,
+      'C:\\Users\\owner\\AppData\\Local\\Programs\\Microsoft VS Code',
+    )).toBe('Moderado IDE');
+  });
+});
 
 describe('transcript copy', () => {
   it('copies a transcript row through the host clipboard', () => {

@@ -191,6 +191,15 @@ The next action is for the owner to test the v0.1.30 packages. The 0.1.29 GitHub
 - `test/chat-view.test.ts` gained a case that the local runtimes carry the message, that the box holds no value, that the "Paste a key and save" line is gone, and that the Gateway and a hosted provider still say "Paste API key". `test/provider-setup.test.ts` gained a case for the `local` flag. The existing local-runtime case was updated to set `local: true` on its provider literal, which is the shape the host now sends.
 - Verification: full `npm test` passed 487 with 4 skipped across 22 files; `npm run typecheck` passed; `npm run compile` produced `extensions/moderado-agent/dist/` at 589 KiB. No live provider call, editor smoke test, build dispatch, or release.
 
+### Composer footer workspace label
+
+- The owner reported that the bottom row of the panel read `Microsoft VS Code` where it used to read `moderado-ide`.
+- Cause: `workspaceLabel` was `workspaceRoot.split(/[\\/]/).pop()`, and `workspaceRoot` falls back to `process.cwd()` when the window has no folder open. In an extension host that working directory is the editor's install folder, so on Windows the label became `Microsoft VS Code`. Nothing in the branding overlay was involved, and no editor process is running on this machine.
+- `extension.ts` now computes the label with `workspaceFolderLabel`: the folder's display name when a folder is open, else the last path segment, and `Moderado IDE` when there is no folder at all, so a host path is never shown. `workspaceRoot` itself is unchanged, because it is the file-tool jail root and the session directory key, and moving it is a separate decision.
+- Not changed, and worth a decision later: the jail root and the session directory are fixed at activation, so opening a folder in a window that started without one leaves the agent scoped to the old root and only the label would be correct. Raising this rather than changing it here.
+- Tests: three unit cases in `test/settings-host.test.ts` for a named folder, a folder with no name, and no folder at all.
+- Verification: full `npm test` passed 506 with 4 skipped across 23 files; `npm run typecheck` passed; `npm run compile` produced `extensions/moderado-agent/dist/` at 595 KiB.
+
 ### Transcript copy and edit
 
 - The owner reported that a past message of theirs could not be copied or edited, and that a model's output could not be copied.
