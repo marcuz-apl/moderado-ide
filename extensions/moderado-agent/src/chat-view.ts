@@ -280,6 +280,10 @@ body { font-family: var(--vscode-font-family); font-size: 13px; color: var(--vsc
   li { border-left: 3px solid var(--vscode-panel-border); margin: 0.4rem 0; padding-left: 0.6rem; }
   li.error { border-color: var(--vscode-errorForeground); }
   li.tool { border-color: var(--vscode-charts-blue); }
+  /* The user's own message is tinted and inset, so it reads as the request
+     being answered rather than as part of the answer. Moderado's reply keeps
+     the panel canvas and the full reading surface. */
+  li.user { border-left-color: var(--vscode-focusBorder); background: var(--vscode-textBlockQuote-background, var(--vscode-list-inactiveSelectionBackground, transparent)); border-radius: 0 4px 4px 0; margin: 0.4rem 0 0.4rem 1rem; padding: 0.35rem 0.6rem; }
   .who { font-size: 0.72rem; text-transform: uppercase; opacity: 0.7; }
   pre { white-space: pre-wrap; word-break: break-word; margin: 0.2rem 0 0; font-family: inherit; }
   .approval { border: 1px solid var(--vscode-focusBorder); padding: 0.75rem; margin-top: 1rem; border-radius: 4px; }

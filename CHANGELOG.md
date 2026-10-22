@@ -2,6 +2,13 @@
 
 ## [Unreleased] - 2026-10-21
 
+**Feature: the chat transcript tells the request from the reply**
+- **Type**: `feat` / `chat` / `patch`
+- **Key deliverables**:
+  - The user's own message is now tinted and carries its own accent border, so it reads as the request being answered rather than as part of the answer.
+  - The user's message is inset from the left, so the request and the reply are visually distinct without the reply losing reading width in the narrow sidebar.
+  - Moderado's reply keeps the panel canvas, and the tool and error rows keep their existing accents. The `YOU` / `MODERADO` labels remain, so the distinction is never carried by colour alone.
+
 **Chore: retire the "Moderado Cloud" product name**
 - **Type**: `chore` / `provider` / `patch`
 - **Key deliverables**:

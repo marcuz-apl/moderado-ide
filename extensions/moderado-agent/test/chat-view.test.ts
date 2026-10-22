@@ -17,6 +17,14 @@ function state(over: Partial<ChatViewState> = {}): ChatViewState {
   return { transcript: [], running: false, pendingApproval: null, ...over };
 }
 
+/** The declaration block of one CSS rule in the generated stylesheet. */
+const cssRule = (html: string, selector: string): string => {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = new RegExp(`(?:^|\\n)\\s*${escaped}\\s*\\{([^}]*)\\}`).exec(html);
+  expect(match).not.toBeNull();
+  return match?.[1] ?? '';
+};
+
 describe('chat view', () => {
   it('places project context before file/image attachment controls instead of a new-task plus', () => {
     const html = chatHtml(state(), preview);
@@ -37,6 +45,23 @@ describe('chat view', () => {
     expect(html).toContain('data-attachment-id="11111111-1111-4111-8111-111111111111"');
     expect(html).toContain("type: 'removeAttachment'");
     expect(viewSnapshot(state(), preview).attachments).toBe('');
+  });
+
+  it('differentiates the user input from the Moderado reply', () => {
+    // The user's own message is tinted and carries its own accent; the reply
+    // stays on the panel canvas, so the answer keeps the full reading surface.
+    const html = chatHtml(state(), preview);
+    const user = cssRule(html, 'li.user');
+    expect(user).toMatch(/background:/);
+    expect(user).toMatch(/border-left-color:\s*var\(--vscode-focusBorder\)/);
+    expect(cssRule(html, 'li')).not.toMatch(/background:/);
+  });
+
+  it('indents the user input', () => {
+    const html = chatHtml(state(), preview);
+    const leftMargin = (rule: string) =>
+      Number.parseFloat((/margin:\s*([^;]+)/.exec(rule)?.[1] ?? '0 0 0 0').split(/\s+/)[3] ?? '0');
+    expect(leftMargin(cssRule(html, 'li.user'))).toBeGreaterThan(leftMargin(cssRule(html, 'li')));
   });
 
   it('wraps every stylesheet in a style element', () => {
