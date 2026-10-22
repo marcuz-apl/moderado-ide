@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 import { defaultSettingsPreferences, parsePreferenceChange, type SettingsPreferences } from './settings-preferences.js';
 import { IDE_VERSION } from './ide-version.js';
 import { AgentEvent, ApprovalRequest } from '@moderado/contracts';
-import { AgentHost, RunOutcome } from './host.js';
+import { AgentHost, RunOutcome, COMPACTED_STATUS_PREFIX } from './host.js';
 import { RawDecision } from './approval.js';
 import { configPath, readConfig } from './profile.js';
 import { updateConfigCoordinated } from './coordination.js';
@@ -232,6 +232,12 @@ export function activate(context: vscode.ExtensionContext): ModeradoApi {
         render();
       }
       if (event.type === 'error') append({ kind: 'error', label: 'Error', text: event.message });
+      // A narrowed prompt is shown, so a model that has lost the start of a long
+      // chat is explained rather than mysterious. Other progress events stay in
+      // the output channel.
+      if (event.type === 'progress' && event.status.startsWith(COMPACTED_STATUS_PREFIX)) {
+        append({ kind: 'tool', label: 'Context', text: event.status });
+      }
       if (event.type === 'assistant_delta') appendDelta(event.delta);
     },
     promptForApproval: (request, signal) => askHuman(request, signal),

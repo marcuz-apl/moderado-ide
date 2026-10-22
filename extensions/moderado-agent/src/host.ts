@@ -20,6 +20,16 @@ import { ApprovalCoordinator, RawDecision } from './approval.js';
 import { ConfigState, canonicalWorkspaceRoot, configPath, readConfig } from './profile.js';
 import { CredentialStore, MemoryCredentialStore, resolveCredential } from './credentials.js';
 import { SessionStore, StoredSession, conversationOf, createSession, saveSessionChecked } from './sessions.js';
+import { DEFAULT_CONTEXT_BUDGET_TOKENS, compactConversation } from './context-budget.js';
+
+/**
+ * How the host announces that a prompt was narrowed.
+ *
+ * The agent event union has no dedicated type for this, so the progress status
+ * carries a recognisable prefix and the extension host turns it into a note in
+ * the transcript instead of leaving it in the output channel.
+ */
+export const COMPACTED_STATUS_PREFIX = 'Summarised';
 import { DESKTOP_PROVIDER_PRESETS } from './provider-catalog.js';
 import { fetchGatewayRoutes, type GatewayRoute } from './provider-discovery.js';
 import { DesktopOpenAIAdapter } from './provider-transport.js';
@@ -363,7 +373,14 @@ export class AgentHost implements IApprovalHandler {
     this.current = session;
 
     try {
-      const history = input.conversationHistory ?? conversationOf(session.messages);
+      // The stored conversation is what the record holds. The prompt is narrowed
+      // to fit the model when the record has grown past the budget; the record
+      // itself is never reduced, so nothing the user wrote is lost.
+      const recorded = conversationOf(session.messages);
+      const budgetTokens = preferences?.contextBudgetTokens ?? DEFAULT_CONTEXT_BUDGET_TOKENS;
+      const prompt = compactConversation(recorded, input.task, { budgetTokens });
+      const history = input.conversationHistory ?? prompt.messages;
+      const sent = conversationOf(history);
       const scope = { workspaceRoot: this.options.workspaceRoot, sessionId: session.id, home: this.options.moderadoHome };
       const images = input.images?.map(image => ImageAttachmentSchema.parse(image)) ?? [];
       if (images.length) saveImageContext(input.task, images, scope);
@@ -425,6 +442,17 @@ export class AgentHost implements IApprovalHandler {
         readOnly: input.planMode ?? false,
         nonInteractive: this.options.nonInteractive ?? false,
       });
+      if (prompt.compacted) {
+        // Said before the call, so a summarised prompt is never silent. The
+        // extension host turns this status into a transcript note.
+        this.options.onEvent({
+          type: 'progress',
+          step: 0,
+          maxSteps: policy.maxSteps,
+          status: `${COMPACTED_STATUS_PREFIX} ${prompt.dropped} earlier messages to fit the model's context window.`,
+          timestamp: Date.now(),
+        });
+      }
       const result = await new AgentLoop().run(input.task, {
         workspaceRoot: this.options.workspaceRoot,
         provider,
@@ -461,7 +489,7 @@ export class AgentHost implements IApprovalHandler {
             ...session,
             modelId: result.selectedModel.id,
             mode: input.planMode ? 'Plan' : session.mode,
-            messages: conversationOf(result.messages),
+            messages: [...recorded, ...conversationOf(result.messages).slice(sent.length)],
             usage: usage ? SessionStore.applyUsage(session.usage, usage, true) : session.usage,
           },
           { knownUpdatedAt: session.updatedAt },

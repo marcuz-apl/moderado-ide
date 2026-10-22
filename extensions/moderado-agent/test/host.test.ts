@@ -10,6 +10,7 @@ import { canonicalWorkspaceRoot, readConfig } from '../src/profile.js';
 import { DesktopOpenAIAdapter } from '../src/provider-transport.js';
 import { preparePrompt } from '../src/attachments.js';
 import { createSession, SessionStore } from '../src/sessions.js';
+import { defaultSettingsPreferences } from '../src/settings-preferences.js';
 
 function workspace(): string {
   return tempDirectory('moderado-m2-');
@@ -183,6 +184,61 @@ describe('Desktop provider host integration', () => {
     await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
     finish(Response.json({ object: 'list', data: [] }));
     await pending;
+  });
+
+  it('summarises an oversized chat for the prompt but keeps every stored message', async () => {
+    const workspaceRoot = workspace();
+    const home = configuredHome('moderado-cloud', gateway);
+    const store = new SessionStore(home);
+    const history = Array.from({ length: 40 }, (_, index) => ({
+      role: index % 2 === 0 ? 'user' as const : 'assistant' as const,
+      content: `turn ${index} ${'x'.repeat(600)}`,
+    }));
+    const session = store.save({ ...createSession(workspaceRoot), messages: history });
+    const fetchImpl = fakeHTTP([route]);
+    const events: AgentEvent[] = [];
+    const host = new AgentHost({
+      workspaceRoot, moderadoHome: home, fetchImpl,
+      onEvent: event => events.push(event), promptForApproval: async () => undefined,
+      getPreferences: () => ({ ...defaultSettingsPreferences, contextBudgetTokens: 4_000 }),
+    });
+    host.resumeRecordedSession(session);
+    await host.startRun({ task: 'keep going', modelId: 'auto' });
+
+    const body = JSON.parse(String(fetchImpl.mock.calls.filter(([, init]) => init?.method === 'POST')[0][1]?.body));
+    const digest = body.messages.find((message: { content?: unknown }) => typeof message.content === 'string' && message.content.includes('Earlier in this conversation'));
+    expect(digest?.role).toBe('user');
+    expect(String(digest.content)).toContain('- You: turn 0');
+    // The summary is announced, not silent.
+    expect(events.some(event => event.type === 'progress' && /Summarised/.test(event.status))).toBe(true);
+
+    // The stored record keeps every message it had, plus the new exchange.
+    const saved = host.session;
+    expect(saved?.messages.length).toBeGreaterThan(history.length);
+    expect(saved?.messages.slice(0, history.length)).toEqual(history);
+  });
+
+  it('leaves a chat that fits the budget untouched', async () => {
+    const workspaceRoot = workspace();
+    const home = configuredHome('moderado-cloud', gateway);
+    const store = new SessionStore(home);
+    const history = [
+      { role: 'user' as const, content: 'one' },
+      { role: 'assistant' as const, content: 'two' },
+    ];
+    const session = store.save({ ...createSession(workspaceRoot), messages: history });
+    const fetchImpl = fakeHTTP([route]);
+    const host = new AgentHost({
+      workspaceRoot, moderadoHome: home, fetchImpl,
+      onEvent: () => {}, promptForApproval: async () => undefined,
+      getPreferences: () => ({ ...defaultSettingsPreferences, contextBudgetTokens: 48_000 }),
+    });
+    host.resumeRecordedSession(session);
+    await host.startRun({ task: 'again', modelId: 'auto' });
+
+    const body = JSON.parse(String(fetchImpl.mock.calls.filter(([, init]) => init?.method === 'POST')[0][1]?.body));
+    expect(body.messages.some((message: { content?: unknown }) => typeof message.content === 'string' && message.content.includes('Earlier in this conversation'))).toBe(false);
+    expect(host.session?.messages.slice(0, history.length)).toEqual(history);
   });
 
   const route = { id: 'moonshotai/kimi-k3', provider: 'nvidia-nim', owned_by: 'moonshotai', capabilities: ['chat', 'tools'], data_note: 'Gateway route' };

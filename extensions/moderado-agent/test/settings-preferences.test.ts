@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { defaultSettingsPreferences, parsePreferenceChange, settingsFeaturesHtml } from '../src/settings-preferences.js';
 
 describe('Settings preferences', () => {
-  it('defaults to free models, web search, English, and a bounded approval wait', () => {
-    expect(defaultSettingsPreferences).toEqual({ allowPaidModels: false, allowUnknownModels: false, webSearchEnabled: true, showHistoryOnStartup: false, preferredLanguage: 'English', approvalTimeoutSeconds: 120 });
+  it('defaults to free models, web search, English, a bounded approval wait, and a context budget', () => {
+    expect(defaultSettingsPreferences).toEqual({ allowPaidModels: false, allowUnknownModels: false, webSearchEnabled: true, showHistoryOnStartup: false, preferredLanguage: 'English', approvalTimeoutSeconds: 120, contextBudgetTokens: 48_000 });
   });
 
   it('validates every supported preference with a typed value', () => {
@@ -16,6 +16,8 @@ describe('Settings preferences', () => {
       expect(parsePreferenceChange('preferredLanguage', value)).toEqual({ ok: true, value: { key: 'preferredLanguage', value } });
     for (const value of [1, 120, 600])
       expect(parsePreferenceChange('approvalTimeoutSeconds', value)).toEqual({ ok: true, value: { key: 'approvalTimeoutSeconds', value } });
+    for (const value of [4_000, 48_000, 200_000])
+      expect(parsePreferenceChange('contextBudgetTokens', value)).toEqual({ ok: true, value: { key: 'contextBudgetTokens', value } });
   });
 
   it('rejects unknown keys, invalid language values, and malformed timeout values', () => {
@@ -25,12 +27,14 @@ describe('Settings preferences', () => {
       expect(parsePreferenceChange('preferredLanguage', value).ok).toBe(false);
     for (const value of [0, 601, -1, 1.5, NaN, Infinity, '120', null, undefined])
       expect(parsePreferenceChange('approvalTimeoutSeconds', value).ok).toBe(false);
+    for (const value of [0, 3_999, 200_001, 1.5, NaN, Infinity, '48000', null, undefined])
+      expect(parsePreferenceChange('contextBudgetTokens', value).ok).toBe(false);
   });
 
   it('renders only real features controls and reflects preference values', () => {
     const html = settingsFeaturesHtml({ ...defaultSettingsPreferences, allowPaidModels: true, approvalTimeoutSeconds: 60 });
     for (const title of ['Agent', 'Editor', 'Advanced']) expect(html).toContain(`>${title}</h3>`);
-    for (const key of ['allowPaidModels', 'allowUnknownModels', 'webSearchEnabled', 'showHistoryOnStartup', 'approvalTimeoutSeconds'])
+    for (const key of ['allowPaidModels', 'allowUnknownModels', 'webSearchEnabled', 'showHistoryOnStartup', 'approvalTimeoutSeconds', 'contextBudgetTokens'])
       expect(html).toContain(`data-preference="${key}"`);
     expect(html).toMatch(/data-preference="allowPaidModels"[^>]*checked/);
     expect(html).toMatch(/data-preference="allowUnknownModels"(?![^>]*checked)/);

@@ -191,6 +191,19 @@ The next action is for the owner to test the v0.1.30 packages. The 0.1.29 GitHub
 - `test/chat-view.test.ts` gained a case that the local runtimes carry the message, that the box holds no value, that the "Paste a key and save" line is gone, and that the Gateway and a hosted provider still say "Paste API key". `test/provider-setup.test.ts` gained a case for the `local` flag. The existing local-runtime case was updated to set `local: true` on its provider literal, which is the shape the host now sends.
 - Verification: full `npm test` passed 487 with 4 skipped across 22 files; `npm run typecheck` passed; `npm run compile` produced `extensions/moderado-agent/dist/` at 589 KiB. No live provider call, editor smoke test, build dispatch, or release.
 
+### Session management: context compaction
+
+- The owner asked for session management functions, naming compaction. Investigation confirmed there was none anywhere: `host.ts` passed the whole stored transcript as `conversationHistory` on every turn, the engine only bounds `policy.maxSteps`, and nothing in the IDE consumed the `progress` events the engine already emits. A long chat therefore grew until the provider refused it.
+- `extensions/moderado-agent/src/context-budget.ts` is new. `compactConversation` walks the cut forward until the estimated prompt fits, never opens the tail on a tool result (a provider rejects a tool message with no preceding call), and replaces what it dropped with a digest of one line per message, bounded at 24 lines so a very long chat cannot rebuild the prompt.
+- The digest is emitted as an ordinary **user** turn, not a system message: the engine replaces a leading system message with its own prompt, which would have discarded the digest.
+- The estimate is four characters per token plus a small per-message overhead. It errs high, which is the safe direction: an early compaction is harmless, an over-long prompt is refused.
+- Compaction costs no model call. A model-written summary would need a second provider request per compaction, could fail, and would be non-deterministic; the deterministic digest is the smallest implementation that solves the failure.
+- The **record is not reduced**. `host.ts` now saves `[...recorded, ...conversationOf(result.messages).slice(sent.length)]`, so the stored chat keeps every message it had plus the new ones. This also fixes a latent issue where a compacted prompt would have shortened the stored conversation.
+- `Context budget (tokens)` was added to `SettingsPreferences` and the Advanced card (4000 to 200000, default 48000), validated by `parsePreferenceChange` like every other preference.
+- Visibility: the engine event union has no type for this, so the host emits a `progress` status beginning with the exported `COMPACTED_STATUS_PREFIX` and `extension.ts` appends it to the transcript as a `Context` note. Other progress events still only reach the output channel.
+- Tests: eight unit cases in `test/context-budget.test.ts` (estimate, untouched short chat, digest content, fitting the budget, the tail kept under a tiny budget, the tool-result boundary, the digest bound, no mutation), two host cases in `test/host.test.ts` (an oversized chat is summarised, the stored record keeps every message and the note is emitted; a chat that fits is untouched), and the preference cases in `test/settings-preferences.test.ts`.
+- Verification: full `npm test` passed 516 with 4 skipped across 24 files; `npm run typecheck` passed; `npm run compile` produced `extensions/moderado-agent/dist/` at 599 KiB. No live provider call.
+
 ### Composer footer workspace label
 
 - The owner reported that the bottom row of the panel read `Microsoft VS Code` where it used to read `moderado-ide`.

@@ -10,6 +10,7 @@ export interface SettingsPreferences {
   showHistoryOnStartup: boolean;
   preferredLanguage: PreferredLanguage;
   approvalTimeoutSeconds: number;
+  contextBudgetTokens: number;
 }
 
 export const defaultSettingsPreferences: Readonly<SettingsPreferences> = Object.freeze({
@@ -19,6 +20,7 @@ export const defaultSettingsPreferences: Readonly<SettingsPreferences> = Object.
     showHistoryOnStartup: false,
     preferredLanguage: 'English',
     approvalTimeoutSeconds: 120,
+    contextBudgetTokens: 48_000,
 });
 
 export type PreferenceChange = {
@@ -45,6 +47,10 @@ export function parsePreferenceChange(key: unknown, value: unknown): PreferenceC
       return typeof value === 'number' && Number.isFinite(value) && Number.isInteger(value) && value >= 1 && value <= 600
         ? { ok: true, value: { key, value } }
         : { ok: false, error: 'Approval timeout must be a whole number from 1 to 600 seconds.' };
+    case 'contextBudgetTokens':
+      return typeof value === 'number' && Number.isFinite(value) && Number.isInteger(value) && value >= 4_000 && value <= 200_000
+        ? { ok: true, value: { key, value } }
+        : { ok: false, error: 'Context budget must be a whole number from 4000 to 200000 tokens.' };
     default:
       return { ok: false, error: 'Unknown setting.' };
   }
@@ -78,5 +84,8 @@ export function settingsFeaturesHtml(preferences: SettingsPreferences): string {
     <label for="preference-approvalTimeoutSeconds">Approval timeout (seconds)</label>
     <input id="preference-approvalTimeoutSeconds" type="number" data-preference="approvalTimeoutSeconds" min="1" max="600" step="1" value="${escapeHtml(preferences.approvalTimeoutSeconds)}" />
     <p class="note">Unanswered approval requests are denied when this time expires. Applies to new tasks.</p>
+    <label for="preference-contextBudgetTokens">Context budget (tokens)</label>
+    <input id="preference-contextBudgetTokens" type="number" data-preference="contextBudgetTokens" min="4000" max="200000" step="1000" value="${escapeHtml(preferences.contextBudgetTokens)}" />
+    <p class="note">When a chat grows past this, the oldest turns are summarised in the prompt to fit the model. The saved chat keeps every message.</p>
   </section>`;
 }

@@ -2,6 +2,15 @@
 
 ## [Unreleased] - 2026-10-21
 
+**Feature: long chats are summarised to fit the model's context window**
+- **Type**: `feat` / `agent` / `patch`
+- **Key deliverables**:
+  - A chat that outgrows the context budget no longer fails at the provider. The oldest turns are replaced in the prompt by a short digest of what was said, and the recent turns are sent in full.
+  - The digest is built from the messages themselves, so compaction costs no extra model call, cannot fail, and gives the same result every time.
+  - The saved chat keeps every message. Only the prompt is narrowed, so nothing the user wrote is lost and the conversation still reads completely in the panel.
+  - The summarising is announced in the transcript, so a model that has lost the start of a long chat is explained rather than mysterious.
+  - `Context budget (tokens)` is a new Advanced setting (4000 to 200000, default 48000).
+
 **Fix: the composer footer names the workspace, not the editor's install folder**
 - **Type**: `fix` / `chat` / `build`
 - **Key deliverables**:
