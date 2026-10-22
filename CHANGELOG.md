@@ -8,7 +8,7 @@
   - The old product name no longer appears in any IDE-owned surface. The provider picker, the Settings pane, the chat surface, and the Gateway rejection messages are covered by `test/branding.test.ts`.
   - The IDE-owned base URL constant is now `MODERADO_BASE_URLS`.
   - The `moderado-cloud` connection id and the `moderado/provider/moderado-cloud` Credential Manager reference are unchanged: both are the shared profile contract with the Moderado CLI.
-  - The old name still exists in the vendored CLI snapshot (`vendor/moderado/**`). That snapshot is a hash-pinned copy of the pinned upstream commit, so the strings are removed by a separate CLI change that is then re-vendored.
+  - The old name still exists in the vendored CLI snapshot (`vendor/moderado/**`). That snapshot is a hash-pinned copy of the pinned upstream commit and changes only when the pinned revision is advanced. The CLI repository is a separate project and is never edited from this one.
   - "Moderado Gateway" names the gateway service and is unchanged.
 
 **Feature: Moderado provider rename and production gateway endpoint**
