@@ -130,17 +130,14 @@ describe('chat view', () => {
     expect(html).toMatch(/body\.settings-open #settings-host\s*\{[^}]*border-top:\s*none/);
   });
 
-  it('points the collapsed auto-approve chevron the right way', () => {
-    // The collapsed state used &#9652; (UPPER LEFT TRIANGLE), which does not read
-    // as "expand". It must pair with the down-pointing triangle used when open.
-    const collapsed = chatHtml(state(), preview);
-    expect(collapsed).toContain('&#9656;');
-    expect(collapsed).not.toContain('&#9652;');
-    const open = chatHtml(
-      state({ autoApprove: { ...emptyAutoApprove(), expanded: true } }),
-      preview,
-    );
-    expect(open).toContain('&#9662;');
+  it('has no auto-approve expand control, because the toggles are in the row', () => {
+    // The row used to be a button that expanded a separate checkbox grid.
+    // The checkboxes moved into the row, so the chevron is gone with it.
+    const html = chatHtml(state(), preview);
+    expect(html).not.toContain('&#9656;');
+    expect(html).not.toContain('&#9662;');
+    expect(html).not.toContain('aa-chevron');
+    expect(html).toContain('data-key="readFiles"');
   });
 
   it('does not drag the transcript back down when the reader scrolled up', () => {
@@ -380,39 +377,44 @@ describe('moderado settings pane', () => {
 
   it('pre-enables the requested auto-approve categories but not commands', () => {
     const html = chatHtml(state({
-      autoApprove: { ...emptyAutoApprove(), expanded: true },
+      autoApprove: { ...emptyAutoApprove() },
     }), preview);
-    expect(html).toContain('Auto-approve: Read files, Edit files, Fetch web content, Use MCP servers');
+    expect(html).toContain('Auto-approve:');
     expect(html).toContain('data-key="readFiles" checked');
     expect(html).toContain('data-key="editFiles" checked');
     expect(html).toContain('data-key="fetchWeb" checked');
     expect(html).toContain('data-key="useMcp" checked');
     expect(html).toMatch(/data-key="executeCommands"(?! checked)/);
-    expect(html).toContain('id="aa-toggle"');
   });
 
-  it('expands into a two-column grid when opened', () => {
+  it('puts each auto-approve checkbox in the row, in front of its item', () => {
+    // The privilege toggles sit in the row itself, so the user reaches them
+    // directly instead of opening a panel first.
     const html = chatHtml(state({
-      autoApprove: {
-        expanded: true, readFiles: true, editFiles: false,
-        executeCommands: false, fetchWeb: false, useMcp: false,
-      },
+      autoApprove: { ...emptyAutoApprove(), readFiles: true, editFiles: false },
     }), preview);
-    expect(html).toContain('aa-grid');
-    expect(html).toContain('Read files');
-    expect(html).toContain('Edit files');
-    expect(html).toContain('Execute commands');
-    expect(html).toContain('Fetch web content');
-    expect(html).toContain('Use MCP servers');
-    expect(html).toContain('data-key="readFiles" checked');
-    expect(html).toContain('Turn a category off to require approval.');
+    const item = (key: string) => {
+      const at = html.indexOf(`data-key="${key}"`);
+      expect(at).toBeGreaterThan(-1);
+      return html.slice(at, html.indexOf('</label>', at));
+    };
+    for (const [key, label] of [['readFiles', 'Read files'], ['editFiles', 'Edit files'],
+      ['executeCommands', 'Execute commands'], ['fetchWeb', 'Fetch web content'], ['useMcp', 'Use MCP servers']] as const) {
+      const markup = item(key);
+      expect(markup).toContain(label);
+      // The checkbox comes before the label text it belongs to.
+      expect(markup.indexOf('type="checkbox"')).toBeLessThan(markup.indexOf(label));
+    }
+    // The row is no longer a click-to-expand control.
+    expect(html).not.toContain('id="aa-toggle"');
+    expect(html).not.toContain('aa-grid');
+    expect(html).toContain('id="auto-approve"');
   });
 
   it('reports an auto-approve change to the host rather than deciding locally', () => {
     // The renderer must never conclude on its own that an action is approved.
     const html = chatHtml(state(), preview);
     expect(html).toContain("postMessage({ type: 'setAutoApprove'");
-    expect(html).toContain("postMessage({ type: 'toggleAutoApprovePanel' })");
   });
 
   it('offers a Plan/Act toggle in the footer', () => {

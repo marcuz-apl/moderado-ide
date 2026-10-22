@@ -24,6 +24,12 @@
   - The task token usage (`In: … | Out: … | Total: … | Rate: … tok/s`) now sits on the left of the top bar, directly beside the `MODERADO` title, at a larger font. The session, history, and settings buttons stay right-aligned.
   - The API Provider menu lists the local runtimes as `Ollama - Local` and `LM Studio - Local`.
 
+**Feature: auto-approve toggles sit in the row**
+- **Type**: `feat` / `provider` / `patch`
+- **Key deliverables**:
+  - The `Auto-approve:` row now carries each privilege toggle directly, in front of its category, so the user reaches the approval settings without clicking to open a panel first. The row is no longer a click-to-expand control.
+  - The safety note stays with the row: enabled actions run without asking, and turning a category off requires approval.
+
 **Feature: Moderado provider rename and production gateway endpoint**
 - **Type**: `feat` / `provider` / `patch`
 - **Key deliverables**:

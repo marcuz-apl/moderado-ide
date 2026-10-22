@@ -141,3 +141,21 @@ The next action is for the owner to test the v0.1.30 packages. The 0.1.29 GitHub
 - The API Provider menu: the option separator for a tagged provider is now ` - ` instead of ` · `, which renders the local runtimes as `Ollama - Local` and `LM Studio - Local`. A custom endpoint renders as `Name - Custom` for the same reason. The underlying `ProviderChoice.label` and `tag` are unchanged, so the preset labels, the saved connection display names, and the composer footer still read `Ollama` and `LM Studio`.
 - `test/chat-view.test.ts` gained a case for the usage position and font size and one for the two local runtime labels; the existing local-tag case was updated to the new separator.
 - Verification: full `npm test` passed 465 with 4 skipped across 21 files; `npm run typecheck` passed; `npm run compile` produced `extensions/moderado-agent/dist/`. No live provider call, editor smoke test, build dispatch, or release.
+
+## 2026-10-22 v0.1.34 auto-approve toggles in the row, and the version hook fix (unreleased)
+
+### Version hooks
+
+- The owner asked to fix the commit issues. The bug: a `fix:` commit bumped the patch. Reproduced in a scratch repo: `feat:` then `fix:` produced `v0.1.34` then `v0.1.35`.
+- Root cause, confirmed by probing the hooks: Git runs `pre-commit` FIRST and writes `COMMIT_EDITMSG` only afterwards in `prepare-commit-msg`. So `pre-commit` always read the *previous* commit's message, and a `fix:` inherited an earlier `feat:` and bumped the patch. The wrong order was recorded in `docs/planning/release-v0.1.30/findings.md` and is corrected there.
+- `e88c111` (`v0.1.34+2610226`) `fix: decide the version bump from the real commit message`: `pre-commit` now only advances the daily build counter, which is always safe, and `post-commit` moves the semver from the real commit message and amends the commit so the tree and the subject carry the same identifier. `post-commit` marks its nested amend with `ALFAZEN_VERSION_AMEND`, because `--no-verify` skips `pre-commit` and `commit-msg` but not `post-commit`. The merge guard now only rejects commits with two or more parents, so a root commit is still bumped.
+- Verified in a scratch repo: `feat:` bumps the patch, `fix:`/`docs:`/`chore:` only advance the build, `release(patch):` and `release(minor):` bump as intended, a root commit is bumped, an amend does not double-bump, a merge commit is left alone, and a `feat!` without `ALFAZEN_MAJOR_APPROVED=1` still commits and warns. The same commit in this repository produced `v0.1.34+2610226`, a build-only bump, which is the live regression test.
+
+### Auto-approve row
+
+- The owner asked to move the auto-approve checkboxes into the `Auto-approve:` row, in front of each category, so the privileges are reachable without clicking the row to open a panel.
+- `chat-view.ts`: the row is now `Auto-approve:` followed by the five toggle items, each a checkbox, its icon, and its label. The row is a plain container, not a button, because a checkbox inside a button is invalid markup.
+- The now-dead expansion machinery was removed rather than left behind: `AutoApproveState.expanded`, the `autoApproveExpanded` view field, `autoApproveSummary`, the `toggleAutoApprovePanel` message, and the `.aa-head`, `.aa-chevron`, `.aa-grid`, and `.aa-body` styles. Toggling still posts `setAutoApprove` to the host, so the renderer still never decides that an action is approved.
+- The safety note stays under the row: enabled actions run without asking, and turning a category off requires approval. The owner did not ask for it to be removed.
+- `test/chat-view.test.ts` gained a case that each checkbox precedes its own label, and the cases that asserted the old summary text, the expand control, and the chevron were replaced.
+- Verification: full `npm test` passed 465 with 4 skipped across 21 files; `npm run typecheck` passed; `npm run compile` produced `extensions/moderado-agent/dist/`. No live provider call, editor smoke test, build dispatch, or release.

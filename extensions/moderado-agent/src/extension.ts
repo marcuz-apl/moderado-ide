@@ -104,7 +104,6 @@ export function activate(context: vscode.ExtensionContext): ModeradoApi {
   let loginAbort: AbortController | undefined;
   /** Auto-approve categories enabled by default; command execution stays opt-in. */
   const autoApprove: AutoApproveState = {
-    expanded: false,
     ...DEFAULT_AUTO_APPROVE,
   };
   let chatView: vscode.WebviewView | undefined;
@@ -875,11 +874,6 @@ async function openDiffTab(requestId: string): Promise<void> {
         draftAttachments.delete(parsed.data.id);
         render();
       } else { void pickAttachments(parsed.data.type); }
-      return;
-    }
-    if (msg.type === 'toggleAutoApprovePanel') {
-      autoApprove.expanded = !autoApprove.expanded;
-      render();
       return;
     }
     if (msg.type === 'setAutoApprove' && typeof msg.key === 'string' && typeof msg.value === 'boolean') {

@@ -33,7 +33,6 @@ export interface RecentSession {
 
 /** Auto-approve categories, mirroring the approval boundary in AGENTS.md. */
 export interface AutoApproveState {
-  expanded: boolean;
   readFiles: boolean;
   editFiles: boolean;
   executeCommands: boolean;
@@ -42,7 +41,7 @@ export interface AutoApproveState {
 }
 
 export function emptyAutoApprove(): AutoApproveState {
-  return { expanded: false, ...DEFAULT_AUTO_APPROVE };
+  return { ...DEFAULT_AUTO_APPROVE };
 }
 
 export interface ChatViewState {
@@ -79,7 +78,6 @@ export interface ViewSnapshot {
   recents: string;
   historyOpen: boolean;
   autoApprove: string;
-  autoApproveExpanded: boolean;
   planMode: boolean;
   empty: boolean;
   /** Escaped `provider · model` footer context, refreshed with the connection. */
@@ -165,36 +163,30 @@ const AUTO_APPROVE_CATEGORIES = [
   { key: 'useMcp', label: 'Use MCP servers', icon: '&#128196;' },
 ] as const;
 
-/** A short summary of what is currently auto-approved, for the collapsed bar. */
-export function autoApproveSummary(auto: AutoApproveState): string {
-  const on = AUTO_APPROVE_CATEGORIES.filter((c) => auto[c.key]).map((c) => c.label);
-  return on.length ? on.join(', ') : 'nothing';
-}
-
 /**
- * The collapsible auto-approve bar and its expanded checkbox grid.
+ * The auto-approve row.
  *
- * The default categories are pre-approved; command execution remains opt-in.
+ * The privilege toggles sit in the row itself, in front of each category, so
+ * the user reaches them directly instead of opening a panel first. The row is
+ * no longer a control, and the renderer still never decides that an action is
+ * approved: every change is a host decision.
  */
 function autoApproveHtml(auto: AutoApproveState): string {
-  const grid = AUTO_APPROVE_CATEGORIES.map(
+  const items = AUTO_APPROVE_CATEGORIES.map(
     (category) => `<label class="aa-item">
       <input type="checkbox" class="aa-box" data-key="${category.key}"${auto[category.key] ? ' checked' : ''} />
       <span class="aa-icon">${category.icon}</span>
       <span class="aa-label">${escapeHtml(category.label)}</span>
     </label>`,
   ).join('');
-  return `<div class="aa${auto.expanded ? ' open' : ''}" id="auto-approve">
-    <button id="aa-toggle" class="aa-head" type="button" aria-expanded="${auto.expanded}">
-      <span>Auto-approve: ${escapeHtml(autoApproveSummary(auto))}</span>
-      <span class="aa-chevron">${auto.expanded ? '&#9662;' : '&#9656;'}</span>
-    </button>
-    ${auto.expanded ? `<div class="aa-body">
-      <p class="aa-note">Let Moderado take these actions without asking for approval.
-        <span class="aa-warn">Enabled actions run without asking. Turn a category off to require approval.</span>
-      </p>
-      <div class="aa-grid">${grid}</div>
-    </div>` : ''}
+  return `<div class="aa" id="auto-approve">
+    <div class="aa-row">
+      <span class="aa-title">Auto-approve:</span>
+      <div class="aa-items">${items}</div>
+    </div>
+    <p class="aa-note">Let Moderado take these actions without asking for approval.
+      <span class="aa-warn">Enabled actions run without asking. Turn a category off to require approval.</span>
+    </p>
   </div>`;
 }
 
@@ -254,13 +246,11 @@ body { font-family: var(--vscode-font-family); font-size: 13px; color: var(--vsc
   .recent-cost { background: var(--vscode-charts-blue, #2f7ae5); color: #fff; border-radius: 8px; padding: 0 0.4rem; font-size: 0.68rem; }
   /* Auto-approve */
   #auto-approve { flex: 0 0 auto; border-top: 1px solid var(--vscode-panel-border); }
-  .aa-head { display: flex; align-items: center; justify-content: space-between; width: 100%; text-align: left; padding: 0.5rem 0.75rem; font-size: 0.8rem; }
-  .aa-head:hover { background: var(--vscode-toolbar-hoverBackground); }
-  .aa-chevron { opacity: 0.7; }
-  .aa-body { padding: 0 0.75rem 0.6rem; }
-  .aa-note { font-size: 0.75rem; margin: 0 0 0.5rem; opacity: 0.8; }
+  .aa-row { display: flex; align-items: center; flex-wrap: wrap; gap: 0.3rem 0.75rem; padding: 0.5rem 0.75rem 0.3rem; font-size: 0.8rem; }
+  .aa-title { flex: 0 0 auto; opacity: 0.85; }
+  .aa-items { display: flex; align-items: center; flex-wrap: wrap; gap: 0.3rem 0.75rem; }
+  .aa-note { font-size: 0.75rem; margin: 0 0.75rem 0.5rem; opacity: 0.8; }
   .aa-warn { display: block; color: var(--vscode-editorWarning-foreground); opacity: 0.9; margin-top: 0.15rem; }
-  .aa-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.35rem 0.75rem; }
   .aa-item { display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; cursor: pointer; }
   .aa-box { accent-color: var(--vscode-focusBorder); }
   /* Composer */
@@ -567,12 +557,9 @@ ${toolbarHtml(snapshot.historyOpen, snapshot.tokenUsage, snapshot.tokenUsageTitl
     }
   }
 
-  // Auto-approve: expanding and toggling are host decisions. The renderer never
-  // decides for itself that an action is approved.
-  const aaHost = document.getElementById('auto-approve-host');
+  // Auto-approve: toggling is a host decision. The renderer never decides for
+  // itself that an action is approved.
   function bindAutoApprove() {
-    const toggle = document.getElementById('aa-toggle');
-    if (toggle) toggle.addEventListener('click', () => vscode.postMessage({ type: 'toggleAutoApprovePanel' }));
     for (const box of document.querySelectorAll('.aa-box')) {
       box.addEventListener('change', () => vscode.postMessage({ type: 'setAutoApprove', key: box.getAttribute('data-key'), value: box.checked }));
     }
@@ -799,7 +786,6 @@ export function viewSnapshot(
   const rows = state.transcript.map(transcriptEntryHtml).join('');
   const settings = state.settings ?? emptySettings();
   const auto = state.autoApprove ?? {
-    expanded: false,
     readFiles: false,
     editFiles: false,
     executeCommands: false,
@@ -828,7 +814,6 @@ export function viewSnapshot(
     recents: recentsHtml(state),
     historyOpen: state.historyOpen === true,
     autoApprove: autoApproveHtml(auto),
-    autoApproveExpanded: auto.expanded,
     planMode,
     // The welcome state only shows before the first message; afterwards the
     // transcript speaks for itself.
