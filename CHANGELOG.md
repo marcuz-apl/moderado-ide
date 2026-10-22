@@ -28,7 +28,7 @@
 - **Type**: `feat` / `provider` / `patch`
 - **Key deliverables**:
   - The `Auto-approve:` row now carries each privilege toggle directly, in front of its category, so the user reaches the approval settings without clicking to open a panel first. The row is no longer a click-to-expand control.
-  - The safety note stays with the row: enabled actions run without asking, and turning a category off requires approval.
+  - The caveat that enabled actions run without asking is a popup on a warning mark beside the label, so it takes no room in the row.
 
 **Feature: Moderado provider rename and production gateway endpoint**
 - **Type**: `feat` / `provider` / `patch`

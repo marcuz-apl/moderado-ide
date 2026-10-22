@@ -411,6 +411,18 @@ describe('moderado settings pane', () => {
     expect(html).toContain('id="auto-approve"');
   });
 
+  it('shows the auto-approve warning as a popup on an exclamation mark', () => {
+    // The warning must not occupy the row: it is a popup on the mark.
+    const html = chatHtml(state(), preview);
+    expect(html).not.toContain('aa-note');
+    expect(html).toContain('&#9888;');
+    expect(html).toMatch(/class="aa-warn"[^>]*title="[^"]*Turn a category off to require approval\./);
+    // The mark sits with the label, ahead of the categories.
+    const row = html.slice(html.indexOf('<div class="aa" id="auto-approve">'));
+    expect(row.indexOf('aa-warn')).toBeLessThan(row.indexOf('aa-title'));
+    expect(row.indexOf('aa-title')).toBeLessThan(row.indexOf('aa-items'));
+  });
+
   it('reports an auto-approve change to the host rather than deciding locally', () => {
     // The renderer must never conclude on its own that an action is approved.
     const html = chatHtml(state(), preview);

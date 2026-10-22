@@ -170,6 +170,9 @@ const AUTO_APPROVE_CATEGORIES = [
  * the user reaches them directly instead of opening a panel first. The row is
  * no longer a control, and the renderer still never decides that an action is
  * approved: every change is a host decision.
+ *
+ * The caveat that these actions run without asking is a popup on the warning
+ * mark, so it takes no room in the row.
  */
 function autoApproveHtml(auto: AutoApproveState): string {
   const items = AUTO_APPROVE_CATEGORIES.map(
@@ -179,14 +182,14 @@ function autoApproveHtml(auto: AutoApproveState): string {
       <span class="aa-label">${escapeHtml(category.label)}</span>
     </label>`,
   ).join('');
+  const warning = 'Let Moderado take these actions without asking for approval. '
+    + 'Enabled actions run without asking. Turn a category off to require approval.';
   return `<div class="aa" id="auto-approve">
     <div class="aa-row">
+      <span class="aa-warn" role="img" tabindex="0" aria-label="${escapeHtml(warning)}" title="${escapeHtml(warning)}">&#9888;</span>
       <span class="aa-title">Auto-approve:</span>
       <div class="aa-items">${items}</div>
     </div>
-    <p class="aa-note">Let Moderado take these actions without asking for approval.
-      <span class="aa-warn">Enabled actions run without asking. Turn a category off to require approval.</span>
-    </p>
   </div>`;
 }
 
@@ -246,11 +249,10 @@ body { font-family: var(--vscode-font-family); font-size: 13px; color: var(--vsc
   .recent-cost { background: var(--vscode-charts-blue, #2f7ae5); color: #fff; border-radius: 8px; padding: 0 0.4rem; font-size: 0.68rem; }
   /* Auto-approve */
   #auto-approve { flex: 0 0 auto; border-top: 1px solid var(--vscode-panel-border); }
-  .aa-row { display: flex; align-items: center; flex-wrap: wrap; gap: 0.3rem 0.75rem; padding: 0.5rem 0.75rem 0.3rem; font-size: 0.8rem; }
+  .aa-row { display: flex; align-items: center; flex-wrap: wrap; gap: 0.3rem 0.75rem; padding: 0.5rem 0.75rem; font-size: 0.8rem; }
   .aa-title { flex: 0 0 auto; opacity: 0.85; }
   .aa-items { display: flex; align-items: center; flex-wrap: wrap; gap: 0.3rem 0.75rem; }
-  .aa-note { font-size: 0.75rem; margin: 0 0.75rem 0.5rem; opacity: 0.8; }
-  .aa-warn { display: block; color: var(--vscode-editorWarning-foreground); opacity: 0.9; margin-top: 0.15rem; }
+  .aa-warn { flex: 0 0 auto; color: var(--vscode-editorWarning-foreground); opacity: 0.9; cursor: help; }
   .aa-item { display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; cursor: pointer; }
   .aa-box { accent-color: var(--vscode-focusBorder); }
   /* Composer */
