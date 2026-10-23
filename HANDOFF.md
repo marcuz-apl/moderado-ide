@@ -1,6 +1,6 @@
 # Project Handoff
 
-Updated: 2026-10-23 10:04 UTC
+Updated: 2026-10-23 10:08 UTC
 Branch: `master`
 Status: v0.1.44 release preparation is underway. v0.1.31 remains the latest published stable release. Release docs and the generated release-note template are prepared; no 0.1.44 build, tag, or publication has occurred.
 
@@ -26,7 +26,8 @@ Status: v0.1.44 release preparation is underway. v0.1.31 remains the latest publ
 - Extension suite excluding sandbox-blocked loopback Gateway login cases: `npx vitest run --exclude test/gateway-login.test.ts` — 25 files, 544 passed, 6 skipped.
 - `npm run typecheck` — PASS.
 - `npm run compile` — PASS, 616 KiB bundle.
-- `git diff --check` — PASS before release-documentation edits; rerun before commit.
+- `git diff --check` — PASS after release-documentation edits.
+- `node --check scripts/publish-release.mjs` — PASS after the release-note template update.
 - An unfiltered local `npm test` could not open the loopback callback listener; 5 Gateway browser-login tests failed in this environment.
 
 ## Next action
