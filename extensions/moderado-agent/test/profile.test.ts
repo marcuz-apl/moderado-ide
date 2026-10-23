@@ -6,6 +6,9 @@ import { deepMerge, detectConflicts, updateConfigCoordinated } from '../src/coor
 import { credentialReference, MemoryCredentialStore, resolveCredential } from '../src/credentials.js';
 import { canonicalWorkspaceRoot, configPath, discoverSkills, mergeConfig, readConfig } from '../src/profile.js';
 import { SessionStore, StoredSessionSchema, createSession, saveSessionChecked } from '../src/sessions.js';
+import { FakeProviderAdapter } from '@moderado/providers';
+import { DesktopOpenAIAdapter } from '../src/provider-transport.js';
+import { resolveProvider } from '../src/host.js';
 
 function home(): string {
   return mkdtempSync(join(tmpdir(), 'moderado-profile-'));
@@ -52,16 +55,6 @@ describe('canonicalWorkspaceRoot', () => {
     expect(canonicalWorkspaceRoot(link)).toBe(canonicalWorkspaceRoot(real));
   });
 });
-
-import { describe, expect, it } from 'vitest';
-import { FakeProviderAdapter } from '@moderado/providers';
-import { DesktopOpenAIAdapter } from '../src/provider-transport.js';
-import { resolveProvider } from '../src/host.js';
-import { MemoryCredentialStore } from '../src/credentials.js';
-import { readConfig } from '../src/profile.js';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 
 /** Isolated profile home; never the developer's real `~/.moderado`. */
 function homeWithConfig(contents: unknown): string {
@@ -234,6 +227,9 @@ describe('mergeConfig', () => {
     const root = home();
     expect(mergeConfig({ defaultModel: 'x' }, root).written).toBe(true);
     expect(JSON.parse(readFileSync(configPath(root), 'utf8')).defaultModel).toBe('x');
+  });
+});
+
 describe('SessionStore', () => {
   it('round-trips a session through the shared profile', () => {
     const root = home();
@@ -296,8 +292,7 @@ describe('SessionStore', () => {
     expect(existsSync(writer.getDirectory(workspace))).toBe(true);
   });
 });
-  });
-});
+
 describe('config coordination', () => {
   it('writes through a lock and preserves another process keys', () => {
     const root = tempDir('moderado-cfg-');

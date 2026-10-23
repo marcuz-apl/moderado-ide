@@ -1,14 +1,32 @@
 # Moderado IDE Agent Guidelines
 
-These rules apply to this IDE repository and its contributors. Read
-`PRD.md`, `docs/UPSTREAM.md`, and `docs/PROFILE.md` before implementation.
+These rules apply to this IDE repository and its contributors. At the start of
+each task, read `HANDOFF.md` first, then read `PRD.md`, `docs/UPSTREAM.md`, and
+`docs/PROFILE.md` before implementation. Treat the current status, blockers,
+and next action in `HANDOFF.md` as the active project snapshot. Do not resume an
+older task from chat history or a stale handoff section unless the user asks.
+Before ending work that changes project state, refresh `HANDOFF.md` with the
+current state, exact check outcomes, blockers, and next action. Keep one concise
+snapshot rather than appending a session diary.
 
 ## 1. Scope and ownership
 
-- This is an independent IDE project. Do not edit, reset, commit, tag, or
-  publish the sibling Moderado CLI repository while working here. Submit any
-  necessary shared-engine or profile-format change as a separate, reviewed CLI
-  change, then advance IDE's pinned source revision.
+- This is an independent IDE project with its own requirements, roadmap,
+  provider layer, release process, and product decisions. The CLI is a separate
+  project. Use its source only where this IDE's architecture and requirements
+  call for shared packages or compatibility; CLI scope or behavior does not
+  automatically define IDE scope or acceptance.
+- Do not edit, reset, commit, tag, or publish the sibling Moderado CLI
+  repository while working here. Prefer an IDE-owned implementation when it
+  can meet the IDE requirements. If a required shared-engine or profile-format
+  change cannot be made in the IDE, propose it as a separate, reviewed CLI
+  change, then update this IDE's source pin only when that change is approved
+  and needed.
+- `sources.lock.json` identifies the exact upstream source inputs used by this
+  repository. Consult it when a task touches those inputs; do not hard-code an
+  assumed CLI baseline in IDE guidance or require IDE-owned provider behavior
+  to come from CLI code. A pin is a dependency record, not the IDE's product
+  identity or a blanket parity requirement.
 - Treat VSCodium and Code OSS as pinned upstream inputs. Keep downstream
   patches minimal and review each upstream refresh for license, security,
   behavior, and build changes.
@@ -38,12 +56,12 @@ meet the need.
   raw editor filesystem or process APIs.
 - IDE-owned provider code (`extensions/moderado-agent/src/provider-*.ts`,
   `model-router.ts`, `gateway-login.ts`) owns Gateway/provider adapters,
-  presets, discovery, model policy, transport, and routing. It adapts CLI
-  `v0.4.8` behavior without using CLI provider code at runtime. Contracts,
-  core, and tools use the reviewed CLI `v0.4.8` source revision pinned in
-  `sources.lock.json`. Do not
-  reintroduce a rule requiring provider transport, presets, or policy to come
-  from the CLI source.
+  presets, discovery, model policy, transport, and routing. It does not use CLI
+  provider code at runtime. Contracts, core, and tools consume only the source
+  revisions recorded in `sources.lock.json`; consult the current lock and
+  relevant compatibility requirements when those packages are involved. Do
+  not impose blanket CLI feature parity or move IDE-owned provider behavior
+  into the CLI source.
 - IDE-owned code composes those packages and renders UI. A renderer or
   webview never receives stored/resolved provider secrets or grants its own tool permissions. The owner-authorized API Config password field may hold a transient user-pasted key; only validated discovery/save messages may carry it to the host, which never echoes it back.
 
@@ -99,8 +117,10 @@ traversal, external symlinks, and protected metadata.
   integration, and relevant security tests before claiming completion.
 - Use fake providers and mock MCP servers in automated tests. Live model calls
   require an explicit opt-in smoke procedure and never run in CI.
-- Record exact commands and outcomes in `HANDOFF.md` at milestones or when
-  pausing. Keep secrets and raw transcripts out of it.
+- Record exact commands and outcomes in `HANDOFF.md` whenever project state
+  changes and when pausing. Keep secrets and raw transcripts out of it. Keep
+  the current state at the top; do not let a stale release-era summary or
+  historical entry override the current next action.
 - Use focused subagents for independent architecture, implementation, security,
   and review tasks when a change spans several components. Each receives a
   bounded task and may not modify unrelated files.

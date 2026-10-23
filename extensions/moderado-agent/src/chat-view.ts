@@ -454,12 +454,10 @@ ${toolbarHtml(snapshot.historyOpen, snapshot.tokenUsage, snapshot.tokenUsageTitl
 
   function browsePromptHistory(direction) {
     const browsing = historyIndex < promptHistory.length;
-    if (!browsing) {
-      if (input.selectionStart !== input.selectionEnd) return false;
-      const beforeCaret = input.value.slice(0, input.selectionStart);
-      const afterCaret = input.value.slice(input.selectionEnd);
-      if (direction === 'ArrowUp' ? beforeCaret.includes('\\n') : afterCaret.includes('\\n')) return false;
-    }
+    if (input.selectionStart !== input.selectionEnd) return false;
+    const beforeCaret = input.value.slice(0, input.selectionStart);
+    const afterCaret = input.value.slice(input.selectionEnd);
+    if (direction === 'ArrowUp' ? beforeCaret.includes('\\n') : afterCaret.includes('\\n')) return false;
     if (direction === 'ArrowUp') {
       if (historyIndex === promptHistory.length) historyDraft = input.value;
       if (historyIndex === 0) return browsing;

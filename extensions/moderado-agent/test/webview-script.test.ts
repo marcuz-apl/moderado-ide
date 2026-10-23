@@ -46,6 +46,94 @@ function expectParses(label: string, html: string): void {
   }
 }
 
+type Listener = (event: Record<string, unknown>) => void;
+
+class StubElement {
+  readonly listeners = new Map<string, Listener[]>();
+  readonly attributes = new Map<string, string>();
+  readonly classList = { toggle: () => {}, add: () => {}, remove: () => {} };
+  readonly style = { setProperty: () => {}, removeProperty: () => {} };
+  readonly children: StubElement[] = [];
+  value = '';
+  defaultValue = '';
+  selectionStart = 0;
+  selectionEnd = 0;
+  disabled = false;
+  checked = false;
+  type = 'text';
+  textContent = '';
+  innerHTML = '';
+  scrollHeight = 0;
+  scrollTop = 0;
+  clientHeight = 0;
+  dataset: Record<string, string> = {};
+
+  constructor(readonly id: string) {}
+
+  addEventListener(name: string, listener: Listener): void {
+    this.listeners.set(name, [...(this.listeners.get(name) ?? []), listener]);
+  }
+
+  emit(name: string, event: Record<string, unknown> = {}): void {
+    for (const listener of this.listeners.get(name) ?? []) listener(event);
+  }
+
+  setSelectionRange(start: number, end: number): void {
+    this.selectionStart = start;
+    this.selectionEnd = end;
+  }
+
+  setAttribute(name: string, value: string): void { this.attributes.set(name, value); }
+  getAttribute(name: string): string | null { return this.attributes.get(name) ?? null; }
+  contains(): boolean { return false; }
+  closest(): null { return null; }
+  querySelector(): null { return null; }
+  requestSubmit(): void {}
+  insertAdjacentHTML(): void {}
+  focus(): void {}
+  remove(): void {}
+}
+
+function runChatScript(savedState?: unknown) {
+  const elements = new Map<string, StubElement>();
+  const getElementById = (id: string): StubElement => {
+    let element = elements.get(id);
+    if (!element) {
+      element = new StubElement(id);
+      elements.set(id, element);
+    }
+    return element;
+  };
+  let currentState = savedState;
+  const messages: unknown[] = [];
+  const document = {
+    body: getElementById('body'),
+    activeElement: null as StubElement | null,
+    getElementById,
+    querySelectorAll: () => [],
+    querySelector: () => null,
+    addEventListener: () => {},
+    getSelection: () => ({ isCollapsed: true, rangeCount: 0 }),
+  };
+  getElementById('prompt').focus = () => { document.activeElement = getElementById('prompt'); };
+  const api = {
+    getState: () => currentState,
+    setState: (next: unknown) => { currentState = next; },
+    postMessage: (message: unknown) => { messages.push(message); },
+  };
+  const script = new Script(scriptOf(chatHtml(state({ settings: emptySettings() }), preview)), { filename: 'webview-inline.js' });
+  script.runInNewContext({
+    acquireVsCodeApi: () => api,
+    document,
+    window: { addEventListener: () => {} },
+    Element: StubElement,
+    setTimeout: () => 1,
+    clearTimeout: () => {},
+    console,
+  });
+  return { elements, messages, getState: () => currentState };
+}
+
 describe('webview inline script', () => {
   it('parses with the settings pane open', () => {
     expectParses('settings open', chatHtml(state(), preview));
@@ -85,5 +173,105 @@ describe('webview inline script', () => {
     const script = scriptOf(chatHtml(state(), preview));
     expect(script).toContain('redactGatewayKeys');
     expect(script).toContain('REDACTED Gateway key');
+  });
+
+  it('leaves ArrowUp on a middle line of a browsed multiline prompt to the caret', () => {
+    const { elements } = runChatScript({ promptHistory: ['first line\nsecond line', 'newest prompt'] });
+    const input = elements.get('prompt')!;
+    const up = { key: 'ArrowUp', prevented: false, preventDefault() { this.prevented = true; } };
+
+    input.emit('keydown', up);
+    input.emit('keydown', up);
+    expect(input.value).toBe('first line\nsecond line');
+    input.setSelectionRange('first line\n'.length + 2, 'first line\n'.length + 2);
+    up.prevented = false;
+    input.emit('keydown', up);
+
+    expect(up.prevented).toBe(false);
+    expect(input.value).toBe('first line\nsecond line');
+  });
+
+  it('leaves ArrowDown on a middle line of a browsed multiline prompt to the caret', () => {
+    const { elements } = runChatScript({ promptHistory: ['first line\nsecond line', 'newest prompt'] });
+    const input = elements.get('prompt')!;
+    const up = { key: 'ArrowUp', prevented: false, preventDefault() { this.prevented = true; } };
+    const down = { key: 'ArrowDown', prevented: false, preventDefault() { this.prevented = true; } };
+
+    input.emit('keydown', up);
+    input.emit('keydown', up);
+    expect(input.value).toBe('first line\nsecond line');
+    input.setSelectionRange(2, 2);
+    input.emit('keydown', down);
+
+    expect(down.prevented).toBe(false);
+    expect(input.value).toBe('first line\nsecond line');
+  });
+
+  it('leaves a selected range in a browsed prompt to normal keyboard behavior', () => {
+    const { elements } = runChatScript({ promptHistory: ['older prompt', 'newest prompt'] });
+    const input = elements.get('prompt')!;
+    const up = { key: 'ArrowUp', prevented: false, preventDefault() { this.prevented = true; } };
+    const down = { key: 'ArrowDown', prevented: false, preventDefault() { this.prevented = true; } };
+
+    input.emit('keydown', up);
+    input.setSelectionRange(2, 7);
+    input.emit('keydown', down);
+
+    expect(down.prevented).toBe(false);
+    expect(input.value).toBe('newest prompt');
+  });
+
+  it('browses to older and newer prompts and restores the unsent draft', () => {
+    const { elements } = runChatScript({ promptHistory: ['older prompt', 'newest prompt'] });
+    const input = elements.get('prompt')!;
+    input.value = 'unsent draft';
+    const key = (name: string) => ({
+      key: name,
+      prevented: false,
+      preventDefault() { this.prevented = true; },
+    });
+    const upToNewest = key('ArrowUp');
+    input.emit('keydown', upToNewest);
+    expect(upToNewest.prevented).toBe(true);
+    expect(input.value).toBe('newest prompt');
+    input.emit('keydown', key('ArrowUp'));
+    expect(input.value).toBe('older prompt');
+    const upAtOldest = key('ArrowUp');
+    input.emit('keydown', upAtOldest);
+    expect(upAtOldest.prevented).toBe(true);
+    expect(input.value).toBe('older prompt');
+    input.emit('keydown', key('ArrowDown'));
+    expect(input.value).toBe('newest prompt');
+    input.emit('keydown', key('ArrowDown'));
+    expect(input.value).toBe('unsent draft');
+    const downAtDraft = key('ArrowDown');
+    input.emit('keydown', downAtDraft);
+    expect(downAtDraft.prevented).toBe(false);
+    expect(input.value).toBe('unsent draft');
+  });
+
+  it('resets browsing after the user edits an input field', () => {
+    const { elements } = runChatScript({ promptHistory: ['older prompt', 'newest prompt'] });
+    const input = elements.get('prompt')!;
+    input.emit('keydown', { key: 'ArrowUp', preventDefault() {} });
+    input.value = 'edited text';
+    input.emit('input');
+    input.emit('keydown', { key: 'ArrowDown', preventDefault() {} });
+
+    expect(input.value).toBe('edited text');
+  });
+
+  it('filters and caps persisted prompt history at 100 entries', () => {
+    const history = [null, '  ', ...Array.from({ length: 105 }, (_, index) => `prompt ${index}`)];
+    const { elements, getState } = runChatScript({ promptHistory: history });
+    const input = elements.get('prompt')!;
+    input.value = 'new prompt';
+    elements.get('composer')!.emit('submit', { preventDefault() {} });
+
+    const saved = getState() as { promptHistory: string[] };
+    expect(saved.promptHistory).toHaveLength(100);
+    expect(saved.promptHistory[0]).toBe('prompt 6');
+    expect(saved.promptHistory.at(-1)).toBe('new prompt');
+    expect(saved.promptHistory.every((prompt) => typeof prompt === 'string' && prompt.trim())).toBe(true);
   });
 });
