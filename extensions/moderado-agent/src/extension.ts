@@ -714,7 +714,7 @@ async function openDiffTab(requestId: string): Promise<void> {
       render();
       return;
     }
-    const result = updateConfigCoordinated(configPath(), { activeConnectionId: id });
+    const result = updateConfigCoordinated(configPath(), { activeConnectionId: id }, { expected: { connections: { [id]: record[id] } } });
     if (!result.written) {
       settings.status = result.conflict?.reason ?? result.reason ?? 'Could not switch connection.';
       render();
@@ -746,11 +746,12 @@ async function openDiffTab(requestId: string): Promise<void> {
     }
     const remaining = { ...connections };
     delete remaining[id];
-    // The coordinated writer merges one level deep, so a removed connection is
-    // dropped by an explicit undefined, which the JSON write omits.
-    const patch: Record<string, unknown> = { connections: { ...remaining, [id]: undefined } };
+    // Touch only this entry so a sibling changed during the user's action stays intact.
+    const patch: Record<string, unknown> = { connections: { [id]: undefined } };
     if (state.config.activeConnectionId === id) patch.activeConnectionId = Object.keys(remaining)[0] ?? '';
-    const result = updateConfigCoordinated(configPath(), patch);
+    const expected: Record<string, unknown> = { connections: { [id]: connections[id] } };
+    if (state.config.activeConnectionId === id) expected.activeConnectionId = id;
+    const result = updateConfigCoordinated(configPath(), patch, { expected });
     if (!result.written) {
       settings.status = result.conflict?.reason ?? result.reason ?? 'Could not remove the connection.';
       render();
@@ -873,7 +874,7 @@ async function openDiffTab(requestId: string): Promise<void> {
       savePhase = 'profile persistence';
       const result = updateConfigCoordinated(configPath(), {
         connections: { [connection.id]: saved }, activeConnectionId: connection.id, defaultModel: connection.defaultModel,
-      }, { expected: { connections: profileConfig.connections, activeConnectionId: profileConfig.activeConnectionId, defaultModel: profileConfig.defaultModel } });
+      }, { expected: { connections: { [connection.id]: stored }, activeConnectionId: profileConfig.activeConnectionId, defaultModel: profileConfig.defaultModel } });
       if (!result.written) { settings.status = result.conflict?.reason ?? result.reason ?? 'Could not save the settings.'; render(); return; }
       void chatView?.webview.postMessage({ type: 'providerSaved' });
       await loadSettingsState('Saved.', { skipModels: true });
@@ -1236,6 +1237,8 @@ async function openDiffTab(requestId: string): Promise<void> {
       await openSettingsPane();
     }),
     vscode.commands.registerCommand('moderado.selectModel', async () => {
+      const initialProfile = readConfig();
+      const expectedModel = initialProfile.kind === 'ok' ? initialProfile.config.defaultModel : undefined;
       const models = await host.discoverModels();
       // Paid and unknown-cost models stay labelled so the free-first rule is visible.
       const picked = await vscode.window.showQuickPick(
@@ -1244,8 +1247,8 @@ async function openDiffTab(requestId: string): Promise<void> {
       );
       if (!picked) return;
       const modelId = picked.split(' — ')[0];
-      // Coordinated write: the shared config may have changed in the CLI.
-      const result = updateConfigCoordinated(configPath(), { defaultModel: modelId });
+      // Preserve a model choice another IDE window made during discovery.
+      const result = updateConfigCoordinated(configPath(), { defaultModel: modelId }, { expected: { defaultModel: expectedModel } });
       if (result.written) {
         vscode.window.showInformationMessage(`Default model set to ${modelId}.`);
         return;

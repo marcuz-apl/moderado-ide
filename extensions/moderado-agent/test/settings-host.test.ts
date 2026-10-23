@@ -158,6 +158,8 @@ describe('host-only Settings credentials', () => {
     const record = (harness.profile.connections as any)['moderado-cloud'];
     expect(record).toMatchObject({ authMethod: 'manual', credentialReference: 'moderado/provider/moderado-cloud', defaultModel: 'Exact/Route' });
     expect(harness.keys.get('moderado/provider/moderado-cloud')).toBe('mrd_stored_secret');
+    expect(harness.write.mock.calls[0]?.[2]).toMatchObject({ expected: { connections: { 'moderado-cloud': expect.any(Object) } } });
+    expect(harness.write.mock.calls[0]?.[2]?.expected?.connections).not.toHaveProperty('other-provider');
   });
 
   it('stores a pasted Gateway key without a native prompt', async () => {
@@ -171,6 +173,20 @@ describe('host-only Settings credentials', () => {
     expect(JSON.stringify(harness.profile)).not.toContain('mrd_pasted_secret');
   });
 
+  it('model selection guards the default model value it read before discovery', async () => {
+    harness.profile = { defaultModel: 'old-model' };
+    harness.contextPicker.mockResolvedValue('new-model — free (free)');
+    await harness.commands.get('moderado.selectModel')?.();
+    expect(harness.write.mock.calls[0]?.[2]).toEqual({ expected: { defaultModel: 'old-model' } });
+  });
+
+  it('switches connection with an expected value scoped to that connection', async () => {
+    harness.profile = { connections: { chosen: { id: 'chosen' }, other: { id: 'other' } } };
+    send('useConnection', { id: 'chosen' });
+    await vi.waitFor(() => expect(harness.write).toHaveBeenCalled());
+    expect(harness.write.mock.calls[0]?.[2]).toEqual({ expected: { connections: { chosen: { id: 'chosen' } } } });
+  });
+
   it('removes a saved connection from the shared profile', async () => {
     harness.profile = { activeConnectionId: 'moderado', connections: {
       'moderado': { id: 'moderado', displayName: 'Moderado', baseUrl: 'https://modr.alfazen.org/v1' },
@@ -180,6 +196,8 @@ describe('host-only Settings credentials', () => {
     await vi.waitFor(() => expect(harness.write).toHaveBeenCalled());
     expect(Object.keys((harness.profile.connections as Record<string, unknown>))).toEqual(['nvidia-nim']);
     expect(harness.profile.activeConnectionId).toBe('nvidia-nim');
+    expect(harness.write.mock.calls[0]?.[1]?.connections).toEqual({ 'moderado': undefined });
+    expect(harness.write.mock.calls[0]?.[2]?.expected).toEqual({ connections: { moderado: { id: 'moderado', displayName: 'Moderado', baseUrl: 'https://modr.alfazen.org/v1' } }, activeConnectionId: 'moderado' });
   });
 
   it('cancellation denies credential/config mutation', async () => {

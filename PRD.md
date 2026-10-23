@@ -105,9 +105,10 @@ formats. Windows provider keys remain in Credential Manager. IDE-specific
 layout and caches are isolated. Unknown config fields must survive a IDE
 write. Schema changes require explicit versioning and a reversible migration.
 
-IDE configuration writes use an IDE-side lock and detect conflicting CLI
-changes, but the current CLI writer does not take that lock and can still race
-with an IDE write. Two live
+IDE configuration writes use an IDE-side lock, re-read the file while holding
+it, preserve unrelated fields, and detect conflicts only on values being
+changed. Concurrent IDE writers are coordinated. Other applications must use
+the same lock protocol for a cross-application write guarantee. Two live
 processes must not edit the same session ID without a conflict policy. The
 supported sharing case is IDE and CLI within one account on the same OS;
 credential persistence must be verified separately for each platform. Sharing between

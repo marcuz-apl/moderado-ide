@@ -18,8 +18,9 @@ export interface ConfigUpdateResult {
 function readRaw(file: string): string | undefined {
   try {
     return fs.readFileSync(file, 'utf8');
-  } catch {
-    return undefined;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    throw error;
   }
 }
 
@@ -33,15 +34,9 @@ function parseConfig(raw: string | undefined): Record<string, unknown> {
 }
 
 /**
- * Merges `patch` into the shared config under an exclusive lock.
- *
- * The CLI writes config.json with a direct read/merge/write, so two processes
- * can lose one another's changes even when each write is atomic. Desktop takes
- * a lock file, then *re-reads inside the lock* — that re-read is what makes the
- * update safe against a CLI write that landed while Desktop was waiting.
- *
- * Where Desktop believes it owns a field, `expected` lets it detect that someone
- * else changed it and refuse rather than silently overwrite.
+ * Merges `patch` under the IDE writer lock. Other writers must use this same
+ * protocol for concurrent writes to be coordinated. `expected` limits conflict
+ * detection to fields the caller owns.
  */
 export function updateConfigCoordinated(
   configFile: string,
@@ -57,10 +52,18 @@ export function updateConfigCoordinated(
   fs.mkdirSync(path.dirname(configFile), { recursive: true, mode: 0o700 });
 
   let lockHandle: number | undefined;
+  const ownerToken = crypto.randomUUID();
   for (;;) {
     try {
       // `wx` fails if the lock already exists, so two writers cannot share one.
       lockHandle = fs.openSync(lockFile, 'wx', 0o600);
+      try {
+        fs.writeFileSync(lockHandle, JSON.stringify({ pid: process.pid, token: ownerToken }));
+      } catch (writeError) {
+        fs.closeSync(lockHandle);
+        lockHandle = undefined;
+        return { written: false, reason: `Could not record config lock ownership. Inspect ${lockFile} and remove it only after confirming no IDE writer is active.`, attempts: 1 };
+      }
       break;
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
@@ -74,17 +77,16 @@ export function updateConfigCoordinated(
           conflict: {
             kind: 'conflict',
             reason:
-              'Another process held the config lock for too long. Desktop did not write, so no change was lost.',
+              'The config lock or its recovery marker remained busy. No config was written; manual recovery: inspect both lock files and remove them only after confirming no IDE writer is active.',
             conflictingKeys: Object.keys(patch),
           },
         };
       }
-      // A lock older than the timeout belongs to a process that died.
+      // Age alone is not proof that an owner is dead. Reap only a lock whose
+      // recorded process is gone, while holding a separate exclusive claim.
       try {
-        if (now() - fs.statSync(lockFile).mtimeMs > timeoutMs) {
-          fs.rmSync(lockFile, { force: true });
-          continue;
-        }
+        const stat = fs.statSync(lockFile);
+        if (now() - stat.mtimeMs > timeoutMs && reapDeadLock(lockFile)) continue;
       } catch {
         continue;
       }
@@ -93,10 +95,9 @@ export function updateConfigCoordinated(
   }
 
   try {
-    const raw = readRaw(configFile);
     let base: Record<string, unknown>;
     try {
-      base = parseConfig(raw);
+      base = parseConfig(readRaw(configFile));
     } catch (error) {
       return {
         written: false,
@@ -113,7 +114,7 @@ export function updateConfigCoordinated(
         conflict: {
           kind: 'conflict',
           reason:
-            'The shared config changed while Desktop was editing it. Desktop left it untouched so the other process keeps its value.',
+            'The shared config changed while this IDE was editing it. The file was left untouched so the newer value survives.',
           conflictingKeys: conflicting,
         },
       };
@@ -131,7 +132,7 @@ export function updateConfigCoordinated(
         /* already closed */
       }
     }
-    fs.rmSync(lockFile, { force: true });
+    removeOwnedLock(lockFile, ownerToken);
   }
 }
 
@@ -145,9 +146,66 @@ export function detectConflicts(
   const conflicts: string[] = [];
   for (const [key, want] of Object.entries(expected)) {
     if (!(key in desired)) continue;
-    if (JSON.stringify(current[key]) !== JSON.stringify(want)) conflicts.push(key);
+    collectConflicts(current[key], want, desired[key], key, conflicts);
   }
   return conflicts;
+}
+
+function collectConflicts(
+  current: unknown,
+  expected: unknown,
+  desired: unknown,
+  key: string,
+  conflicts: string[],
+): void {
+  if (isPlainObject(expected) && isPlainObject(desired)) {
+    for (const [child, expectedValue] of Object.entries(expected)) {
+      if (child in desired) collectConflicts(isPlainObject(current) ? current[child] : undefined,
+        expectedValue, desired[child], `${key}.${child}`, conflicts);
+    }
+    return;
+  }
+  if (JSON.stringify(current) !== JSON.stringify(expected)) conflicts.push(key);
+}
+
+interface LockRecord { pid: number; token: string }
+
+function readLock(lockFile: string): LockRecord | undefined {
+  try {
+    const value: unknown = JSON.parse(fs.readFileSync(lockFile, 'utf8'));
+    if (typeof value !== 'object' || value === null) return undefined;
+    const record = value as Partial<LockRecord>;
+    return Number.isInteger(record.pid) && typeof record.token === 'string'
+      ? { pid: record.pid!, token: record.token } : undefined;
+  } catch { return undefined; }
+}
+
+function processIsAlive(pid: number): boolean {
+  try { process.kill(pid, 0); return true; }
+  catch (error) { return (error as NodeJS.ErrnoException).code === 'EPERM'; }
+}
+
+function reapDeadLock(lockFile: string): boolean {
+  const claim = `${lockFile}.reap`;
+  let claimHandle: number;
+  try { claimHandle = fs.openSync(claim, 'wx', 0o600); }
+  catch { return false; }
+  try {
+    const observed = readLock(lockFile);
+    if (!observed || processIsAlive(observed.pid)) return false;
+    const current = readLock(lockFile);
+    if (!current || current.token !== observed.token || current.pid !== observed.pid) return false;
+    fs.rmSync(lockFile, { force: true });
+    return true;
+  } finally {
+    fs.closeSync(claimHandle);
+    fs.rmSync(claim, { force: true });
+  }
+}
+
+function removeOwnedLock(lockFile: string, token: string): void {
+  const current = readLock(lockFile);
+  if (current?.pid === process.pid && current.token === token) fs.rmSync(lockFile, { force: true });
 }
 
 /** One-level-deep merge so a sibling's added keys survive; arrays are replaced. */

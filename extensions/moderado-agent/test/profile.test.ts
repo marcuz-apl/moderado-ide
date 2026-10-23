@@ -1,7 +1,10 @@
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, statSync as fsStatSync, rmSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, statSync as fsStatSync, rmSync, symlinkSync, utimesSync } from 'node:fs';
+import fs from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { spawn } from 'node:child_process';
+import { buildSync } from 'esbuild';
+import { join, resolve } from 'node:path';
+import { describe, expect, it, vi } from 'vitest';
 import { deepMerge, detectConflicts, updateConfigCoordinated } from '../src/coordination.js';
 import { credentialReference, MemoryCredentialStore, resolveCredential } from '../src/credentials.js';
 import { canonicalWorkspaceRoot, configPath, discoverSkills, mergeConfig, readConfig } from '../src/profile.js';
@@ -315,6 +318,87 @@ describe('config coordination', () => {
     expect(existsSync(`${file}.moderado-lock`)).toBe(false);
   });
 
+  it('does not reap an old lock while its recorded owner is alive', () => {
+    const root = tempDir('moderado-cfg-');
+    const file = join(root, '.moderado', 'config.json');
+    mkdirSync(join(root, '.moderado'), { recursive: true });
+    const lock = `${file}.moderado-lock`;
+    writeFileSync(lock, JSON.stringify({ pid: process.pid, token: 'active-owner' }));
+    utimesSync(lock, new Date(0), new Date(0));
+
+    const result = updateConfigCoordinated(file, { a: 1 }, { timeoutMs: 30 });
+    expect(result.written).toBe(false);
+    expect(existsSync(lock)).toBe(true);
+    expect(existsSync(file)).toBe(false);
+  });
+
+  it('fails closed when old lock ownership metadata is malformed', () => {
+    const root = tempDir('moderado-cfg-');
+    const file = join(root, '.moderado', 'config.json');
+    mkdirSync(join(root, '.moderado'), { recursive: true });
+    const lock = `${file}.moderado-lock`;
+    writeFileSync(lock, '{broken');
+    utimesSync(lock, new Date(0), new Date(0));
+
+    const result = updateConfigCoordinated(file, { a: 1 }, { timeoutMs: 30 });
+    expect(result.written).toBe(false);
+    expect(result.conflict?.reason).toContain('manual recovery');
+    expect(existsSync(lock)).toBe(true);
+    expect(existsSync(file)).toBe(false);
+  });
+
+  it('reaps an old lock only when the recorded owner is gone', () => {
+    const root = tempDir('moderado-cfg-');
+    const file = join(root, '.moderado', 'config.json');
+    mkdirSync(join(root, '.moderado'), { recursive: true });
+    const lock = `${file}.moderado-lock`;
+    writeFileSync(lock, JSON.stringify({ pid: 2_000_000_000, token: 'dead-owner' }));
+    utimesSync(lock, new Date(0), new Date(0));
+
+    const result = updateConfigCoordinated(file, { a: 1 }, { timeoutMs: 30 });
+    expect(result.written).toBe(true);
+    expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({ a: 1 });
+    expect(existsSync(lock)).toBe(false);
+    expect(existsSync(`${lock}.reap`)).toBe(false);
+  });
+
+  it('preserves independent writes from separate IDE processes', async () => {
+    const root = tempDir('moderado-cfg-process-');
+    const file = join(root, 'config.json');
+    const worker = join(root, 'writer.mjs');
+    const entry = resolve('src/coordination.ts');
+    buildSync({
+      stdin: { contents: `import { updateConfigCoordinated } from ${JSON.stringify(entry)};\nconst [file, id] = process.argv.slice(2);\nconst result = updateConfigCoordinated(file, { connections: { [id]: { id } } });\nif (!result.written) { console.error(result.reason ?? result.conflict?.reason); process.exitCode = 1; }`, resolveDir: process.cwd(), sourcefile: 'writer.mjs' },
+      bundle: true, platform: 'node', format: 'esm', outfile: worker,
+    });
+    const launch = (id: string): Promise<void> => new Promise((resolvePromise, reject) => {
+      const child = spawn(process.execPath, [worker, file, id], { stdio: 'ignore' });
+      child.once('error', reject);
+      child.once('exit', code => code === 0 ? resolvePromise() : reject(new Error(`writer ${id} exited ${code}`)));
+    });
+
+    await Promise.all([launch('first'), launch('second')]);
+    expect(JSON.parse(readFileSync(file, 'utf8')).connections).toEqual({
+      first: { id: 'first' }, second: { id: 'second' },
+    });
+  });
+
+  it('refuses to overwrite a config when reading it fails for a reason other than missing', () => {
+    const root = tempDir('moderado-cfg-');
+    const file = join(root, '.moderado', 'config.json');
+    mkdirSync(join(root, '.moderado'), { recursive: true });
+    writeFileSync(file, JSON.stringify({ keep: 'existing' }));
+    vi.spyOn(fs, 'readFileSync').mockImplementationOnce(() => {
+      const error = new Error('permission denied') as NodeJS.ErrnoException;
+      error.code = 'EACCES';
+      throw error;
+    });
+
+    const result = updateConfigCoordinated(file, { added: true });
+    expect(result.written).toBe(false);
+    expect(result.reason).toContain('permission denied');
+  });
+
   it('refuses to write over a corrupt config', () => {
     const root = tempDir('moderado-cfg-');
     const file = join(root, '.moderado', 'config.json');
@@ -362,6 +446,14 @@ describe('config coordination', () => {
   it('detectConflicts reports nothing when the value is unchanged', () => {
     expect(detectConflicts({ a: 1 }, { a: 2 }, { a: 1 })).toEqual([]);
     expect(detectConflicts({ a: 1 }, { a: 2 }, { a: 9 })).toEqual(['a']);
+  });
+
+  it('checks only the targeted connection when detecting nested conflicts', () => {
+    const expected = { connections: { ours: { id: 'ours', defaultModel: 'old' } } };
+    const desired = { connections: { ours: { id: 'ours', defaultModel: 'new' } } };
+    const current = { connections: { ours: expected.connections.ours, theirs: { id: 'theirs' } } };
+    expect(detectConflicts(current, desired, expected)).toEqual([]);
+    expect(detectConflicts({ ...current, connections: { ...current.connections, ours: { id: 'ours', defaultModel: 'other' } } }, desired, expected)).toEqual(['connections.ours.defaultModel']);
   });
 });
 

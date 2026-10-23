@@ -181,9 +181,10 @@ Not verified or not available:
 - **Native Linux installation.** The DEB metadata was inspected under WSL, but
   installation and runtime behavior were not verified on native Linux.
 - **Chat view only.** There is no diff renderer; previews appear as text.
-- **Profile coordination is one-sided.** IDE writes `config.json` under a
-  lock and detects conflicting CLI changes, but the CLI does not take that lock,
-  so a simultaneous CLI write can still be lost.
+- **Profile coordination is IDE-side.** Concurrent IDE writers use a shared
+  lock, merge against the latest file, and detect conflicts on the values they
+  change. Other applications must use the same lock protocol; direct external
+  writes can still race with IDE writes.
 
 ## Where data lives
 

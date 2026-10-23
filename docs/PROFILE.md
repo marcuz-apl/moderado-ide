@@ -10,13 +10,13 @@ home directory, normally `%USERPROFILE%`; it is not the literal `$USER` path.
 Windows and Linux normally have different home directories and path identities,
 so cross-OS sharing remains outside the supported profile contract.
 
-| Location | Current CLI meaning | IDE rule |
+| Location | Shared profile data | IDE rule |
 | --- | --- | --- |
-| `config.json` | Provider connections, model and cost policy, MCP servers, enabled skills | Read existing values and preserve unknown fields. IDE writes use an IDE-side lock and detect conflicting CLI changes, but CLI does not take that lock, so simultaneous writes are not fully coordinated. |
+| `config.json` | Provider connections, model and cost policy, MCP servers, enabled skills | Read existing values and preserve unknown fields. IDE writers coordinate through a shared lock, re-read before merge, and detect conflicts only on values being changed. Other applications must use the same protocol for a cross-application write guarantee. |
 | `sessions/<workspace-hash>/<id>.json` | Version 1 workspace session records | Canonicalize the workspace root before SHA-256 hashing, as the pinned CLI callers do; validate schema and preserve IDs/history. |
 | `skills/<name>/SKILL.md` | User-installed skills | Discover enabled files with symlink checks, 256 KiB per file, 64 entries, and a 1 MiB aggregate cap; skill bodies remain untrusted advisory data. |
-| `logs/` | CLI diagnostic output | Use a distinct IDE log file and redact secrets. |
-| `desktop/` | Unused by the CLI | Reserved for IDE-specific Moderado state that does not belong in shared config. |
+| `logs/` | Agent diagnostic output | Use a distinct IDE log file and redact secrets. |
+| `desktop/` | IDE-specific state | Reserved for IDE-specific Moderado state that does not belong in shared config. |
 
 The Gateway connection uses connection ID `moderado-cloud` with
 `kind: 'openai-compatible'` and model identity `defaultModel: 'auto'`
@@ -78,12 +78,17 @@ platform profile gates.
 
 ## Writes and migrations
 
-The CLI currently writes `config.json` with a direct read/merge/write. IDE
-writes take an IDE-side lock, re-read the file under lock, and detect changed
-IDE-owned values, but CLI does not take the lock. A CLI write can still race
-with an IDE write, so simultaneous cross-application edits are not guaranteed
-safe. A common writer protocol requires a separate CLI change; this IDE
-repository may not patch the CLI sibling in place.
+IDE writes take an IDE-side lock, re-read the file under lock, and compare only
+the fields each operation intends to change. Lock records include process
+ownership; age alone never authorizes lock removal. A stale lock is reaped only
+when its owner process is gone and an exclusive recovery claim is held. If lock
+ownership is malformed or cannot be verified, IDE fails closed and reports
+manual recovery guidance.
+
+This protocol guarantees coordination among IDE processes that use the
+coordinated writer. Any external application that writes `config.json` without
+using this lock can still race; cross-application safety requires those writers
+to adopt the same protocol. This IDE repository does not modify the CLI.
 
 Session saves use a temporary file and rename, but that only protects against
 a partial file. Two active processes modifying the same session ID can still
@@ -110,7 +115,7 @@ and host evidence do not establish verification of this source update.
 The IDE-owned provider layer adapts CLI
 `v0.4.10` cost, AUTO, and routing fixtures/behavior without using CLI provider
 code at runtime; it does not claim simultaneous config-write safety beyond
-the coordinated-writer guarantees above.
+the IDE coordinated-writer guarantees above.
 IDE's Auto-Approve defaults enable reads, file edits, web content, and the
 Use MCP servers category; command execution remains approval-gated. The MCP
 category controls per-call approvals only because no MCP tools are registered.
