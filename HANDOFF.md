@@ -1,9 +1,9 @@
 # Project Handoff
 
-Updated: 2026-10-23 19:45 UTC
+Updated: 2026-10-23 19:47 UTC
 Branch: `master`
-Commit: `a3fa91c` (pushed to `origin/master`); provider-save fix is locally verified and awaiting commit/push
-Status: Prevented Done from aborting provider saves and restored the saved provider/model after closing unsaved API Config edits; next produce an unpublished macOS test artifact in GitHub Actions
+Commit: `e65a714` (pushed to `origin/master`)
+Status: Prevented Done from aborting provider saves and restored saved provider/model after closing unsaved API Config edits; macOS test artifacts are building in GitHub Actions run #70
 
 ## Summary
 
@@ -28,7 +28,7 @@ Addressed API Config feedback in the IDE extension. Settings hides the duplicate
 
 ## Working tree
 
-- Source edits are in `extensions/moderado-agent/src/extension.ts`, `src/settings-view.ts`, and `test/settings-host.test.ts`; `HANDOFF.md` records this state. An ignored partial local `build/` checkout remains from the failed local build attempt; the user chose GitHub Actions to avoid more local build downloads.
+- Fix is committed at `e65a714`; this handoff has a current local update for Actions run #70. An ignored partial local `build/` checkout remains from the failed local build attempt; the user chose GitHub Actions to avoid more local build downloads.
 
 ## Checks
 
@@ -36,10 +36,11 @@ Addressed API Config feedback in the IDE extension. Settings hides the duplicate
 - `npm test -- --run test/settings-host.test.ts -t 'shows the known list when switching back'` — PASS; covers discovery requests for both Ollama and LM Studio, including their local `/models` URLs.
 - `npm test -- --run test/provider-discovery.test.ts test/model-discovery.test.ts test/settings-host.test.ts` — PASS; 102 passed.
 - `npm test -- --run test/settings-host.test.ts test/settings-view.test.ts test/chat-view.test.ts` — PASS; 186 passed, including the two new save/close regressions.
+- `npm test` — PARTIAL: 577 passed, 6 skipped, 5 failed. The failures are the same `gateway-login.test.ts` loopback-listener restrictions seen previously; 25 test files passed, 1 failed.
 - `npm run typecheck` — PASS.
 - `npm run compile` — PASS; extension bundle produced.
-- `npm test` — PARTIAL: 575 passed, 6 skipped, 5 failed. All 5 failures are `gateway-login.test.ts` loopback callback tests that could not open listeners in this environment. 25 test files passed and 1 failed.
 - GitHub Actions run [#69](https://github.com/marcuz-apl/moderado-ide/actions/runs/39999221002) on `a3fa91c` — macOS arm64 and Intel x64 build, packaging, and artifact upload PASS; Linux and Windows SKIPPED; release publish SKIPPED.
+- GitHub Actions run [#70](https://github.com/marcuz-apl/moderado-ide/actions/runs/40013945171) on `e65a714` — macOS arm64 and Intel x64 build jobs IN PROGRESS; Linux and Windows SKIPPED; the run was dispatched with `platform=macos`, so it is artifact-only and will not publish.
 - `moderado-ide-macos-arm64` — 488,294,591 bytes, expires 2026-11-22, artifact archive SHA-256 `86c75868275718a5d699585d09c6f7b45b07c13e51f6a8002d048a2537e2122b`.
 - `moderado-ide-macos-x64` — 498,830,593 bytes, expires 2026-11-22, artifact archive SHA-256 `ca645796be35a0ac0b1195fdbbed51d6734aaba86d7019eabbcd7c63bc01fb87`.
 - `curl -sS -D - --max-time 3 http://127.0.0.1:11434/v1/models` — FAIL as expected for current state: connection refused; no local Ollama server is accepting requests.
@@ -61,7 +62,7 @@ Addressed API Config feedback in the IDE extension. Settings hides the duplicate
 
 ## Next action
 
-1. Commit and push the verified fix, then dispatch the macOS-only Actions build (artifact only; no publish). Owner tests Moderado save and confirms the chat footer/provider after Done. Publish only after owner acceptance and explicit release authorization. Plan a separate reviewed CLI change if cross-app write coordination is required.
+1. Wait for Actions run #70 to finish, then owner downloads the macOS arm64 artifact and verifies Moderado Save completes and the chat footer shows the saved provider/model. Publish only after owner acceptance and explicit release authorization. Plan a separate reviewed CLI change if cross-app write coordination is required.
 
 ## Resume notes
 
