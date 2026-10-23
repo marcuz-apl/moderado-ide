@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, statSync as fsStatSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, statSync as fsStatSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -407,12 +407,12 @@ describe('session conflict handling', () => {
  * the only way to prove the two editions agree; asserting against a hand-written
  * copy of the schema would only prove Desktop agrees with itself.
  *
- * The CLI is loaded from `vendor/moderado` plus the sibling CLI checkout, and the
- * test never writes to the real `~/.moderado`.
+ * The test never writes to the real `~/.moderado`.
  */
-const cliRoot = process.env.MODERADO_CLI_ROOT ?? 'D:\\projects\\moderado';
+const cliRoot = process.env.MODERADO_CLI_ROOT;
 
 async function loadCliSessions(): Promise<typeof import('d:/../moderado/apps/cli/dist/sessions.js')> {
+  if (!cliRoot) throw new Error('MODERADO_CLI_ROOT is required for pinned CLI interoperability tests.');
   const path = await import('node:path');
   const file = path.join(cliRoot, 'apps', 'cli', 'dist', 'sessions.js');
   const mod = (await import(/* @vite-ignore */ `file:///${file.replace(/\\/g, '/')}`)) as {
@@ -426,13 +426,55 @@ async function loadCliSessions(): Promise<typeof import('d:/../moderado/apps/cli
   return mod as never;
 }
 
-const cliAvailable = existsSync(join(cliRoot, 'apps', 'cli', 'dist', 'sessions.js'));
+async function loadCliConfig(): Promise<{
+  loadConfig(customHome?: string): Record<string, unknown>;
+  saveConfig(config: Record<string, unknown>, customHome?: string): void;
+}> {
+  if (!cliRoot) throw new Error('MODERADO_CLI_ROOT is required for pinned CLI interoperability tests.');
+  const file = join(cliRoot, 'apps', 'cli', 'dist', 'config.js');
+  return await import(/* @vite-ignore */ `file:///${file.replace(/\\/g, '/')}`) as never;
+}
+
+const cliAvailable = Boolean(cliRoot
+  && existsSync(join(cliRoot, 'apps', 'cli', 'dist', 'sessions.js'))
+  && existsSync(join(cliRoot, 'apps', 'cli', 'dist', 'config.js')));
 
 describe.skipIf(!cliAvailable)('round-trip with the pinned CLI', () => {
+  it('reads CLI profile settings and preserves them when the IDE merges a setting', async () => {
+    const cli = await loadCliConfig();
+    const root = tempDir('moderado-home-');
+    cli.saveConfig({
+      defaultModel: 'pinned/model',
+      enabledSkills: ['review'],
+      mcpServers: { docs: { command: 'node', args: ['server.js'], enabled: true } },
+      connections: { provider: { id: 'provider', credentialReference: 'moderado/provider/provider' } },
+    }, root);
+
+    const loaded = readConfig(root);
+    expect(loaded.kind).toBe('ok');
+    if (loaded.kind !== 'ok') return;
+    expect(loaded.config.enabledSkills).toEqual(['review']);
+    expect(loaded.config.mcpServers).toEqual({ docs: { command: 'node', args: ['server.js'], enabled: true } });
+    expect((loaded.config.connections as Record<string, Record<string, unknown>>).provider.credentialReference).toBe('moderado/provider/provider');
+    expect(mergeConfig({ preferredLanguage: 'English' }, root).written).toBe(true);
+    expect(cli.loadConfig(root).defaultModel).toBe('pinned/model');
+  });
+
+  it('documents that the CLI typed loader does not preserve unknown config keys on save', async () => {
+    const cli = await loadCliConfig();
+    const root = tempDir('moderado-home-');
+    writeConfig(root, JSON.stringify({ futureIdeField: { keep: true }, defaultModel: 'before' }));
+    const loaded = cli.loadConfig(root);
+    cli.saveConfig({ ...loaded, defaultModel: 'after' }, root);
+    const raw = JSON.parse(readFileSync(configPath(root), 'utf8')) as Record<string, unknown>;
+    expect(raw.defaultModel).toBe('after');
+    expect(raw.futureIdeField).toBeUndefined();
+  });
+
   it('reads a session the CLI wrote', async () => {
     const cli = await loadCliSessions();
     const home = tempDir('moderado-home-');
-    const workspace = tempDir('moderado-ws-');
+    const workspace = canonicalWorkspaceRoot(tempDir('moderado-ws-'));
 
     const cliStore = new cli.SessionStore(home);
     const record = {
@@ -461,7 +503,7 @@ describe.skipIf(!cliAvailable)('round-trip with the pinned CLI', () => {
   it('writes a session the CLI can read back', async () => {
     const cli = await loadCliSessions();
     const home = tempDir('moderado-home-');
-    const workspace = tempDir('moderado-ws-');
+    const workspace = canonicalWorkspaceRoot(tempDir('moderado-ws-'));
 
     const desktop = new SessionStore(home);
     const session = createSession(workspace, { modelId: 'mock/free-tool-model' });
@@ -476,7 +518,7 @@ describe.skipIf(!cliAvailable)('round-trip with the pinned CLI', () => {
   it('resolves the same session directory for the same workspace', async () => {
     const cli = await loadCliSessions();
     const home = tempDir('moderado-home-');
-    const workspace = tempDir('moderado-ws-');
+    const workspace = canonicalWorkspaceRoot(tempDir('moderado-ws-'));
 
     const cliStore = new cli.SessionStore(home) as unknown as {
       getDirectory(workspaceRoot: string): string;
@@ -521,6 +563,54 @@ describe('skills', () => {
 
   it('returns nothing when no skills exist', () => {
     expect(discoverSkills(tempDir('moderado-home-')).skills).toEqual([]);
+  });
+
+  it('rejects symlinked skill folders and skill files', () => {
+    const root = tempDir('moderado-home-');
+    const skillsRoot = join(root, '.moderado', 'skills');
+    const outside = join(root, 'outside');
+    mkdirSync(skillsRoot, { recursive: true });
+    mkdirSync(outside);
+    writeFileSync(join(outside, 'SKILL.md'), 'outside folder');
+    symlinkSync(outside, join(skillsRoot, 'linked-folder'), 'dir');
+    mkdirSync(join(skillsRoot, 'linked-file'), { recursive: true });
+    symlinkSync(join(outside, 'SKILL.md'), join(skillsRoot, 'linked-file', 'SKILL.md'));
+
+    const result = discoverSkills(root);
+    expect(result.skills).toEqual([]);
+    expect(result.invalid).toHaveLength(2);
+  });
+
+  it('rejects names outside the pinned loader format', () => {
+    const root = tempDir('moderado-home-');
+    mkdirSync(join(root, '.moderado', 'skills', 'Bad Name'), { recursive: true });
+    writeFileSync(join(root, '.moderado', 'skills', 'Bad Name', 'SKILL.md'), 'not exposed');
+    const result = discoverSkills(root);
+    expect(result.skills).toEqual([]);
+    expect(result.invalid).toHaveLength(1);
+  });
+
+  it('caps discovery at 64 skills', () => {
+    const root = tempDir('moderado-home-');
+    for (let i = 0; i < 65; i++) {
+      const name = `skill-${String(i).padStart(2, '0')}`;
+      mkdirSync(join(root, '.moderado', 'skills', name), { recursive: true });
+      writeFileSync(join(root, '.moderado', 'skills', name, 'SKILL.md'), name);
+    }
+    const result = discoverSkills(root);
+    expect(result.skills).toHaveLength(64);
+    expect(result.invalid).toHaveLength(1);
+  });
+
+  it('caps aggregate skill content at 1 MiB', () => {
+    const root = tempDir('moderado-home-');
+    for (const name of ['one', 'two', 'three', 'four', 'five']) {
+      mkdirSync(join(root, '.moderado', 'skills', name), { recursive: true });
+      writeFileSync(join(root, '.moderado', 'skills', name, 'SKILL.md'), 'x'.repeat(220 * 1024));
+    }
+    const result = discoverSkills(root);
+    expect(result.skills.reduce((sum, skill) => sum + Buffer.byteLength(skill.body), 0)).toBeLessThanOrEqual(1024 * 1024);
+    expect(result.invalid).toHaveLength(1);
   });
 });
 

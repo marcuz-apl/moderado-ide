@@ -17,7 +17,7 @@ import {
   ModelInventoryEntry,
 } from '@moderado/contracts';
 import { ApprovalCoordinator, RawDecision } from './approval.js';
-import { ConfigState, canonicalWorkspaceRoot, configPath, readConfig } from './profile.js';
+import { ConfigState, canonicalWorkspaceRoot, configPath, discoverSkills, readConfig } from './profile.js';
 import { CredentialStore, MemoryCredentialStore, resolveCredential } from './credentials.js';
 import { SessionStore, StoredSession, conversationOf, createSession, saveSessionChecked } from './sessions.js';
 import { DEFAULT_CONTEXT_BUDGET_TOKENS, compactConversation } from './context-budget.js';
@@ -113,6 +113,7 @@ function envVarFor(connectionId: string): string {
 }
 
 const ModelIdSchema = z.string().min(1).refine(value => value.trim().length > 0 && !/[\x00-\x1f\x7f]/.test(value));
+const EnabledSkillsSchema = z.array(z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/)).max(64);
 const ConnectionSchema = z.object({
   id: z.string().min(1).refine(value => /^[a-zA-Z0-9_-]+$/.test(value)),
   displayName: z.string().optional(),
@@ -409,6 +410,11 @@ export class AgentHost implements IApprovalHandler {
       // connection exists it falls back to the fake adapter and says so, rather
       // than silently pretending a real run happened.
       const state = readConfig(this.options.moderadoHome);
+      const enabledSkills = state.kind === 'ok' ? EnabledSkillsSchema.safeParse(state.config.enabledSkills) : undefined;
+      const enabledSkillNames = new Set(enabledSkills?.success ? enabledSkills.data : []);
+      const skills = enabledSkillNames.size
+        ? discoverSkills(this.options.moderadoHome).skills.filter(skill => enabledSkillNames.has(skill.name))
+        : [];
       const resolution = await resolveProvider(
         state,
         this.credentials,
@@ -481,6 +487,7 @@ export class AgentHost implements IApprovalHandler {
           preferences ? `Respond in ${preferences.preferredLanguage}.` : undefined,
           'For simple conversational questions, answer directly and briefly. Do not volunteer the active model or session details unless asked.',
         ].filter(Boolean).join('\n'),
+        skills,
         approvalHandler: this,
         router: this.router,
         policy,

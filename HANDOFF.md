@@ -1,9 +1,9 @@
 # Project Handoff
 
-Updated: 2026-10-23 08:56 UTC
+Updated: 2026-10-23 09:28 UTC
 Branch: `master`
-Commit: closeout changes recorded in the latest IDE Git commit; consult `git log` for its identifier.
-Status: in progress — approval safety gaps closed in the IDE host; broader gap remediation remains open
+Commit: `0082708` (`v0.1.43+2610232 fix: harden human approval previews and path review`)
+Status: in progress — bounded skills integration is implemented; pinned profile fixtures pass; MCP and real-editor gates remain open
 
 ## Read this first
 
@@ -23,8 +23,11 @@ persistence/resume, fresh sessions, recent history, rename/delete, prompt
 history, search, Markdown export, branching, and context compaction. The
 prompt-history multiline navigation defect is fixed and covered by tests
 against the emitted webview script. Automated session/package checks pass.
-Real editor restart and CLI/IDE profile round-trip acceptance checks remain
-unverified; see `PRD.md` and `docs/PROFILE.md`.
+Skills are injected through the pinned core's read-only `load_skill` tool only
+when listed in shared `enabledSkills`; discovery rejects symlinks and enforces
+per-file, count, and aggregate content limits. Pinned-source profile tests now
+pass; clean dependency reproduction and real editor restart remain open. See
+`PRD.md` and `docs/PROFILE.md`.
 The owner-approved fail-closed approval remediation design is at
 `docs/superpowers/specs/2026-10-23-approval-safety-design.md`. The fail-closed
 approval work is implemented: capped previews are rejected for human-gated
@@ -55,10 +58,21 @@ headers. See the implementation plan at
 
 ## In progress
 
-- Continue the user-approved gap remediation with profile/editor acceptance,
-  MCP server trust and lifecycle, skills integration, and release readiness.
-- The current stage does not verify real editor restart or CLI/IDE profile
-  round trips. Do not treat those gates as closed.
+- The owner-approved design and plans are saved in `docs/superpowers/specs/2026-10-23-profile-mcp-skills-acceptance-design.md` and `docs/superpowers/plans/`.
+- Skills integration is implemented in IDE-owned profile and host code. Only
+  validated names in shared `enabledSkills` are provided through core's
+  read-only loader; skill contents remain advisory and bounded.
+- MCP discovery/trust is still open. The current pinned tools transport cannot
+  accept a host-supplied sanitized child environment, including removal of
+  dynamically named provider keys. Do not launch MCP servers until a separate
+  reviewed shared-tools API is pinned and tested. Do not edit the sibling CLI
+  or generated vendor packages as a workaround.
+- The adjacent CLI checkout is v0.4.34. Pinned interop ran against a temporary
+  checkout at `a3479fffc6e00ca8796893920930a258759243c5`; its build used the
+  adjacent checkout's installed dependency tree because offline npm install
+  lacked a cached package. Re-run with clean pinned dependencies for stronger
+  evidence. No `code`, `codium`, or Moderado editor application was found, so
+  real editor restart acceptance remains open.
 - The first sandboxed dependency audit could not reach the registry; an
   authorized rerun completed successfully with zero reported vulnerabilities.
 
@@ -73,11 +87,25 @@ headers. See the implementation plan at
 - `npm audit` first failed because registry DNS was unavailable; rerun with
   network access passed (0 vulnerabilities).
 - `git diff --check` — passed.
+- `MODERADO_CLI_ROOT=/private/tmp/moderado-cli-pinned npm run test:profile-interop`
+  from `extensions/moderado-agent` — passed, 52 tests against the pinned CLI
+  commit. The build dependency caveat above applies.
+- Focused host/profile run with the pinned CLI root — passed, 118 tests.
+- Full `npm test` — passed, 26 files; 568 passed, 6 skipped. This run had
+  loopback access for the existing Gateway callback tests.
+- `npm run typecheck` — passed.
+- `npm run compile` — passed; 613 KiB bundle.
+- `git diff --check` — passed after the documentation and plan updates.
+- Real editor close/reopen — unavailable; this host has no editor binary or
+  app bundle. This remains an acceptance gate, not a pass.
+- `npm ci --offline` in the pinned CLI temporary checkout — unavailable because
+  `yargs-parser@20.2.9` was not cached; no sibling files were modified.
 
 ## Working tree
 
-- Approval-safety design/plan, handoff, extension source/tests, and extension
-  manifest changes are uncommitted in the current checkout. No release or
+- The approved design/plans, skills changes, interoperability runner, docs, and
+  HANDOFF updates are uncommitted. `.git` is read-only in this environment, so
+  an isolated implementation worktree could not be created. No release or
   publish action was performed.
 
 ## Checks
@@ -104,20 +132,26 @@ headers. See the implementation plan at
   sources are dependencies for the boundaries recorded in `sources.lock.json`;
   they do not define the IDE's product scope. IDE-owned provider code remains
   IDE-owned. See `AGENTS.md`, `PRD.md`, and `docs/UPSTREAM.md`.
-- The PRD records MCP discovery/trust as unimplemented and discovered skills
-  as not yet injected into agent runs. Do not describe either as delivered.
+- The PRD records MCP discovery/trust as unimplemented; the Use MCP servers
+  category affects approval classification only because no MCP tools are
+  registered. Skills are injected only via enabled names and read-only
+  `load_skill`.
 - Shared profile writes are not fully coordinated with concurrent CLI writes;
   see `docs/PROFILE.md` before changing profile behavior.
 
 ## Blockers
 
-- Real editor restart and CLI/IDE profile interoperability evidence remain
-  outstanding; see `PRD.md` and `docs/PROFILE.md` for the product gates.
+- Clean dependency reproduction for the pinned CLI and real editor restart
+  evidence remain outstanding; MCP also needs the separately reviewed safe
+  environment injection API before any server can launch.
 
 ## Next action
 
-1. Continue with profile/editor acceptance checks; then address the remaining
-   MCP trust, skills integration, and release-readiness gaps.
+1. Obtain a reviewed shared-tools environment-injection API and advance the
+   IDE pin only after review; then implement explicit MCP trust and test with a
+   fake server. Rebuild the pinned CLI with its lockfile dependencies and run
+   profile interop, then repeat close/reopen using a real packaged editor and
+   isolated state directories.
 
 ## Resume notes
 

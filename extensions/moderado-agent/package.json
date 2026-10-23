@@ -140,6 +140,7 @@
     "compile": "node ./scripts/bundle.mjs",
     "watch": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "test:profile-interop": "node ./scripts/test-profile-interop.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

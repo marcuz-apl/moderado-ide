@@ -60,7 +60,7 @@ agent in a complete editor. The first complete flow is:
 | F3 | Preserve model inventory, free-first AUTO routing, model pinning, and paid/unknown-cost opt-in in the IDE-owned provider layer with offline parity to CLI `v0.4.10`. | Shared offline fixtures yield equivalent eligibility and routing outcomes in CLI and IDE for the IDE-owned provider revision. |
 | F4 | Render structured agent events, tool previews, usage, cancellation, and actionable errors; show current-task input/output/total token counts and output rate in the Moderado header. | A real editor-host test observes ordered events, can cancel a running turn, and verifies provider-reported versus estimated token usage display. |
 | F5 | Auto-Approve starts enabled for reads, file edits, web content, and MCP calls; command execution remains approval-gated. Users can turn categories off to require human approval. Plan mode blocks mutations, and requests needing a human decision fail closed on timeout, cancellation, malformed or mismatched decisions, or non-interactive execution. | Tests verify the startup defaults and that enabled categories are approved by the host. Gated writes show every affected path and a complete proposed replacement/patch; commands show the command and working directory. A missing complete preview denies the action. |
-| F6 | Reuse the same local Moderado configuration, skills, and session schema on the same OS. | IDE reads a CLI-created profile/session and the CLI reads a IDE-created session after restart. |
+| F6 | Reuse the same local Moderado configuration, bounded enabled skills, and session schema on the same OS. | Pinned CLI interop passes for isolated profile/session fixtures; packaged IDE close/reopen still needs a real editor run. |
 | F7 | Resolve Windows provider credentials using the existing `moderado/provider/<id>` Credential Manager references. | A CLI-stored test credential works in IDE without copying the secret into `config.json` or the UI. |
 | F8 | Discover and run explicitly configured MCP tools only after the user trusts that server. MCP calls are auto-approved by default; users can turn off Use MCP servers to require per-call approval. | A fake MCP server cannot launch before explicit server trust; when per-call approval is enabled, it cannot bypass approval. Provider credentials are removed from its inherited environment. The UI explains that an MCP server is an external process with its own filesystem privileges. |
 | F9 | Add project-file context references with @ and explicitly selected text files/images with + in the composer, with removable attachment chips. | @ rejects paths outside the canonical project jail; + accepts human-selected external files within bounded format/size limits. Fake-provider tests verify image content parts and IDE-only snapshot restoration while shared sessions remain text-only. |
@@ -73,9 +73,14 @@ agent in a complete editor. The first complete flow is:
 | F16 | Moderado replies render as Markdown: headings, paragraphs, lists, fenced code, block quotes, rules, links, and inline emphasis are formatted. The user's own input, tool output, and errors stay plain text. Reply text is escaped, so model output cannot inject markup, and only `http`, `https`, and `mailto` targets are linked. | Offline webview tests assert the rendered structure of a reply, that HTML in a reply is shown as text, and that an unsafe link scheme is not linked. |
 
 **Known gaps in the current build:** MCP server discovery and trust (F8) are
-not implemented; the Use MCP servers toggle is present but inert. Skill files
-are discovered and validated (F6) but are not yet injected into agent runs.
-Those rows describe the intended product bar, not delivered behavior.
+not implemented; the Use MCP servers toggle only affects per-call approval
+classification and no MCP tools are currently registered. Safe launch remains
+blocked until the pinned shared-tools adapter accepts a host-supplied sanitized
+child environment. Skill files are bounded and validated, and only names in
+the shared `enabledSkills` config are exposed to the core's read-only
+`load_skill` tool. Profile interoperability has passed against the pinned
+source revision, with dependency reproduction and real editor restart evidence
+still open; see `docs/PROFILE.md`.
 
 Auto-Approve defaults to Read files, Edit files, Fetch web content, and Use MCP
 servers. Execute commands stays off by default. These host-side defaults are

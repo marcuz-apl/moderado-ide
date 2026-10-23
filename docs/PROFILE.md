@@ -13,8 +13,8 @@ so cross-OS sharing remains outside the supported profile contract.
 | Location | Current CLI meaning | IDE rule |
 | --- | --- | --- |
 | `config.json` | Provider connections, model and cost policy, MCP servers, enabled skills | Read existing values and preserve unknown fields. IDE writes use an IDE-side lock and detect conflicting CLI changes, but CLI does not take that lock, so simultaneous writes are not fully coordinated. |
-| `sessions/<workspace-hash>/<id>.json` | Version 1 workspace session records | Use the same canonical workspace path before SHA-256 hashing; validate schema and preserve IDs/history. |
-| `skills/<name>/SKILL.md` | User-installed skills | Discover and validate using the pinned Moderado behavior; do not execute instructions as authority. |
+| `sessions/<workspace-hash>/<id>.json` | Version 1 workspace session records | Canonicalize the workspace root before SHA-256 hashing, as the pinned CLI callers do; validate schema and preserve IDs/history. |
+| `skills/<name>/SKILL.md` | User-installed skills | Discover enabled files with symlink checks, 256 KiB per file, 64 entries, and a 1 MiB aggregate cap; skill bodies remain untrusted advisory data. |
 | `logs/` | CLI diagnostic output | Use a distinct IDE log file and redact secrets. |
 | `desktop/` | Unused by the CLI | Reserved for IDE-specific Moderado state that does not belong in shared config. |
 
@@ -112,12 +112,15 @@ The IDE-owned provider layer adapts CLI
 code at runtime; it does not claim simultaneous config-write safety beyond
 the coordinated-writer guarantees above.
 IDE's Auto-Approve defaults enable reads, file edits, web content, and the
-inert Use MCP servers category; command execution remains approval-gated.
+Use MCP servers category; command execution remains approval-gated. The MCP
+category controls per-call approvals only because no MCP tools are registered.
 Users can disable any category to require a human decision. Plan mode still
-blocks mutations. MCP server discovery and trust are not implemented yet;
-when they are added, server trust must be required before launch regardless
-of the per-call setting. These IDE defaults may differ from the current CLI
-handler behavior and must not be represented as CLI parity.
+blocks mutations. MCP server discovery and trust are not implemented yet. The
+current pinned MCP transport cannot accept the IDE's sanitized child
+environment, so no server is launched; trust must still precede discovery and
+launch when a reviewed transport with explicit environment injection is
+available. These IDE defaults may differ from the current CLI handler behavior
+and must not be represented as CLI parity.
 
 ## Verification fixtures
 
@@ -126,3 +129,20 @@ CLI-created profile to IDE, IDE-created session to CLI, missing or
 corrupt records, unknown config fields, credential references, differing
 workspace path spellings, and simultaneous read/write attempts. No automated
 test uses the developer's real `~/.moderado`.
+
+Pinned CLI interoperability is run explicitly with
+`MODERADO_CLI_ROOT=/path/to/pinned/checkout npm run test:profile-interop` from
+`extensions/moderado-agent`. The runner verifies the checkout HEAD against
+`sources.lock.json` and requires built CLI config/session modules. The current
+local run used commit `a3479fffc6e00ca8796893920930a258759243c5` and passed all
+52 profile tests. Its build used the adjacent checkout's installed dependency
+tree because offline installation could not find a cached `yargs-parser`
+archive; clean dependency reproduction remains open. The pinned CLI's config
+loader returns known fields and its save path drops unknown raw keys, so IDE
+merges must preserve them and avoid treating CLI round trips as unknown-field
+preservation evidence.
+
+The real editor close/reopen acceptance gate remains open: this host has no
+`code`, `codium`, or Moderado editor application available. Unit tests do not
+substitute for restarting the packaged IDE with isolated user-data and
+extensions directories.

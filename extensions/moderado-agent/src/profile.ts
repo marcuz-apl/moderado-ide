@@ -144,6 +144,14 @@ export interface DiscoveredSkill {
 
 /** Guard against a skill file that would flood the prompt. */
 const MAX_SKILL_BYTES = 256 * 1024;
+const MAX_SKILL_COUNT = 64;
+const MAX_TOTAL_SKILL_BYTES = 1024 * 1024;
+const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+
+function staysInside(root: string, target: string): boolean {
+  const relative = path.relative(root, target);
+  return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
+}
 
 /**
  * Discovers user-installed skills from the shared `skills/` tree.
@@ -158,21 +166,69 @@ export function discoverSkills(customHome?: string): { skills: DiscoveredSkill[]
   const invalid: string[] = [];
   if (!fs.existsSync(dir)) return { skills, invalid };
 
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+  let root: string;
+  try {
+    if (!fs.lstatSync(dir).isDirectory() || fs.lstatSync(dir).isSymbolicLink()) {
+      return { skills, invalid: ['skills: directory is not a regular directory'] };
+    }
+    root = fs.realpathSync.native(dir);
+  } catch {
+    return { skills, invalid: ['skills: directory could not be read'] };
+  }
+
+  let totalBytes = 0;
+  let entryCount = 0;
+  const entries = fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name));
+  for (const entry of entries) {
+    if (entry.isSymbolicLink()) {
+      entryCount++;
+      if (entryCount > MAX_SKILL_COUNT) {
+        invalid.push(`skills: entry count exceeds ${MAX_SKILL_COUNT}`);
+        break;
+      }
+      invalid.push(`${entry.name}: skill folder must not be a symlink`);
+      continue;
+    }
     if (!entry.isDirectory()) continue;
+    entryCount++;
+    if (entryCount > MAX_SKILL_COUNT) {
+      invalid.push(`skills: entry count exceeds ${MAX_SKILL_COUNT}`);
+      break;
+    }
+    if (!SKILL_NAME_PATTERN.test(entry.name)) {
+      invalid.push(`${entry.name}: invalid skill name`);
+      continue;
+    }
     const file = path.join(dir, entry.name, 'SKILL.md');
     try {
-      const stat = fs.statSync(file);
+      const folderStat = fs.lstatSync(path.join(dir, entry.name));
+      const fileStat = fs.lstatSync(file);
+      if (!folderStat.isDirectory() || folderStat.isSymbolicLink() || !fileStat.isFile() || fileStat.isSymbolicLink()) {
+        invalid.push(`${entry.name}: skill path must not contain symlinks`);
+        continue;
+      }
+      const folderReal = fs.realpathSync.native(path.join(dir, entry.name));
+      const fileReal = fs.realpathSync.native(file);
+      if (!staysInside(root, folderReal) || !staysInside(root, fileReal)) {
+        invalid.push(`${entry.name}: skill path escapes the skills directory`);
+        continue;
+      }
+      const stat = fs.statSync(fileReal);
       if (stat.size > MAX_SKILL_BYTES) {
         invalid.push(`${entry.name}: larger than ${MAX_SKILL_BYTES} bytes`);
         continue;
       }
-      const body = fs.readFileSync(file, 'utf8');
+      if (totalBytes + stat.size > MAX_TOTAL_SKILL_BYTES) {
+        invalid.push(`${entry.name}: total skill content exceeds ${MAX_TOTAL_SKILL_BYTES} bytes`);
+        continue;
+      }
+      const body = fs.readFileSync(fileReal, 'utf8');
       if (!body.trim()) {
         invalid.push(`${entry.name}: SKILL.md is empty`);
         continue;
       }
       skills.push({ name: entry.name, body });
+      totalBytes += stat.size;
     } catch {
       invalid.push(`${entry.name}: SKILL.md could not be read`);
     }

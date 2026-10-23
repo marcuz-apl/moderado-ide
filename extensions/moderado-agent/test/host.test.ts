@@ -6,7 +6,7 @@ import { AgentEvent, ApprovalRequest } from '@moderado/contracts';
 import { resolveInJail } from '@moderado/tools';
 import { AgentHost, previewFor, resolveProvider } from '../src/host.js';
 import { MemoryCredentialStore } from '../src/credentials.js';
-import { canonicalWorkspaceRoot, readConfig } from '../src/profile.js';
+import { canonicalWorkspaceRoot, discoverSkills, readConfig } from '../src/profile.js';
 import { DesktopOpenAIAdapter } from '../src/provider-transport.js';
 import { preparePrompt } from '../src/attachments.js';
 import { createSession, SessionStore } from '../src/sessions.js';
@@ -610,6 +610,55 @@ describe('AgentHost tool approvals end to end', () => {
       return new Response('data: ' + JSON.stringify({ choices: [{ delta, finish_reason: posts === 1 ? 'tool_calls' : 'stop' }] }) + '\n\ndata: [DONE]\n\n');
     });
   }
+
+  it('exposes only enabled shared skills through the read-only loader', async () => {
+    const root = workspace();
+    const home = configuredHome('moderado-cloud', gateway, { enabledSkills: ['one'] });
+    const skillsRoot = join(home, '.moderado', 'skills');
+    mkdirSync(join(skillsRoot, 'one'), { recursive: true });
+    mkdirSync(join(skillsRoot, 'two'), { recursive: true });
+    writeFileSync(join(skillsRoot, 'one', 'SKILL.md'), 'one advisory text');
+    writeFileSync(join(skillsRoot, 'two', 'SKILL.md'), 'two secret text');
+    const requests: Array<Record<string, any>> = [];
+    let posts = 0;
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async (_url, init) => {
+      if (init?.method !== 'POST') return Response.json({ object: 'list', data: [route] });
+      const body = JSON.parse(String(init.body)) as Record<string, any>;
+      requests.push(body);
+      const delta = ++posts === 1
+        ? { tool_calls: [{ index: 0, id: 'load-one', type: 'function', function: { name: 'load_skill', arguments: '{"name":"one"}' } }] }
+        : { content: 'Loaded.' };
+      return new Response('data: ' + JSON.stringify({ choices: [{ delta, finish_reason: posts === 1 ? 'tool_calls' : 'stop' }] }) + '\n\ndata: [DONE]\n\n');
+    });
+    const host = new AgentHost({ workspaceRoot: root, moderadoHome: home, fetchImpl, onEvent: () => {}, promptForApproval: async () => undefined });
+
+    await host.startRun({ task: 'Use skill one.', modelId: 'auto' });
+
+    expect(requests[0].tools).toEqual(expect.arrayContaining([expect.objectContaining({ function: expect.objectContaining({ name: 'load_skill' }) })]));
+    expect(JSON.stringify(requests[1].messages)).toContain('one advisory text');
+    expect(JSON.stringify(requests[1].messages)).not.toContain('two secret text');
+    expect(discoverSkills(home).skills).toHaveLength(2);
+  });
+
+  it('exposes no skills when enabledSkills is malformed', async () => {
+    const root = workspace();
+    const home = configuredHome('moderado-cloud', gateway, { enabledSkills: ['Bad Name'] });
+    const skillDir = join(home, '.moderado', 'skills', 'one');
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(join(skillDir, 'SKILL.md'), 'must stay unavailable');
+    const requests: Array<Record<string, any>> = [];
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async (_url, init) => {
+      if (init?.method !== 'POST') return Response.json({ object: 'list', data: [route] });
+      requests.push(JSON.parse(String(init.body)) as Record<string, any>);
+      return new Response('data: {"choices":[{"delta":{"content":"Done."},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n');
+    });
+    const host = new AgentHost({ workspaceRoot: root, moderadoHome: home, fetchImpl, onEvent: () => {}, promptForApproval: async () => undefined });
+
+    await host.startRun({ task: 'Answer.', modelId: 'auto' });
+
+    expect(JSON.stringify(requests[0].tools)).not.toContain('load_skill');
+    expect(JSON.stringify(requests[0].messages)).not.toContain('must stay unavailable');
+  });
 
   function hostFor(root: string, fetchImpl: typeof fetch, promptForApproval: ConstructorParameters<typeof AgentHost>[0]['promptForApproval'], onEvent: (event: AgentEvent) => void, isAutoApproved?: (toolName: string) => boolean) {
     return new AgentHost({ workspaceRoot: root, moderadoHome: configuredHome('moderado-cloud', gateway), fetchImpl, onEvent, promptForApproval, isAutoApproved });
