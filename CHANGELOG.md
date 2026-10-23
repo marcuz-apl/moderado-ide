@@ -1,6 +1,6 @@
 # Moderado IDE changelog
 
-## [v0.1.44] — Release candidate; not yet published
+## [v0.1.44] — 2026-10-23 (published)
 
 **Release summary**
 - Extend chat history with rename/delete, recent sessions, search, Markdown export, branching, and prompt-history navigation.
@@ -10,7 +10,7 @@
 - Add bounded, validated skill loading and safer concurrent IDE writes to shared `config.json`.
 - Render assistant replies as safe Markdown and show clearer usage and workspace context.
 
-Build scope: Windows x64, Linux x64, macOS Apple Silicon (arm64), and macOS Intel (x64). This candidate still requires a successful all-platform GitHub Actions build and artifact verification. It has not been tagged or published.
+Build scope: Windows x64, Linux x64, macOS Apple Silicon (arm64), and macOS Intel (x64). Published as [`v0.1.44+2610236`](https://github.com/marcuz-apl/moderado-ide/releases/tag/v0.1.44%2B2610236) from source commit `fe362d3421a22157f3b905c8d64c995dc0bae914` by [GitHub Actions run 39943739959](https://github.com/marcuz-apl/moderado-ide/actions/runs/39943739959). All four platform builds and release-artifact verification passed; the release contains 19 assets.
 
 
 **Feature: branch a chat**

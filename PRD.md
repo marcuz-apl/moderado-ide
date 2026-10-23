@@ -1,7 +1,7 @@
 # Moderado IDE Product Requirements
 
 **Project version:** see [VERSION](VERSION) (development version; releases are tracked separately)
-**Release status:** v0.1.31 is the latest published stable release. v0.1.44 is being prepared; no 0.1.44 artifacts, tag, or release have been produced. v0.1.29 was withdrawn after a webview startup error. See [installation and release limitations](docs/INSTALL.md) and the [roadmap](docs/ROADMAP.md).
+**Release status:** v0.1.44 (`v0.1.44+2610236`) is the latest published stable release. Its all-platform GitHub Actions build and artifact verification passed; see [installation and release limitations](docs/INSTALL.md) and the [roadmap](docs/ROADMAP.md). v0.1.29 was withdrawn after a webview startup error.
 **Target platforms:** Linux, macOS, and Windows. Public artifacts exist for all three platforms, but native Linux installation, Windows signing, and macOS Developer ID signing/notarization remain open.
 **Reference agent baseline:** Moderado CLI `v0.4.10` pinned contracts, core, and
 tools source; IDE-owned provider behavior adapts CLI `v0.4.10` fixtures and

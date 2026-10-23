@@ -1,9 +1,8 @@
 # Installing Moderado IDE
 
-> **Published:** v0.1.31 remains the latest stable release. **Next candidate:**
-> v0.1.44 is being prepared; it has not been built, tagged, or published. The
-> v0.1.29 release was withdrawn after a webview startup error. The v0.1.31
-> release includes the fix and all four platform builds.
+> **Published:** v0.1.44 (`v0.1.44+2610236`) is the latest stable release.
+> Its all-platform build and artifact verification passed. The v0.1.29 release
+> was withdrawn after a webview startup error; v0.1.31 included the fix.
 > Download the current release from the
 > [GitHub release page](https://github.com/marcuz-apl/moderado-ide/releases/latest).
 > Windows installers are unsigned; macOS images are ad-hoc signed but not
@@ -14,12 +13,12 @@
 | | |
 | --- | --- |
 | Targets | Linux x64, macOS x64/arm64, and Windows x64 |
-| Existing artifact evidence | Official v0.1.31 release includes Windows x64, Linux x64, macOS Apple Silicon arm64, and macOS Intel x64 assets |
+| Existing artifact evidence | Official v0.1.44 release includes Windows x64, Linux x64, macOS Apple Silicon arm64, and macOS Intel x64 assets |
 | Editor base | Code OSS `1.135.0`, built through VSCodium `1.135.06055` |
 | Agent packages | Moderado CLI `v0.4.10` (`a3479fff…`, `v0.4.10+2610105`) |
 | Architectures | Linux and Windows x64; macOS x64 and arm64 |
 
-The stable [v0.1.31 release](https://github.com/marcuz-apl/moderado-ide/releases/tag/v0.1.31%2B261021c) was built from commit `bc1500eb485522088a2fbb855ca6862d511843c2` by [workflow run 39632261922](https://github.com/marcuz-apl/moderado-ide/actions/runs/39632261922). To prepare v0.1.44, review and push the final source, then use the manually dispatched [build-and-release workflow](../.github/workflows/build-and-release.yml) with platform `all` and an empty `source_ref`; that combination publishes if all build and verification jobs succeed. Partial-platform and custom-source builds remain build-only. Do not dispatch the publishing combination until the owner explicitly authorizes release publication. For a local Linux build, follow the [Linux build instructions](../README.md#build-the-linux-editor-locally). Windows/Linux cross-home profile sharing is outside this milestone: the two environments have different home directories and do not automatically share a `~/.moderado` profile.
+The stable [v0.1.44 release](https://github.com/marcuz-apl/moderado-ide/releases/tag/v0.1.44%2B2610236) was built from commit `fe362d3421a22157f3b905c8d64c995dc0bae914` by [workflow run 39943739959](https://github.com/marcuz-apl/moderado-ide/actions/runs/39943739959). The workflow published 19 assets after all four platform builds and release-artifact checks passed. The preceding [v0.1.31 release](https://github.com/marcuz-apl/moderado-ide/releases/tag/v0.1.31%2B261021c) was built from commit `bc1500eb485522088a2fbb855ca6862d511843c2` by [workflow run 39632261922](https://github.com/marcuz-apl/moderado-ide/actions/runs/39632261922). Partial-platform and custom-source builds remain build-only. For a local Linux build, follow the [Linux build instructions](../README.md#build-the-linux-editor-locally). Windows/Linux cross-home profile sharing is outside this milestone: the two environments have different home directories and do not automatically share a `~/.moderado` profile.
 
 ## Local Debian installer and WSLg window checks
 
@@ -117,7 +116,7 @@ Windows installers are **unsigned**; Windows SmartScreen may warn and there is
 no Authenticode signature to validate. macOS images use ad-hoc signing only;
 they are not Developer ID signed or notarized, so Gatekeeper may prevent them
 from opening without local approval. Linux packages are unsigned. These are
-the published v0.1.31 artifacts; no update channel is provided.
+the published v0.1.44 artifacts; no update channel is provided.
 
 ## Provenance and notices
 
@@ -154,8 +153,8 @@ That command **refuses** and explains why. It only proceeds with
 mutation and runs no commands, and it never writes or logs the API key.
 
 **Still open:** platform code signing and notarization, an update channel, and
-native Linux runtime installation verification. The currently published v0.1.31 artifacts
-are published on the [GitHub Release page](https://github.com/marcuz-apl/moderado-ide/releases/latest).
+native Linux runtime installation verification. The published v0.1.44 artifacts
+are available on the [GitHub Release page](https://github.com/marcuz-apl/moderado-ide/releases/latest).
 
 ## What works, and what does not
 

@@ -1,11 +1,11 @@
 # Moderado IDE roadmap
 
-This roadmap records milestone intent and current release readiness. v0.1.31
-is the latest published stable release; v0.1.44 is in preparation and has no
-release artifacts yet. The v0.1.29 release was withdrawn after a webview
-startup error. Current caveats are in [INSTALL.md](INSTALL.md).
+This roadmap records milestone intent and current release readiness. v0.1.44
+(`v0.1.44+2610236`) is the latest published stable release. The v0.1.29
+release was withdrawn after a webview startup error. Current caveats are in
+[INSTALL.md](INSTALL.md).
 
-Moderado IDE targets Linux, macOS, and Windows. The v0.1.31 release includes Windows x64, Linux x64, macOS Apple Silicon arm64, and macOS Intel x64 packages; each platform's manifest records the source revisions used. The 0.1.44 source adds session, approval, skill, provider, and shared-config improvements. Its four-platform build and artifact verification have not run yet. Native Linux installation, code signing/notarization, update service, and real editor restart evidence remain open.
+Moderado IDE targets Linux, macOS, and Windows. The v0.1.44 release includes Windows x64, Linux x64, macOS Apple Silicon arm64, and macOS Intel x64 packages; each platform's manifest records the source revisions used. The release adds session, approval, skill, provider, and shared-config improvements. Native Linux installation, code signing/notarization, update service, and real editor restart acceptance remain open.
 
 ## M0 — Independent project foundation (documentation scaffold)
 
@@ -111,14 +111,13 @@ produce an editor with no agent that still passed every other check.
 Installation, supported platform combinations, data locations, and known
 limitations are documented in [INSTALL.md](INSTALL.md).
 
-The v0.1.31 release is published with platform-specific manifests, provenance,
-verification results, checksums, and third-party notices. The next candidate,
-v0.1.44, is not yet built or published. Remaining release limitations include
-platform signing/notarization, an update channel, native Linux runtime
-installation verification, and real editor restart acceptance. Shared profile
-write coordination is guaranteed among IDE writers; external writers must adopt
-the same lock protocol. See [PROFILE.md](PROFILE.md) for details. Publishing a
-new release requires the owner's explicit authorization.
+The v0.1.44 release is published with platform-specific manifests, provenance,
+verification results, checksums, and third-party notices. Remaining release
+limitations include platform signing/notarization, an update channel, native
+Linux runtime installation verification, and real editor restart acceptance.
+Shared profile write coordination is guaranteed among IDE writers; external
+writers must adopt the same lock protocol. See [PROFILE.md](PROFILE.md) for
+details. Publishing a new release requires the owner's explicit authorization.
 
 ## M5 — Provenance and license compliance
 

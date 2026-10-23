@@ -1,38 +1,54 @@
 # Project Handoff
 
-Updated: 2026-10-23 10:08 UTC
+Updated: 2026-10-23 11:56 UTC
 Branch: `master`
-Status: v0.1.44 release preparation is underway. v0.1.31 remains the latest published stable release. Release docs and the generated release-note template are prepared; no 0.1.44 build, tag, or publication has occurred.
+Commit: release source `fe362d3421a22157f3b905c8d64c995dc0bae914`; release docs are current on `master`
+Status: v0.1.44 published; post-release editor acceptance remains open
 
-## Current state
+## Summary
 
-- The shared `~/.moderado/config.json` IDE-writer fix is committed and pushed.
-  Concurrent IDE writers use owned locks, scoped conflict checks, and preserve
-  unrelated provider entries. Other writers must adopt the lock protocol for
-  cross-application write safety.
-- The candidate changelog, product/install/roadmap/upstream status, and
-  publisher-generated release notes now describe v0.1.44 and its known
-  limitations. See `docs/planning/release-v0.1.44/readiness.md`.
-- GitHub still reports v0.1.31 as latest stable. No v0.1.44 tag/release or
-  build workflow is present. The all-platform workflow publishes when it
-  succeeds, so dispatch requires explicit owner release authorization.
-- The owner will run packaged-editor restart acceptance through GitHub Actions
-  after release. MCP remains unimplemented and is disclosed in the candidate
-  notes.
+GitHub Actions run 39943739959 successfully built and published stable release
+`v0.1.44+2610236` for Windows x64, Linux x64, macOS arm64, and macOS x64.
+GitHub reports 19 assets; the release tag resolves to source commit
+`fe362d3421a22157f3b905c8d64c995dc0bae914`.
 
-## Verification
+## Completed
 
-- Extension focused suites: `npx vitest run test/profile.test.ts test/settings-host.test.ts` — 125 passed, 6 skipped.
-- Extension suite excluding sandbox-blocked loopback Gateway login cases: `npx vitest run --exclude test/gateway-login.test.ts` — 25 files, 544 passed, 6 skipped.
-- `npm run typecheck` — PASS.
-- `npm run compile` — PASS, 616 KiB bundle.
-- `git diff --check` — PASS after release-documentation edits.
-- `node --check scripts/publish-release.mjs` — PASS after the release-note template update.
-- An unfiltered local `npm test` could not open the loopback callback listener; 5 Gateway browser-login tests failed in this environment.
+- Verified the stable [GitHub release](https://github.com/marcuz-apl/moderado-ide/releases/tag/v0.1.44%2B2610236), its tag target, and asset inventory.
+- Recorded the published state in `PRD.md`, `CHANGELOG.md`, `docs/INSTALL.md`, `docs/UPSTREAM.md`, `docs/ROADMAP.md`, and `docs/planning/release-v0.1.44/readiness.md`.
+
+## In progress
+
+- Real editor close/reopen acceptance for the packaged release has not been run. The owner plans to check the builds through GitHub Actions.
+
+## Working tree
+
+- The published release documentation is current on `master`; source artifacts remain tied to `fe362d3`.
+
+## Checks
+
+- `gh run view 39943739959 --repo marcuz-apl/moderado-ide --json status,conclusion,headSha,url` — PASS; conclusion `success`, source SHA matches `fe362d3`.
+- `gh release view 'v0.1.44+2610236' --repo marcuz-apl/moderado-ide` — PASS; stable, published, not draft, 19 assets.
+- `gh api repos/marcuz-apl/moderado-ide/commits/'v0.1.44+2610236' --jq .sha` — PASS; resolves to `fe362d3421a22157f3b905c8d64c995dc0bae914`.
+- GitHub Actions — PASS; four platform builds, release artifact checks, and publisher completed successfully.
+- Local tests after documentation updates — NOT RUN; documentation-only changes.
+
+## Decisions and context
+
+- IDE release `v0.1.44+2610236` is independent of the CLI release. Its pinned sources are recorded in `sources.lock.json`.
+- Known limitations remain: unsigned Windows/Linux artifacts, ad-hoc signed and unnotarized macOS artifacts, no native Linux runtime verification, no update channel, and no MCP discovery/trust.
+- Build completion is not evidence of real editor restart acceptance.
+
+## Blockers
+
+- None for publication. Real editor close/reopen acceptance is pending the owner's planned GitHub Actions check.
 
 ## Next action
 
-Wait for explicit release authorization before dispatching the publishing
-workflow. After an authorized all-platform run, verify the published
-tag/assets and update the current release status. The owner will perform
-packaged-editor restart checks through GitHub Actions after release.
+1. Owner runs the packaged-editor close/reopen acceptance against the published release and records the run and result.
+
+## Resume notes
+
+- Release run: https://github.com/marcuz-apl/moderado-ide/actions/runs/39943739959
+- Release assets: https://github.com/marcuz-apl/moderado-ide/releases/tag/v0.1.44%2B2610236
+- Read `docs/planning/release-v0.1.44/readiness.md` for the current release record and limitations.
