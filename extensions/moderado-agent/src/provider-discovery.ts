@@ -87,13 +87,53 @@ async function getJson(url: string, apiKey: string | undefined, options: Discove
     if (options.signal?.aborted || deadline.signal.aborted) {
       throw new ProviderError('Model discovery request was aborted', 'ERR_ABORTED');
     }
-    throw new ProviderError(
-      `Model discovery network request failed: ${error instanceof Error ? error.message : String(error)}`,
-      'ERR_NETWORK_ERROR',
-    );
+    throw new ProviderError(networkFailureMessage(error, url), 'ERR_NETWORK_ERROR');
   } finally {
     deadline.dispose();
   }
+}
+
+function networkFailureMessage(error: unknown, requestUrl: string): string {
+  const code = errorCode(error);
+  const endpoint = safeEndpoint(requestUrl);
+  let hostname = '';
+  try { hostname = new URL(requestUrl).hostname.replace(/^\[|\]$/g, '').toLowerCase(); } catch { /* Report without endpoint details. */ }
+  const local = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+  if (local && code === 'ECONNREFUSED') {
+    const product = /:11434(?:$|\/)/.test(endpoint) ? 'Ollama' : /:1234(?:$|\/)/.test(endpoint) ? 'LM Studio' : 'local model server';
+    return `No local model server is listening at ${endpoint}. Start ${product} or check the Base URL.`;
+  }
+  if (local && (code === 'EPERM' || code === 'EACCES')) {
+    return `The operating system denied access to ${endpoint}. Check Moderado IDE's local network permissions and the Base URL.`;
+  }
+  if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') {
+    return `Could not resolve the provider host${endpoint ? ` ${endpoint}` : ''}. Check the Base URL and network connection.`;
+  }
+  if (code === 'ETIMEDOUT' || code === 'UND_ERR_CONNECT_TIMEOUT') {
+    return `Connection to the provider${endpoint ? ` at ${endpoint}` : ''} timed out. Check the Base URL and network connection.`;
+  }
+  return `Model discovery network request failed${code ? ` (${code})` : ''}${endpoint ? ` for ${endpoint}` : ''}. Check the Base URL and network connection.`;
+}
+
+function safeEndpoint(requestUrl: string): string {
+  try {
+    const url = new URL(requestUrl);
+    return `${url.hostname.replace(/^\[|\]$/g, '')}${url.port ? `:${url.port}` : ''}`;
+  } catch { return ''; }
+}
+
+function errorCode(error: unknown): string | undefined {
+  const seen = new Set<object>();
+  const pending: unknown[] = [error];
+  while (pending.length > 0) {
+    const current = pending.shift();
+    if (!current || typeof current !== 'object' || seen.has(current)) continue;
+    seen.add(current);
+    if ('code' in current && typeof current.code === 'string') return current.code;
+    if ('cause' in current) pending.push(current.cause);
+    if ('errors' in current && Array.isArray(current.errors)) pending.push(...current.errors);
+  }
+  return undefined;
 }
 
 /** Fetch and strictly validate the Gateway's OpenAI-style route inventory. */

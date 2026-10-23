@@ -579,7 +579,7 @@ async function openDiffTab(requestId: string): Promise<void> {
   async function loadModelsForPreset(
     preset: string,
     pending?: SettingsFormValues & { apiKey?: string },
-    options: { force?: boolean } = {},
+    options: { force?: boolean; preserveStatus?: boolean } = {},
   ): Promise<void> {
     const request = ++discoveryRequest;
     // The previous request is left to finish. Aborting it would drop the
@@ -676,14 +676,14 @@ async function openDiffTab(requestId: string): Promise<void> {
       return;
     }
 
-    settings.status = 'Loading free models…';
+    if (!options.preserveStatus) settings.status = 'Loading free models…';
     render();
     const result = await fetchCatalog();
     if (request !== discoveryRequest || !settings.open) return;
     if (result.models.length > 0) catalogCache.set(cacheKey, result.models);
     settings.models = sortFreeFirst(result.models);
     settings.defaultModel = pickDefaultModel(settings.models, currentModel);
-    settings.status = result.status;
+    if (!options.preserveStatus) settings.status = result.status;
     render();
   }
 
@@ -877,13 +877,10 @@ async function openDiffTab(requestId: string): Promise<void> {
       }, { expected: { connections: { [connection.id]: stored }, activeConnectionId: profileConfig.activeConnectionId, defaultModel: profileConfig.defaultModel } });
       if (!result.written) { settings.status = result.conflict?.reason ?? result.reason ?? 'Could not save the settings.'; render(); return; }
       void chatView?.webview.postMessage({ type: 'providerSaved' });
-      await loadSettingsState('Saved.', { skipModels: true });
-      // The connection may now carry a different key, so ask again.
-      await loadModelsForPreset(settings.preset, undefined, { force: true });
-      if (settings.open) {
-        settings.status = `Settings saved. ${settings.status ?? ''}`.trim();
-        render();
-      }
+      await loadSettingsState('Settings saved.', { skipModels: true });
+      // Config persistence is complete; model discovery must not hold the Save
+      // status open or make a saved model choice look like a failed write.
+      void loadModelsForPreset(settings.preset, undefined, { force: true, preserveStatus: true });
     } catch {
       // Log only a fixed phase label, never native input or service responses.
       output.appendLine(`Provider save failed during ${savePhase}.`);

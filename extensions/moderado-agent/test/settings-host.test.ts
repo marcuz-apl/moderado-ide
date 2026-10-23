@@ -148,6 +148,15 @@ describe('host-only Settings credentials', () => {
     expect(record.credentialReference).toBeUndefined(); expect(record.credentialExpiresAt).toBeUndefined(); expect(record.apiKey).toBeUndefined();
   });
 
+  it('reports the saved config while the post-save model refresh is still pending', async () => {
+    let releaseFetch!: (response: Response) => void;
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(resolve => { releaseFetch = resolve; })));
+    send('saveSettings', { ...form, loginMethod: 'public', modelId: 'auto' });
+    await vi.waitFor(() => expect(harness.write).toHaveBeenCalled());
+    await vi.waitFor(() => expect(harness.messages.some(message => String(message.settings ?? '').includes('Settings saved.'))).toBe(true));
+    releaseFetch(new Response(JSON.stringify({ object: 'list', data: [] })));
+  });
+
   it('keeps a stored Gateway key when only the model changes', async () => {
     // The pane no longer sends an access method, so saving a model choice must
     // not silently unlink the credential the profile already records.
@@ -550,6 +559,8 @@ describe('provider catalog cache', () => {
 
     send('selectPreset', { preset: 'lm-studio' });
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    expect(fetch).toHaveBeenLastCalledWith('http://127.0.0.1:1234/v1/models', expect.anything());
+    await vi.waitFor(() => expect(html()).toContain('Exact/Route'));
 
     vi.mocked(fetch).mockClear();
     send('selectPreset', { preset: 'ollama' });

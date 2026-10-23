@@ -123,6 +123,7 @@ export interface SettingsSnapshot {
 /** One `<option>` per provider preset, in the engine's order. */
 function providerOptions(state: SettingsState): string {
   return state.providers
+    .filter((choice) => !(choice.value.startsWith('custom:') && /^moderado(?:\s+custom)?$/i.test(choice.label.trim())))
     .map(
       (choice) =>
         `<option value="${escapeHtml(choice.value)}"${choice.value === state.preset ? ' selected' : ''}>${escapeHtml(choice.tag ? `${choice.label} - ${choice.tag}` : choice.label)}</option>`,
@@ -154,7 +155,7 @@ function modelOptions(state: SettingsState): string {
   return tabModels(state)
     .map((model) => {
       const name = model.id === 'auto'
-        ? state.preset === 'moderado-cloud' ? 'AUTO · Gateway routing' : 'AUTO · Free-first'
+        ? state.preset === 'moderado-cloud' ? 'AUTO' : 'AUTO · Free-first'
         : displayModelName(model.id);
       return `<option value="${escapeHtml(model.id)}"${model.id === state.defaultModel ? ' selected' : ''}>${escapeHtml(`${model.isFree ? '★ ' : ''}${name}`)}</option>`;
     })

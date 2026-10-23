@@ -58,6 +58,22 @@ describe('Gateway model discovery', () => {
 });
 
 describe('direct provider model discovery', () => {
+  it('explains when a local model server refuses the connection', async () => {
+    const cause = Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:11434'), { code: 'ECONNREFUSED' });
+    const failure = new TypeError('fetch failed', { cause });
+    await expect(fetchDirectModels('http://127.0.0.1:11434/v1', undefined, {
+      fetchImpl: async () => { throw failure; },
+    })).rejects.toThrow(/No local model server is listening at 127\.0\.0\.1:11434.*Start Ollama/i);
+  });
+
+  it('explains when the operating system blocks a local model connection', async () => {
+    const cause = Object.assign(new Error('operation not permitted'), { code: 'EPERM' });
+    const failure = new TypeError('fetch failed', { cause });
+    await expect(fetchDirectModels('http://127.0.0.1:11434/v1', undefined, {
+      fetchImpl: async () => { throw failure; },
+    })).rejects.toThrow(/operating system denied access.*127\.0\.0\.1:11434.*local network permissions/i);
+  });
+
   it.each([
     ['array', [{ id: 'array/model', pricing: { prompt: '0', completion: '0' }, supported_parameters: ['tools'] }]],
     ['OpenAI envelope', { object: 'list', data: [{ id: 'envelope/model', pricing: { prompt: '0.2', completion: '0.4' }, supported_parameters: ['reasoning'] }] }],

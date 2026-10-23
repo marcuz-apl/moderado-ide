@@ -24,6 +24,14 @@ describe('Gateway and provider Settings boundary', () => {
     expect(html).toContain('Sign in with browser');
   });
 
+  it('hides the duplicate Moderado custom connection while keeping the built-in Moderado choice', () => {
+    const html = settingsPaneHtml({ ...gateway(), providers: buildProviderChoices({ custom: [
+      { id: 'moderado-custom', name: 'Moderado', baseUrl: 'https://custom.example/v1', defaultModel: 'auto' },
+    ] } as any) });
+    expect(html).toContain('>Moderado</option>');
+    expect(html).not.toContain('Moderado - Custom');
+  });
+
   it('keeps a large model inventory inside selects with only selected metadata outside', () => {
     const models = Array.from({ length: 200 }, (_, index) => ({
       id: `model-${index}`, accessTier: 'free_trial', isFree: true,
@@ -48,9 +56,10 @@ describe('Gateway and provider Settings boundary', () => {
     expect(html).toContain('Free Gateway models need a website API key');
   });
 
-  it('warns that Gateway AUTO may select a paid route', () => {
+  it('labels Gateway AUTO without describing its routing internals', () => {
     const html = settingsPaneHtml({ ...gateway(), defaultModel: 'auto', models: [{ id: 'auto', accessTier: 'unknown', isFree: false }] });
-    expect(html).toContain('AUTO · Gateway routing');
+    expect(html).toContain('>AUTO</option>');
+    expect(html).not.toContain('AUTO · Gateway routing');
     expect(html).toContain('may select a free or paid route');
   });
 
