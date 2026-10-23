@@ -1,8 +1,9 @@
 # Installing Moderado IDE
 
-> **Status: v0.1.31 is the latest published stable release.** The v0.1.29
-> release was withdrawn after a webview startup error. The v0.1.31 release
-> includes the fix and all four platform builds.
+> **Published:** v0.1.31 remains the latest stable release. **Next candidate:**
+> v0.1.44 is being prepared; it has not been built, tagged, or published. The
+> v0.1.29 release was withdrawn after a webview startup error. The v0.1.31
+> release includes the fix and all four platform builds.
 > Download the current release from the
 > [GitHub release page](https://github.com/marcuz-apl/moderado-ide/releases/latest).
 > Windows installers are unsigned; macOS images are ad-hoc signed but not
@@ -18,7 +19,7 @@
 | Agent packages | Moderado CLI `v0.4.10` (`a3479fff…`, `v0.4.10+2610105`) |
 | Architectures | Linux and Windows x64; macOS x64 and arm64 |
 
-The stable [v0.1.31 release](https://github.com/marcuz-apl/moderado-ide/releases/tag/v0.1.31%2B261021c) was built from commit `bc1500eb485522088a2fbb855ca6862d511843c2` by [workflow run 39632261922](https://github.com/marcuz-apl/moderado-ide/actions/runs/39632261922). Use the manually dispatched [build-and-release workflow](../.github/workflows/build-and-release.yml) with platform `all` for future full releases; partial-platform and custom-source builds remain in Actions for review. For a local Linux build, follow the [Linux build instructions](../README.md#build-the-linux-editor-locally). Windows/Linux cross-home profile sharing is outside this milestone: the two environments have different home directories and do not automatically share a `~/.moderado` profile.
+The stable [v0.1.31 release](https://github.com/marcuz-apl/moderado-ide/releases/tag/v0.1.31%2B261021c) was built from commit `bc1500eb485522088a2fbb855ca6862d511843c2` by [workflow run 39632261922](https://github.com/marcuz-apl/moderado-ide/actions/runs/39632261922). To prepare v0.1.44, review and push the final source, then use the manually dispatched [build-and-release workflow](../.github/workflows/build-and-release.yml) with platform `all` and an empty `source_ref`; that combination publishes if all build and verification jobs succeed. Partial-platform and custom-source builds remain build-only. Do not dispatch the publishing combination until the owner explicitly authorizes release publication. For a local Linux build, follow the [Linux build instructions](../README.md#build-the-linux-editor-locally). Windows/Linux cross-home profile sharing is outside this milestone: the two environments have different home directories and do not automatically share a `~/.moderado` profile.
 
 ## Local Debian installer and WSLg window checks
 
@@ -153,7 +154,7 @@ That command **refuses** and explains why. It only proceeds with
 mutation and runs no commands, and it never writes or logs the API key.
 
 **Still open:** platform code signing and notarization, an update channel, and
-native Linux runtime installation verification. The current v0.1.31 artifacts
+native Linux runtime installation verification. The currently published v0.1.31 artifacts
 are published on the [GitHub Release page](https://github.com/marcuz-apl/moderado-ide/releases/latest).
 
 ## What works, and what does not

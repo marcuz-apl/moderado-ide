@@ -1,6 +1,17 @@
 # Moderado IDE changelog
 
-## [Unreleased] - 2026-10-21
+## [v0.1.44] — Release candidate; not yet published
+
+**Release summary**
+- Extend chat history with rename/delete, recent sessions, search, Markdown export, branching, and prompt-history navigation.
+- Keep long conversations usable with a bounded context budget and automatic prompt compaction that preserves the full saved transcript.
+- Improve review safety with complete change previews, affected-path lists, fail-closed approval handling, and direct auto-approve category controls.
+- Refresh provider setup and model discovery, including the production Moderado Gateway, credential retention/redaction, local-provider guidance, and endpoint-scoped model caching.
+- Add bounded, validated skill loading and safer concurrent IDE writes to shared `config.json`.
+- Render assistant replies as safe Markdown and show clearer usage and workspace context.
+
+Build scope: Windows x64, Linux x64, macOS Apple Silicon (arm64), and macOS Intel (x64). This candidate still requires a successful all-platform GitHub Actions build and artifact verification. It has not been tagged or published.
+
 
 **Feature: branch a chat**
 - **Type**: `feat` / `chat` / `patch`

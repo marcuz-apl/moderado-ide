@@ -1,11 +1,11 @@
 # Moderado IDE roadmap
 
-This roadmap is the original delivery sequence and a record of milestone
-intent. v0.1.31 is the latest published stable release. The v0.1.29 release
-was withdrawn after a webview startup error. Current caveats are in
-[INSTALL.md](INSTALL.md).
+This roadmap records milestone intent and current release readiness. v0.1.31
+is the latest published stable release; v0.1.44 is in preparation and has no
+release artifacts yet. The v0.1.29 release was withdrawn after a webview
+startup error. Current caveats are in [INSTALL.md](INSTALL.md).
 
-Moderado IDE targets Linux, macOS, and Windows. The v0.1.31 release includes Windows x64, Linux x64, macOS Apple Silicon arm64, and macOS Intel x64 packages; each platform's manifest records the source revisions used. Some verification remains incomplete, including native Linux runtime installation and profile coordination with the CLI.
+Moderado IDE targets Linux, macOS, and Windows. The v0.1.31 release includes Windows x64, Linux x64, macOS Apple Silicon arm64, and macOS Intel x64 packages; each platform's manifest records the source revisions used. The 0.1.44 source adds session, approval, skill, provider, and shared-config improvements. Its four-platform build and artifact verification have not run yet. Native Linux installation, code signing/notarization, update service, and real editor restart evidence remain open.
 
 ## M0 — Independent project foundation (documentation scaffold)
 
@@ -50,27 +50,25 @@ fail-closed approval boundary, model selection, and session persistence against
 the shared `~/.moderado` profile. Verification is recorded in
 [HANDOFF.md](../HANDOFF.md).
 
-Milestone 3 still needs the cross-process round-trip against a pinned CLI
-release, Credential Manager references, and a coordinated `config.json` writer.
+Milestone 3 delivered shared-profile reads, writes, and Credential Manager support. The IDE now coordinates its own concurrent `config.json` writers. External applications must adopt the same lock protocol for cross-application write guarantees; simultaneous writes to one session ID still need a conflict policy.
 
 ## M3 — Shared profile compatibility
 
 - Round-trip config, skills, Windows Credential Manager references, and
   sessions with a pinned CLI release.
-- Resolve config write races through a protocol both editions follow;
-  coordinate any CLI-side change in its own repository.
+- Coordinate IDE config writes and document the boundary for other writers.
+  This repository does not change the separate CLI project.
 - Define and test conflict handling for the same session open in two processes.
 - Protect malformed and older profile data with validated, recoverable
   migrations.
 
 ## M3 status (implemented; prior baseline verified)
 
-IDE now reads and writes the shared `~/.moderado` profile through a
-canonical, coordinated path. The CLI `v0.4.10` source update requires rerunning
-the compatibility suite before claiming verification of the current baseline.
-Round-trip tests run against the *actual* CLI
-`dist` from the pinned revision rather than a hand-written copy of its schema,
-so they would fail if the two editions diverged.
+IDE reads and writes the shared `~/.moderado` profile through a canonical,
+coordinated path. Interoperability fixtures check the shared profile and
+session formats; they do not make the CLI part of IDE runtime or define IDE
+product scope. Cross-application config write safety depends on each writer
+following the same lock protocol.
 
 Delivered here:
 
@@ -79,18 +77,15 @@ Delivered here:
 - `src/credentials.ts` — the CLI's `moderado/provider/<id>` normalization and
   resolution order, plus a Windows Credential Manager store that passes the key
   only on stdin and never on a command line.
-- `src/coordination.ts` — a lock file plus an in-lock re-read, so a concurrent
-  CLI write is merged rather than lost, and an owned-field conflict refuses to
-  overwrite instead of clobbering.
+- `src/coordination.ts` — an ownership-checked IDE lock, in-lock re-read,
+  field-scoped conflict checks, and preservation of unrelated config fields.
 - `src/sessions.ts` — the CLI's session schema and directory hash, atomic writes,
   corrupt-record reporting, and a checked save that refuses to overwrite a
   session another process changed.
 
-**Still open:** the CLI does not take IDE's lock, so the coordination
-protects IDE's own writes and detects the CLI's, but it cannot prevent a
-CLI write that lands between IDE's read and its write. Making both editions
-follow one protocol needs a separate, reviewed change in the CLI repository,
-which this project must not make.
+**Still open:** external writers that ignore the IDE lock may race with an IDE
+write. Cross-application safety requires those writers to adopt this protocol.
+This IDE change does not modify the separate CLI project.
 
 ## M4 — Release readiness
 
@@ -117,12 +112,13 @@ Installation, supported platform combinations, data locations, and known
 limitations are documented in [INSTALL.md](INSTALL.md).
 
 The v0.1.31 release is published with platform-specific manifests, provenance,
-verification results, checksums, and third-party notices. Remaining gaps
-include platform signing/notarization, an update channel, native Linux runtime
-installation verification, refreshed compatibility evidence for the current
-agent baseline, and a `config.json` coordination protocol both IDE and CLI
-follow. See [PROFILE.md](PROFILE.md) for profile limits. Publishing was
-explicitly authorized by the owner.
+verification results, checksums, and third-party notices. The next candidate,
+v0.1.44, is not yet built or published. Remaining release limitations include
+platform signing/notarization, an update channel, native Linux runtime
+installation verification, and real editor restart acceptance. Shared profile
+write coordination is guaranteed among IDE writers; external writers must adopt
+the same lock protocol. See [PROFILE.md](PROFILE.md) for details. Publishing a
+new release requires the owner's explicit authorization.
 
 ## M5 — Provenance and license compliance
 

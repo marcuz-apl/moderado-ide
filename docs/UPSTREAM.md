@@ -1,8 +1,9 @@
 # Upstream source and distribution policy
 
-IDE targets Linux, macOS, and Windows. The latest published stable release,
-v0.1.31, contains Linux x64, macOS arm64 and x64, and Windows x64 packages
-built from pinned source revisions. The v0.1.29 release was withdrawn.
+IDE targets Linux, macOS, and Windows. The latest published stable release is
+v0.1.31, with Linux x64, macOS arm64 and x64, and Windows x64 packages built
+from pinned source revisions. Version 0.1.44 is in release preparation; no
+release tag or artifacts exist yet. The v0.1.29 release was withdrawn.
 Platform limitations and verification gaps are recorded in
 [INSTALL.md](INSTALL.md); the release does not imply that every PRD gate is
 complete.
