@@ -84,6 +84,8 @@ export interface SettingsState {
   profileError?: string;
   /** Transient feedback line, e.g. "Saved." or a failure reason. */
   status?: string;
+  /** Prevents closing or changing the connection while its save is in flight. */
+  saving?: boolean;
   /** Which settings section the left nav has selected. */
   page?: string;
   /** 'free' shows cost-free models (default); 'paid' shows paid models. */
@@ -230,13 +232,13 @@ export function settingsPaneHtml(state: SettingsState): string {
     const content = state.page === 'about' ? settingsAboutHtml(state.ideVersion ?? 'Development', state.editorVersion)
       : settingsFeaturesHtml(preferences);
     return `<section id="settings-pane" class="settings" aria-label="Moderado settings">
-      <div class="set-head"><h2>Settings</h2><button id="close-settings" type="button" class="done">Done</button></div>
+      <div class="set-head"><h2>Settings</h2><button id="close-settings" type="button" class="done"${state.saving ? ' disabled' : ''}>Done</button></div>
       <div class="set-body"><nav class="set-nav" aria-label="Settings sections">${settingsNav(state.page)}</nav>
       <div class="set-content">${content}${state.page === 'about' || state.status === 'Saved.' ? '' : `<p id="settings-status" class="status" role="status">${escapeHtml(state.status ?? '')}</p>`}</div></div>
     </section>`;
   }
   const blocked = Boolean(state.profileError);
-  const disabled = blocked ? ' disabled' : '';
+  const disabled = blocked || state.saving ? ' disabled' : '';
 
   const choice = selectedChoice(state);
   const generic = choice?.custom === true;
@@ -322,7 +324,7 @@ export function settingsPaneHtml(state: SettingsState): string {
   return `<section id="settings-pane" class="settings" aria-label="Moderado settings">
     <div class="set-head">
       <h2>Settings</h2>
-      <button id="close-settings" type="button" class="done">Done</button>
+      <button id="close-settings" type="button" class="done"${state.saving ? ' disabled' : ''}>Done</button>
     </div>
     <div class="set-body">
       <nav class="set-nav" aria-label="Settings sections">${settingsNav(state.page ?? 'api')}</nav>
@@ -336,7 +338,7 @@ export function settingsPaneHtml(state: SettingsState): string {
         ${keyField}
         ${modelField}
         <div class="row">
-          <button id="settings-save" type="button"${disabled}>Save settings</button>
+          <button id="settings-save" type="button"${disabled}>${state.saving ? 'Saving…' : 'Save settings'}</button>
           <button id="settings-refresh" type="button"${disabled}>Reload models</button>
         </div>
         <p class="note">Save settings to keep the provider and model after restart.</p>

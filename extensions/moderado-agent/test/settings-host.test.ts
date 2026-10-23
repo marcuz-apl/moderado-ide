@@ -138,6 +138,17 @@ describe('host-only Settings credentials', () => {
     expect(JSON.stringify(harness.messages)).not.toContain('mrd_browser-secret');
   });
 
+  it('keeps Settings open instead of aborting a pending provider save when Done is clicked', async () => {
+    let releaseBrowser!: (value: { accessToken: string; expiresAt: number }) => void;
+    harness.browser.mockImplementation(() => new Promise(resolve => { releaseBrowser = resolve; }));
+    send('gatewayBrowserLogin', { ...form, loginMethod: 'browser' });
+    await vi.waitFor(() => expect(harness.browser).toHaveBeenCalled());
+    send('closeSettings');
+    expect(harness.messages.at(-1)?.settingsOpen).toBe(true);
+    releaseBrowser({ accessToken: 'mrd_browser-secret', expiresAt: Date.now() + 60_000 });
+    await vi.waitFor(() => expect(harness.profile.activeConnectionId).toBe('moderado-cloud'));
+  });
+
   it('saves public Gateway AUTO without a prompt and clears credential metadata', async () => {
     harness.profile = { connections: { 'moderado-cloud': { id: 'moderado-cloud', apiKey: 'legacy-secret', credentialReference: 'moderado/provider/moderado-cloud', credentialExpiresAt: Date.now() + 60_000, future: 'preserved' } } };
     send('saveSettings', { ...form, loginMethod: 'public', modelId: 'auto' });
@@ -391,6 +402,19 @@ describe('default auto-approval', () => {
 });
 
 describe('composer run wiring', () => {
+  it('restores the saved provider and model when Done closes an unsaved API Config selection', async () => {
+    harness.profile = {
+      activeConnectionId: 'ollama', defaultModel: 'llama3.2',
+      connections: { ollama: { id: 'ollama', displayName: 'Ollama', baseUrl: 'http://127.0.0.1:11434/v1', defaultModel: 'llama3.2' } },
+    };
+    send('openSettings');
+    await vi.waitFor(() => expect(html()).toContain('llama3.2'));
+    send('selectPreset', { preset: 'moderado-cloud' });
+    await vi.waitFor(() => expect(html()).toContain('value="moderado-cloud" selected'));
+    send('closeSettings');
+    expect(harness.messages.at(-1)?.activeContext).toBe('Ollama · llama3.2');
+  });
+
   it('passes the host-side active model to startRun and ignores a webview-supplied one', async () => {
     // The active selection lives in the shared profile; the webview only ever
     // sends prompt text, so a modelId echoed back in the message is ignored.

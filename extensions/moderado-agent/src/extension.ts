@@ -780,6 +780,9 @@ async function openDiffTab(requestId: string): Promise<void> {
     if (action === 'key' && form.preset === 'moderado-cloud' && form.loginMethod === 'public') return;
     applySettingsForm(form);
     settingsBusy = true;
+    settings.saving = true;
+    settings.status = 'Saving settings…';
+    render();
     loginAbort = new AbortController();
     const signal = loginAbort.signal;
     let savePhase = 'validation';
@@ -890,7 +893,9 @@ async function openDiffTab(requestId: string): Promise<void> {
       render();
     } finally {
       settingsBusy = false;
+      settings.saving = false;
       loginAbort = undefined;
+      render();
     }
   }
 
@@ -1105,9 +1110,24 @@ async function openDiffTab(requestId: string): Promise<void> {
       return;
     }
     if (msg.type === 'closeSettings') {
+      if (settingsBusy) {
+        settings.status = 'Please wait for the provider save to finish before closing Settings.';
+        render();
+        return;
+      }
       loginAbort?.abort();
       discoveryRequest++;
       discoveryAbort?.abort();
+      const profile = readConfig();
+      if (profile.kind === 'ok') {
+        settings.activeConnectionId = typeof profile.config.activeConnectionId === 'string' ? profile.config.activeConnectionId : '';
+        settings.savedConnections = connectionsFromConfig(profile.config);
+        settings.defaultModel = typeof profile.config.defaultModel === 'string' ? profile.config.defaultModel : '';
+      } else {
+        settings.activeConnectionId = '';
+        settings.savedConnections = [];
+        settings.defaultModel = '';
+      }
       settings.open = false;
       render();
       return;
