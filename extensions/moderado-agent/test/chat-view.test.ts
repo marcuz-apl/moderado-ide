@@ -258,6 +258,22 @@ describe('chat view', () => {
     expect(snap.approval).toContain('id="full-diff"');
   });
 
+  it('lists every affected patch file with path text escaped', () => {
+    const pending = {
+      requestId: 'patch-1', toolName: 'apply_patch', actionSummary: 'Patch 2 files',
+      exactPayload: { diffPreview: [
+        '--- a/src/first.ts', '+++ b/src/first.ts', '@@ -1 +1 @@', '-old', '+new',
+        '--- a/src/<script>.ts', '+++ b/src/<script>.ts', '@@ -1 +1 @@', '-old', '+new',
+      ].join('\n') }, timestamp: Date.now(),
+    } as ApprovalRequest;
+
+    const approval = viewSnapshot(state({ pendingApproval: pending }), preview).approval;
+    expect(approval).toContain('Affected files');
+    expect(approval).toContain('<li>src/first.ts</li>');
+    expect(approval).toContain('<li>src/&lt;script&gt;.ts</li>');
+    expect(approval).not.toContain('<li>src/<script>.ts</li>');
+  });
+
   it('offers the full-change action only for a pending approval', () => {
     const html = chatHtml(state(), preview);
     expect(html).not.toContain('id="full-diff"');

@@ -1,9 +1,9 @@
 # Project Handoff
 
-Updated: 2026-10-23 08:25 UTC
+Updated: 2026-10-23 08:56 UTC
 Branch: `master`
 Commit: closeout changes recorded in the latest IDE Git commit; consult `git log` for its identifier.
-Status: in progress
+Status: in progress — approval safety gaps closed in the IDE host; broader gap remediation remains open
 
 ## Read this first
 
@@ -25,6 +25,15 @@ prompt-history multiline navigation defect is fixed and covered by tests
 against the emitted webview script. Automated session/package checks pass.
 Real editor restart and CLI/IDE profile round-trip acceptance checks remain
 unverified; see `PRD.md` and `docs/PROFILE.md`.
+The owner-approved fail-closed approval remediation design is at
+`docs/superpowers/specs/2026-10-23-approval-safety-design.md`. The fail-closed
+approval work is implemented: capped previews are rejected for human-gated
+file changes, file mutations deny when the review webview is unavailable,
+command modals show exact argument arrays and working directories, pending
+preview state is cleared on cancellation, and the unused approval-default
+setting was removed. Multi-file patch cards list all paths from generated diff
+headers. See the implementation plan at
+`docs/superpowers/plans/2026-10-23-approval-safety.md`.
 
 ## Completed
 
@@ -46,14 +55,30 @@ unverified; see `PRD.md` and `docs/PROFILE.md`.
 
 ## In progress
 
-- The user reported interrupted glitch-fixing work, but no specific unfinished
-  glitch is identified in the repository notes.
+- Continue the user-approved gap remediation with profile/editor acceptance,
+  MCP server trust and lifecycle, skills integration, and release readiness.
+- The current stage does not verify real editor restart or CLI/IDE profile
+  round trips. Do not treat those gates as closed.
+- The first sandboxed dependency audit could not reach the registry; an
+  authorized rerun completed successfully with zero reported vulnerabilities.
+
+## Verification this stage
+
+- `npx vitest run test/approval.test.ts test/settings-host.test.ts test/settings-preferences.test.ts` — passed (focused baseline: 85 tests).
+- New cancellation test was observed failing before the fix; focused lifecycle rerun `npx vitest run test/settings-host.test.ts test/approval.test.ts` passed (85 tests).
+- Focused approval card suite: `npx vitest run test/chat-view.test.ts` — passed (87 tests; new multi-file path test failed before implementation).
+- `npm test` with local loopback access — passed (26 files, 562 passed, 4 skipped).
+- `npm run typecheck` — passed.
+- `npm run compile` — passed (609 KiB bundle).
+- `npm audit` first failed because registry DNS was unavailable; rerun with
+  network access passed (0 vulnerabilities).
+- `git diff --check` — passed.
 
 ## Working tree
 
-- `AGENTS.md`, `HANDOFF.md`, the closeout plan, extension source/tests, and the
-  extension dependency manifest/lockfile are included in this closeout. No
-  release or publish action was performed.
+- Approval-safety design/plan, handoff, extension source/tests, and extension
+  manifest changes are uncommitted in the current checkout. No release or
+  publish action was performed.
 
 ## Checks
 
@@ -91,9 +116,8 @@ unverified; see `PRD.md` and `docs/PROFILE.md`.
 
 ## Next action
 
-1. Run the documented real-editor restart and CLI/IDE profile round-trip
-   acceptance checks when the editor and pinned CLI test environment are
-   available; record evidence here without writing the real user profile.
+1. Continue with profile/editor acceptance checks; then address the remaining
+   MCP trust, skills integration, and release-readiness gaps.
 
 ## Resume notes
 

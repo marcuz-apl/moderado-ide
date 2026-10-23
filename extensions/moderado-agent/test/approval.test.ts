@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ApprovalRequest } from '@moderado/contracts';
-import { ApprovalCoordinator, hasCompletePreview } from '../src/approval.js';
+import { ApprovalCoordinator, buildApprovalRequest, hasCompletePreview } from '../src/approval.js';
 
 function request(overrides: Partial<ApprovalRequest> = {}): ApprovalRequest {
   return {
@@ -50,6 +50,42 @@ describe('hasCompletePreview', () => {
     ).toBe(true);
     expect(hasCompletePreview(request({ toolName: 'run_command', exactPayload: { command: ['npm', 'test'] } }))).toBe(false);
     expect(hasCompletePreview(request({ toolName: 'run_command', exactPayload: { cwd: 'C:\\ws' } }))).toBe(false);
+  });
+
+  it('rejects truncated write and edit previews but accepts an untruncated boundary value', () => {
+    const boundary = 'x'.repeat(200_000);
+    expect(hasCompletePreview(buildApprovalRequest({
+      toolName: 'write_file', actionSummary: 'Write file', payload: { targetFile: 'a.txt', contentPreview: boundary },
+    }))).toBe(true);
+
+    const oversized = 'x'.repeat(200_001);
+    for (const toolName of ['write_file', 'edit_file']) {
+      const request = buildApprovalRequest({
+        toolName, actionSummary: 'Change file', payload: { targetFile: 'a.txt', contentPreview: oversized },
+      });
+      expect(hasCompletePreview(request), `${toolName} must reject a capped content preview`).toBe(false);
+    }
+  });
+
+  it('rejects a multi-file patch truncated after a valid first diff header', () => {
+    const diff = [
+      '--- a/first.txt',
+      '+++ b/first.txt',
+      '@@ -1 +1 @@',
+      `-${'x'.repeat(199_950)}`,
+      '+replacement',
+      '--- a/second.txt',
+      '+++ b/second.txt',
+      '@@ -1 +1 @@',
+      '-old',
+      '+new',
+    ].join('\n');
+    const request = buildApprovalRequest({
+      toolName: 'apply_patch', actionSummary: 'Patch two files', payload: { diffPreview: diff },
+    });
+
+    expect(request.exactPayload.diffPreview).toMatch(/\[truncated at 200000 characters\]$/);
+    expect(hasCompletePreview(request)).toBe(false);
   });
 });
 

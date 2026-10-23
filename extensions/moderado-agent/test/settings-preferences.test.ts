@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { defaultSettingsPreferences, parsePreferenceChange, settingsFeaturesHtml } from '../src/settings-preferences.js';
 
 describe('Settings preferences', () => {
+  it('does not contribute the unused approval default while keeping the supported timeout', () => {
+    const manifest = JSON.parse(readFileSync(join(import.meta.dirname, '../package.json'), 'utf8'));
+    expect(manifest.contributes.configuration.properties['moderado.requireApprovalByDefault']).toBeUndefined();
+    expect(manifest.contributes.configuration.properties['moderado.approvalTimeoutSeconds']).toBeDefined();
+  });
+
   it('defaults to free models, web search, English, a bounded approval wait, and a context budget', () => {
     expect(defaultSettingsPreferences).toEqual({ allowPaidModels: false, allowUnknownModels: false, webSearchEnabled: true, showHistoryOnStartup: false, preferredLanguage: 'English', approvalTimeoutSeconds: 120, contextBudgetTokens: 48_000 });
   });

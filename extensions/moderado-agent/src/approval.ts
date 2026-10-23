@@ -35,6 +35,7 @@ export const DEFAULT_APPROVAL_TIMEOUT_MS = 120_000;
 
 /** Upper bound on a preview payload forwarded to the UI. */
 const MAX_PREVIEW_CHARS = 200_000;
+const PREVIEW_TRUNCATION_MARKER = `\n... [truncated at ${MAX_PREVIEW_CHARS} characters]`;
 
 /**
  * A diff emitted by the vendored patch generator (`--- a/<path>` followed by
@@ -80,11 +81,12 @@ export function hasCompletePreview(request: ApprovalRequest): boolean {
     // does not have. Its tool preview resolves every edit in the jail and
     // emits one generated diff per edited file, so that diff is the complete
     // proposed change; a summary string is still refused.
-    return GENERATED_DIFF_PREVIEW.test(payload.diffPreview ?? '');
+    return !isTruncatedPreview(payload.diffPreview) && GENERATED_DIFF_PREVIEW.test(payload.diffPreview ?? '');
   }
   const mutationTools = new Set(['write_file', 'edit_file']);
   if (mutationTools.has(request.toolName)) {
     if (!payload.targetFile?.trim()) return false;
+    if (isTruncatedPreview(payload.diffPreview) || isTruncatedPreview(payload.contentPreview)) return false;
     return !!(payload.diffPreview?.trim() || payload.contentPreview?.trim());
   }
   if (request.toolName === 'run_command') {
@@ -225,8 +227,12 @@ function capPreview(payload: Record<string, unknown>): Record<string, unknown> {
   for (const [key, value] of Object.entries(payload)) {
     capped[key] =
       typeof value === 'string' && value.length > MAX_PREVIEW_CHARS
-        ? `${value.slice(0, MAX_PREVIEW_CHARS)}\n... [truncated at ${MAX_PREVIEW_CHARS} characters]`
+        ? `${value.slice(0, MAX_PREVIEW_CHARS)}${PREVIEW_TRUNCATION_MARKER}`
         : value;
   }
   return capped;
+}
+
+function isTruncatedPreview(value: string | undefined): boolean {
+  return value?.endsWith(PREVIEW_TRUNCATION_MARKER) ?? false;
 }

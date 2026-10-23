@@ -325,28 +325,44 @@ export function activate(context: vscode.ExtensionContext): ModeradoApi {
       view.pendingApproval = request;
       pendingApprovalRequests.set(request.requestId, request);
       render();
-      const answer = await new Promise<RawDecision | undefined>((resolve) => {
-        pendingApprovals.set(request.requestId, (raw) => {
-          pendingApprovals.delete(request.requestId);
-          pendingApprovalRequests.delete(request.requestId);
+      let abortHandler: (() => void) | undefined;
+      const cleanup = () => {
+        if (abortHandler) signal.removeEventListener('abort', abortHandler);
+        pendingApprovals.delete(request.requestId);
+        pendingApprovalRequests.delete(request.requestId);
+        if (view.pendingApproval?.requestId === request.requestId) {
           view.pendingApproval = null;
           endStreaming();
           render();
+        }
+      };
+      const answer = await new Promise<RawDecision | undefined>((resolve) => {
+        pendingApprovals.set(request.requestId, (raw) => {
+          cleanup();
           resolve(raw);
         });
-        signal.addEventListener('abort', () => {
-          if (!pendingApprovals.delete(request.requestId)) return;
-          view.pendingApproval = null;
+        abortHandler = () => {
+          if (!pendingApprovals.has(request.requestId)) return;
+          cleanup();
           resolve(undefined);
-        }, { once: true });
+        };
+        signal.addEventListener('abort', abortHandler, { once: true });
       });
       return answer;
+    }
+
+    if (request.toolName === 'write_file' || request.toolName === 'edit_file' || request.toolName === 'apply_patch') {
+      return {
+        requestId: request.requestId,
+        status: 'denied',
+        reason: 'Refused: reopen the Moderado chat to review the complete proposed change.',
+      };
     }
 
     const label = `Allow ${request.toolName}: ${request.actionSummary}`;
     const detailParts = [
       request.exactPayload.targetFile ? `Target: ${request.exactPayload.targetFile}` : undefined,
-      request.exactPayload.command?.length ? `Command: ${request.exactPayload.command.join(' ')}` : undefined,
+      request.exactPayload.command?.length ? `Command: ${JSON.stringify(request.exactPayload.command)}` : undefined,
       request.exactPayload.cwd ? `Working directory: ${request.exactPayload.cwd}` : undefined,
     ].filter(Boolean) as string[];
 
@@ -1185,6 +1201,7 @@ async function openDiffTab(requestId: string): Promise<void> {
         chatView = undefined;
         documentRendered = false;
         // Losing the view must deny anything still awaiting a decision.
+        for (const settle of [...pendingApprovals.values()]) settle(undefined);
         host.cancel('The Moderado view was closed.');
       });
       render();

@@ -13,18 +13,22 @@ const harness = vi.hoisted(() => ({
   workspaceRoot: '', windows: true, fileDialog: vi.fn(), contextPicker: vi.fn(), findFiles: vi.fn(), errors: vi.fn(),
   prompt: vi.fn(), browser: vi.fn(), write: vi.fn(), openExternal: vi.fn(), clipboard: [] as string[],
   commands: new Map<string, (...args: unknown[]) => unknown>(), saveDialog: vi.fn(), written: [] as { path: string; text: string }[], info: vi.fn(), resumed: '', running: false,
+  disposeView: undefined as undefined | (() => void),
+  openDocument: vi.fn(), showDocument: vi.fn(),
   workspaceTitles: new Map<string, unknown>(), listCalls: 0,
 }));
 vi.mock('vscode', () => ({
-  version: '1.135.0', ConfigurationTarget: { Global: 1 },
+  version: '1.135.0', ConfigurationTarget: { Global: 1 }, ViewColumn: { One: 1 },
   window: {
     createOutputChannel: () => ({ appendLine: vi.fn(), dispose: vi.fn() }),
     registerWebviewViewProvider: (_id: string, provider: unknown) => { harness.provider = provider; return { dispose: vi.fn() }; },
     showInputBox: harness.prompt, showOpenDialog: harness.fileDialog, showQuickPick: harness.contextPicker,
     showSaveDialog: harness.saveDialog,
     showErrorMessage: harness.errors, showWarningMessage: harness.confirm, showInformationMessage: harness.info,
+    showTextDocument: harness.showDocument,
   },
   workspace: { get workspaceFolders() { return [{ uri: { fsPath: harness.workspaceRoot } }]; }, findFiles: harness.findFiles,
+    openTextDocument: harness.openDocument,
     fs: { writeFile: async (uri: { fsPath: string }, data: Uint8Array) => { harness.written.push({ path: uri.fsPath, text: new TextDecoder().decode(data) }); } },
     getConfiguration: () => ({ get: (key: string, fallback: unknown) => harness.configValues.has(key) ? harness.configValues.get(key) : fallback, update: harness.configUpdate }) },
   commands: { registerCommand: (id: string, handler: (...args: unknown[]) => unknown) => { harness.commands.set(id, handler); return { dispose: vi.fn() }; } },
@@ -97,6 +101,8 @@ beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ object: 'list', data: [
     { id: 'Exact/Route', access: 'free', provider: 'owner', owned_by: 'owner', capabilities: ['tools'], data_note: '<note>' },
   ] }))));
+  harness.disposeView = undefined;
+  harness.openDocument.mockResolvedValue({}); harness.showDocument.mockResolvedValue(undefined);
   activate({ subscriptions: [], workspaceState: {
     get: (key: string) => harness.workspaceTitles.get(key),
     update: async (key: string, value: unknown) => { if (value === undefined) harness.workspaceTitles.delete(key); else harness.workspaceTitles.set(key, value); },
@@ -104,7 +110,7 @@ beforeEach(() => {
   harness.provider.resolveWebviewView({
     webview: { options: {}, html: '', onDidReceiveMessage: (receive: unknown) => { harness.receive = receive; },
       postMessage: (message: Record<string, unknown>) => { harness.messages.push(message); return Promise.resolve(true); } },
-    onDidDispose: vi.fn(),
+    onDidDispose: (dispose: () => void) => { harness.disposeView = dispose; },
   });
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
@@ -248,6 +254,65 @@ describe('default auto-approval', () => {
     expect(harness.messages.at(-1)?.pendingId).toBeNull();
   });
 
+  it('clears canceled approval preview state and ignores a late preview message', async () => {
+    send('setAutoApprove', { key: 'editFiles', value: false });
+    const promptForApproval = harness.agentOptions.promptForApproval as (
+      request: Record<string, unknown>, signal: AbortSignal,
+    ) => Promise<unknown>;
+    const controller = new AbortController();
+    const request = {
+      requestId: 'edit-canceled', toolName: 'edit_file', actionSummary: 'Edit file',
+      exactPayload: { targetFile: 'file.txt', diffPreview: 'complete diff' }, timestamp: Date.now(),
+    };
+    const pending = promptForApproval(request, controller.signal);
+    await vi.waitFor(() => expect(harness.messages.at(-1)).toMatchObject({ pendingId: 'edit-canceled' }));
+
+    controller.abort();
+    await expect(pending).resolves.toBeUndefined();
+    await vi.waitFor(() => expect(harness.messages.at(-1)?.pendingId).toBeNull());
+
+    send('preview', { requestId: 'edit-canceled' });
+    await Promise.resolve();
+    expect(harness.openDocument).not.toHaveBeenCalled();
+  });
+
+  it('clears pending approval synchronously when the webview is disposed', async () => {
+    send('setAutoApprove', { key: 'editFiles', value: false });
+    const promptForApproval = harness.agentOptions.promptForApproval as (
+      request: Record<string, unknown>, signal: AbortSignal,
+    ) => Promise<unknown>;
+    const controller = new AbortController();
+    const request = {
+      requestId: 'edit-disposed', toolName: 'edit_file', actionSummary: 'Edit file',
+      exactPayload: { targetFile: 'file.txt', diffPreview: 'complete diff' }, timestamp: Date.now(),
+    };
+    const pending = promptForApproval(request, controller.signal);
+    await vi.waitFor(() => expect(harness.messages.at(-1)).toMatchObject({ pendingId: 'edit-disposed' }));
+
+    harness.disposeView?.();
+    send('preview', { requestId: 'edit-disposed' });
+    await expect(pending).resolves.toBeUndefined();
+    expect(harness.openDocument).not.toHaveBeenCalled();
+  });
+
+  it('removes the abort listener after a normal approval decision', async () => {
+    send('setAutoApprove', { key: 'editFiles', value: false });
+    const promptForApproval = harness.agentOptions.promptForApproval as (
+      request: Record<string, unknown>, signal: AbortSignal,
+    ) => Promise<unknown>;
+    const controller = new AbortController();
+    const removeListener = vi.spyOn(controller.signal, 'removeEventListener');
+    const request = {
+      requestId: 'edit-approved', toolName: 'edit_file', actionSummary: 'Edit file',
+      exactPayload: { targetFile: 'file.txt', diffPreview: 'complete diff' }, timestamp: Date.now(),
+    };
+    const pending = promptForApproval(request, controller.signal);
+    await vi.waitFor(() => expect(harness.messages.at(-1)).toMatchObject({ pendingId: 'edit-approved' }));
+    send('approval', { requestId: 'edit-approved', status: 'approved' });
+    await expect(pending).resolves.toMatchObject({ requestId: 'edit-approved', status: 'approved' });
+    expect(removeListener).toHaveBeenCalledWith('abort', expect.any(Function));
+  });
+
   it('gates a category only while it is turned off', () => {
     const isAutoApproved = harness.agentOptions.isAutoApproved as (toolName: string) => boolean;
 
@@ -258,6 +323,43 @@ describe('default auto-approval', () => {
     expect(isAutoApproved('web_search')).toBe(true);
     // A tool with no known category is never treated as pre-approved.
     expect(isAutoApproved('unlisted_tool')).toBe(false);
+  });
+
+  it('denies a human-gated file mutation when the review view is unavailable', async () => {
+    const promptForApproval = harness.agentOptions.promptForApproval as (
+      request: Record<string, unknown>, signal: AbortSignal,
+    ) => Promise<{ status: string }>;
+    send('setAutoApprove', { key: 'editFiles', value: false });
+    harness.disposeView?.();
+
+    const result = await promptForApproval({
+      requestId: 'edit-no-view', toolName: 'edit_file', actionSummary: 'Edit source',
+      exactPayload: { targetFile: 'src/file.ts', contentPreview: 'complete replacement' }, timestamp: Date.now(),
+    }, new AbortController().signal);
+
+    expect(result.status).toBe('denied');
+    expect(harness.info).not.toHaveBeenCalled();
+  });
+
+  it('shows command arguments as an exact array and includes cwd in the modal', async () => {
+    const promptForApproval = harness.agentOptions.promptForApproval as (
+      request: Record<string, unknown>, signal: AbortSignal,
+    ) => Promise<{ status: string }>;
+    const command = ['node', '-e', 'console.log("two words")'];
+    harness.info.mockResolvedValue('Allow');
+    harness.disposeView?.();
+
+    const result = await promptForApproval({
+      requestId: 'command-modal', toolName: 'run_command', actionSummary: 'Run a command',
+      exactPayload: { command, cwd: harness.workspaceRoot }, timestamp: Date.now(),
+    }, new AbortController().signal);
+
+    expect(result.status).toBe('approved');
+    expect(harness.info).toHaveBeenCalledWith(
+      'Allow run_command: Run a command',
+      { modal: true, detail: `Command: ${JSON.stringify(command)}\nWorking directory: ${harness.workspaceRoot}` },
+      'Allow', 'Deny',
+    );
   });
 });
 

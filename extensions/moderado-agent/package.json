@@ -109,11 +109,6 @@
           "default": false,
           "description": "Allow routing to models with an unknown access tier. Off by default."
         },
-        "moderado.requireApprovalByDefault": {
-          "type": "boolean",
-          "default": true,
-          "description": "Require an explicit human decision for file mutations, commands, diagnostics, and MCP calls. Disabling this is not recommended."
-        },
         "moderado.webSearchEnabled": {
           "type": "boolean",
           "default": true,

@@ -202,9 +202,21 @@ export function approvalHtml(
   preview: (r: ApprovalRequest) => string,
 ): string {
   if (!pending) return '';
+  const affectedPaths = pending.toolName === 'apply_patch'
+    ? [...new Set(
+      Array.from(
+        pending.exactPayload.diffPreview?.matchAll(/^\+\+\+ b\/(.+)$/gm) ?? [],
+        match => match[1],
+      ).filter((path): path is string => !!path),
+    )]
+    : [];
+  const files = affectedPaths.length
+    ? `<section class="approval-files" aria-label="Affected files"><h3>Affected files</h3><ul>${affectedPaths.map(path => `<li>${escapeHtml(path)}</li>`).join('')}</ul></section>`
+    : '';
   return `<section class="approval" role="alertdialog" aria-label="Approval required">
             <h2>Approval required</h2>
             <p>${escapeHtml(pending.actionSummary)}</p>
+            ${files}
             <pre>${escapeHtml(preview(pending))}</pre>
             <button id="full-diff" type="button">Show full change</button>
             <button id="allow" type="button">Allow</button>
@@ -319,6 +331,8 @@ body { font-family: var(--vscode-font-family); font-size: 13px; color: var(--vsc
   pre { white-space: pre-wrap; word-break: break-word; margin: 0.2rem 0 0; font-family: var(--vscode-editor-font-family, monospace); }
   .approval { border: 1px solid var(--vscode-focusBorder); padding: 0.75rem; margin-top: 1rem; border-radius: 4px; }
   .approval h2 { font-size: 1rem; margin: 0 0 0.4rem; }
+  .approval-files h3 { font-size: 0.85rem; margin: 0.5rem 0 0.25rem; }
+  .approval-files ul { margin: 0; padding-left: 1.25rem; overflow-wrap: anywhere; }
   /* Visually hidden, still read by a screen reader. Repeated with the .settings
      scope because the .settings input/select rule is more specific than a bare
      class and would otherwise win the width and display properties. */

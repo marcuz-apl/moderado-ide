@@ -84,14 +84,12 @@ mutations. MCP server trust before launch remains separate from per-call
 approval. The current CLI's interactive handler may auto-approve actions
 differently; see [Profile and behavior compatibility](docs/PROFILE.md).
 
-F5 requires work beyond the current core: `write_file` has no complete diff
-preview, multi-file patch approval does not enumerate every target in the
-structured payload, and the core currently accepts an `approved` status
-without validating the decision request ID. The IDE integration must
-close these gaps through a validated host boundary and, where needed, a
-separately reviewed upstream Moderado change. Its approval handler must own
-an explicit deadline; the existing policy's timeout field alone does not
-enforce one.
+The IDE host closes the approval gaps at its boundary: it supplies complete
+write previews, shows an explicit affected-file list derived from every
+generated patch diff header, validates approval decisions against the pending
+request id, and owns the timeout. These protections belong to the IDE
+integration; the pinned shared core's approval policy alone does not enforce
+the host's decision-id or timeout checks.
 
 ## 5. Shared-profile contract
 
