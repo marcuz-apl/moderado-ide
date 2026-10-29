@@ -33,9 +33,9 @@ The Gateway now serves stealth models that need no account. The IDE reads the ca
 
 - `npm test` — 615 passed, 6 skipped, 1 failed. The failure is `test/profile.test.ts > config coordination > preserves independent writes from separate IDE processes`.
 - Control run at `1f7e52b` (upstream, without this work) — 581 passed, 6 skipped, 1 failed: the same coordination test. It passes in isolation (2.5 s) and fails under the full parallel suite (6–10 s), so it is load-sensitive and pre-existing, not caused by this change.
-- `npx vitest run test/provider-discovery.test.ts test/provider-transport.test.ts test/host.test.ts test/settings-view.test.ts test/settings-host.test.ts test/chat-view.test.ts test/webview-script.test.ts` — PASS; 308 passed.
+- `npx vitest run test/provider-discovery.test.ts test/provider-transport.test.ts test/host.test.ts test/settings-view.test.ts test/settings-host.test.ts test/chat-view.test.ts test/webview-script.test.ts test/session-title.test.ts test/chat-retention.test.ts` — PASS; 344 passed.
 - `npm run typecheck` — PASS.
-- `npm run compile` — PASS; extension bundle produced at 614 KiB and contains the new strings.
+- `npm run compile` — PASS; extension bundle produced at 626 KiB and contains the new strings.
 - No live Gateway request was made. The catalog shape comes from CLI commit `7cae817` (`v0.4.52+2610291`), its `nvidia_adapter.ts`, and its offline `model_selector_cloud.test.ts` fixtures, not from a call to the server.
 
 ## Decisions and context
