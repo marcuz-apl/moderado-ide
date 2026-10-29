@@ -17,8 +17,25 @@ export const MODERADO_BASE_URLS = {
   production: 'https://modr.alfazen.org/v1',
 } as const;
 
+/**
+ * The built-in deployment a Gateway URL belongs to, if any.
+ *
+ * The CLI records this choice as `gatewayEnvironment` on the shared profile and
+ * lets it override its automatic probe. Writing the marker when the IDE's
+ * Dev/Prod toggle picks a built-in URL keeps both applications pointed at the
+ * same Gateway; a custom URL returns undefined, and the CLI honours that URL
+ * directly.
+ */
+export function moderadoGatewayEnvironmentFor(url: string | undefined): 'production' | 'development' | undefined {
+  const normalized = url?.trim().replace(/\/+$/, '');
+  if (!normalized) return undefined;
+  if (normalized === MODERADO_BASE_URLS.development) return 'development';
+  if (normalized === MODERADO_BASE_URLS.production) return 'production';
+  return undefined;
+}
+
 export const DESKTOP_PROVIDER_PRESETS: readonly DesktopProviderPreset[] = [
-  { id: 'moderado-cloud', label: 'Moderado', description: 'Use browser sign-in, a saved key, a new key, or public access. Free routes require a Moderado website API key.', kind: 'openai-compatible', baseUrl: MODERADO_BASE_URLS.production, requiresApiKey: false, defaultModel: 'auto' },
+  { id: 'moderado-cloud', label: 'Moderado', description: 'Use the free default models without a key, or sign in for the account routes.', kind: 'openai-compatible', baseUrl: MODERADO_BASE_URLS.production, requiresApiKey: false, defaultModel: 'auto' },
   { id: 'nvidia-nim', label: 'NVIDIA NIM', description: 'Free-first routing across NVIDIA hosted models.', kind: 'nvidia-nim', baseUrl: 'https://integrate.api.nvidia.com/v1', requiresApiKey: true, freeCatalog: true },
   { id: 'openrouter', label: 'OpenRouter', description: 'One key for hosted models and free-tier models.', kind: 'openai-compatible', baseUrl: 'https://openrouter.ai/api/v1', requiresApiKey: true },
   { id: 'ollama', label: 'Ollama', description: 'Models served locally by Ollama.', kind: 'openai-compatible', baseUrl: 'http://127.0.0.1:11434/v1', requiresApiKey: false, local: true },

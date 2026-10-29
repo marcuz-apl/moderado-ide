@@ -31,7 +31,7 @@ import { DEFAULT_CONTEXT_BUDGET_TOKENS, compactConversation } from './context-bu
  */
 export const COMPACTED_STATUS_PREFIX = 'Summarised';
 import { DESKTOP_PROVIDER_PRESETS } from './provider-catalog.js';
-import { fetchGatewayRoutes, type GatewayRoute } from './provider-discovery.js';
+import { fetchGatewayRoutes, isPinnedDefault, type GatewayRoute } from './provider-discovery.js';
 import { DesktopOpenAIAdapter } from './provider-transport.js';
 import { DesktopModelRouter } from './model-router.js';
 import type { SettingsPreferences } from './settings-preferences.js';
@@ -239,6 +239,10 @@ export interface ModelOption {
   accessTier: string;
   toolSupport: string;
   isFree: boolean;
+  /** Gateway display name, when the catalog advertises one. */
+  name?: string;
+  /** `default` marks a Gateway route usable without an account key. */
+  section?: 'default' | 'other';
   provider?: string;
   ownedBy?: string;
   capabilities?: string[];
@@ -452,15 +456,16 @@ export class AgentHost implements IApprovalHandler {
           throw new Error(`The selected model '${input.modelId}' is not available from this connection. Open Moderado Settings to refresh models or choose another.`);
         }
       }
-      // A free Gateway route needs a website key. Without one the provider
-      // answers 401 and the only visible symptom is a request that failed,
-      // so the real cause is named here instead.
+      // A free Gateway route needs a website key, but the pinned default routes
+      // are the exception: the Gateway serves those to a keyless session. Only a
+      // free route that is not pinned is refused, and the cause is named here
+      // rather than left as a 401 with no explanation.
       if (resolution.connectionId === 'moderado-cloud' && !resolution.hasApiKey) {
         const route = routes?.find((item) => item.id === requested);
-        if (route?.access === 'free') {
+        if (route?.access === 'free' && !isPinnedDefault(route)) {
           throw new Error(
-            `Model '${route.id}' is a free Gateway route and needs a Moderado website API key. `
-            + 'Open Moderado Settings, paste a key, and save.',
+            `Model '${route.id}' is a free Gateway route that needs a Moderado website API key. `
+            + 'Open Moderado Settings, paste a key, and save, or pick one of the free default models.',
           );
         }
       }
@@ -506,6 +511,15 @@ export class AgentHost implements IApprovalHandler {
       // Persist the turn so the conversation survives a restart and stays
       // readable by the CLI. A failed save must not lose the turn's result.
       const usage = result.usage;
+      // A keyless Gateway session reaches the pinned free defaults and the paid
+      // routes without an account, so nothing it can select costs the user. The
+      // CLI records the same sessions at $0.00; without this the cost badge
+      // stays blank, because the IDE never records a price of its own.
+      const keylessGateway = resolution.connectionId === 'moderado-cloud' && !resolution.hasApiKey;
+      const applied = usage ? SessionStore.applyUsage(session.usage, usage, true) : session.usage;
+      const nextUsage = keylessGateway && usage && !session.usage.costKnown
+        ? { ...applied, available: true, costKnown: true, costUsd: 0 }
+        : applied;
       let saved: StoredSession;
       try {
         // Checked save: if the CLI touched this session since it was read, the
@@ -517,7 +531,7 @@ export class AgentHost implements IApprovalHandler {
             modelId: result.selectedModel.id,
             mode: input.planMode ? 'Plan' : session.mode,
             messages: [...recorded, ...conversationOf(result.messages).slice(sent.length)],
-            usage: usage ? SessionStore.applyUsage(session.usage, usage, true) : session.usage,
+            usage: nextUsage,
           },
           { knownUpdatedAt: session.updatedAt },
         );
@@ -610,6 +624,8 @@ export class AgentHost implements IApprovalHandler {
         toolSupport: classification.toolSupport,
         isFree: classification.accessTier === 'free_trial' || classification.accessTier === 'local',
         ownedBy: entry.owned_by,
+        ...(route?.name ? { name: route.name } : {}),
+        ...(route?.section ? { section: route.section } : {}),
         ...(route ? { provider: route.provider, capabilities: route.capabilities, dataNote: route.data_note } : {}),
       };
     });

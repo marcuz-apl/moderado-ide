@@ -131,10 +131,15 @@ export class DesktopOpenAIAdapter implements IProviderAdapter {
         ] };
         return { role: message.role, content: message.content };
       });
+      // A keyless Gateway session has no account key. `auto` then means the
+      // Gateway's pinned free defaults, which are reached by omitting `model`;
+      // sending `auto` would ask for full routing and fail the free-route key
+      // check. Mirrors the CLI adapter's rule.
+      const useGatewayDefaults = this.config.id === 'moderado-cloud' && !this.config.apiKey && options.modelId === 'auto';
       const response = await bounded(() => (this.config.fetchImpl ?? fetch)(`${this.baseUrl}/chat/completions`, {
         method: 'POST', redirect: 'error',
         headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
-        body: JSON.stringify({ model: options.modelId, messages, stream: true, stream_options: { include_usage: true },
+        body: JSON.stringify({ ...(useGatewayDefaults ? {} : { model: options.modelId }), messages, stream: true, stream_options: { include_usage: true },
           ...(options.tools?.length ? { tools: options.tools.map(tool => ({ type: 'function', function: tool })) } : {}),
           ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
           ...(options.maxTokens !== undefined ? { max_tokens: options.maxTokens } : {}),
@@ -149,7 +154,7 @@ export class DesktopOpenAIAdapter implements IProviderAdapter {
           // user to enter a key sends them to the wrong place.
           throw new AuthenticationError(this.config.apiKey
             ? 'The Moderado Gateway rejected this API key. Open Moderado Settings to sign in again or enter a current key.'
-            : 'Free Gateway models require a valid Moderado website API key. Open Moderado Settings to sign in or enter a key.', 401);
+            : 'The Gateway rejected the keyless free defaults. Open Moderado Settings to sign in or enter a Moderado key.', 401);
         }
         throw statusError(response.status, retry && /^\d+$/.test(retry) ? Number(retry) : undefined);
       }

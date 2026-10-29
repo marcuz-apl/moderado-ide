@@ -6,6 +6,8 @@ export interface DiscoveredModelLike {
   accessTier: string;
   toolSupport: string;
   isFree: boolean;
+  name?: string;
+  section?: 'default' | 'other';
   provider?: string;
   ownedBy?: string;
   capabilities?: string[];
@@ -59,6 +61,8 @@ export async function discoverModelOptions(
       id: model.id,
       accessTier: model.accessTier,
       isFree: model.isFree,
+      ...(model.name !== undefined ? { name: model.name } : {}),
+      ...(model.section !== undefined ? { section: model.section } : {}),
       ...(model.provider !== undefined ? { provider: model.provider } : {}),
       ...(model.ownedBy !== undefined ? { ownedBy: model.ownedBy } : {}),
       ...(model.capabilities !== undefined ? { capabilities: [...model.capabilities] } : {}),

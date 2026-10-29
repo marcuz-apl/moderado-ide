@@ -66,6 +66,33 @@ describe('provider profile recovery', () => {
     expect(fetchImpl.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
   });
 
+  it('runs a keyless Gateway pinned default even though the catalog calls it paid', async () => {
+    // The Gateway marks its stealth defaults with section:'default' and may
+    // advertise them as paid while serving them for nothing. The marker, not
+    // the cost tier, decides whether a keyless session may select the route.
+    const home = configuredHome('moderado-cloud', { baseUrl: 'https://modr.alfazen.org/v1', authMethod: 'public', defaultModel: 'stealth one' });
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async (url, init) => {
+      if (init?.method !== 'POST') {
+        return Response.json({ object: 'list', data: [
+          { id: 'stealth one', name: 'Stealth One', access: 'paid', section: 'default', capabilities: ['tools'] },
+        ] });
+      }
+      return new Response(
+        'data: {"choices":[{"delta":{"content":"Hello."},"finish_reason":"stop"}]}\n\n'
+        + 'data: {"choices":[],"usage":{"prompt_tokens":10,"completion_tokens":2,"total_tokens":12}}\n\n'
+        + 'data: [DONE]\n\n',
+      );
+    });
+    const host = new AgentHost({ workspaceRoot: workspace(), moderadoHome: home, fetchImpl, onEvent: () => {}, promptForApproval: async () => undefined });
+    const result = await host.startRun({ task: 'Hello.', modelId: 'stealth one' });
+
+    expect(result.status).toBe('completed');
+    const post = fetchImpl.mock.calls.find(([, init]) => init?.method === 'POST')!;
+    expect(JSON.parse(String(post[1]?.body)).model).toBe('stealth one');
+    // Nothing a keyless Gateway session can select costs the user.
+    expect(host.session?.usage).toMatchObject({ costKnown: true, costUsd: 0 });
+  });
+
   it.each([
     ['config.json is not valid JSON: private-api-key excerpt', 'config.json is not valid JSON.'],
     ['config.json is empty.', 'config.json is empty.'],
@@ -327,14 +354,26 @@ describe('Desktop provider host integration', () => {
     expect(JSON.stringify(events)).not.toContain('mrd_offline_fixture');
   });
 
-  it('sends Gateway AUTO to the server without pinning a catalog route', async () => {
+  it('omits the model for a keyless Gateway AUTO so the pinned defaults answer', async () => {
     const fetchImpl = fakeHTTP([route]);
     const host = new AgentHost({ workspaceRoot: workspace(), moderadoHome: configuredHome('moderado-cloud', gateway), fetchImpl, onEvent: () => {}, promptForApproval: async () => undefined });
     const result = await host.startRun({ task: 'Say hello.', modelId: 'auto' });
     expect(result.model).toBe('auto');
     const post = fetchImpl.mock.calls.find(([, init]) => init?.method === 'POST')!;
-    expect(JSON.parse(String(post[1]?.body)).model).toBe('auto');
+    // Sending `auto` would ask for full routing and fail the free-route key
+    // check; omitting the model is how a keyless session reaches the defaults.
+    expect(JSON.parse(String(post[1]?.body))).not.toHaveProperty('model');
     expect(post[1]?.headers).not.toHaveProperty('Authorization');
+  });
+
+  it('still sends Gateway AUTO when the connection holds a key', async () => {
+    const fetchImpl = fakeHTTP([route]);
+    const home = configuredHome('moderado-cloud', { ...gateway, apiKey: 'mrd_offline_fixture' });
+    const host = new AgentHost({ workspaceRoot: workspace(), moderadoHome: home, fetchImpl, onEvent: () => {}, promptForApproval: async () => undefined });
+    await host.startRun({ task: 'Say hello.', modelId: 'auto' });
+    const post = fetchImpl.mock.calls.find(([, init]) => init?.method === 'POST')!;
+    expect(JSON.parse(String(post[1]?.body)).model).toBe('auto');
+    expect(post[1]?.headers).toHaveProperty('Authorization');
   });
 
   it('preserves Gateway tool history and leaves output limits to v0.4.8 Gateway AUTO', async () => {

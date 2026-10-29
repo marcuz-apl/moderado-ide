@@ -11,7 +11,7 @@ describe('Gateway and provider Settings boundary', () => {
     const gatewayChoice = choices.find((choice) => choice.value === 'moderado-cloud');
     expect(gatewayChoice?.label).toBe('Moderado');
     expect(gatewayChoice?.tag).toBeUndefined();
-    expect(gatewayChoice?.description).toContain('public access');
+    expect(gatewayChoice?.description).toContain('free default models');
 
     const html = settingsPaneHtml(gateway());
     expect(html).toContain('id="settings-provider"');
@@ -53,14 +53,46 @@ describe('Gateway and provider Settings boundary', () => {
     expect(html).toContain('id="settings-base-url"');
     expect(html).toContain('http://127.0.0.1:4788/v1');
     expect(html).not.toContain('local runtime needs no API key');
-    expect(html).toContain('Free Gateway models need a website API key');
+    expect(html).toContain('The free default models need no key or sign-in');
   });
 
-  it('labels Gateway AUTO without describing its routing internals', () => {
-    const html = settingsPaneHtml({ ...gateway(), defaultModel: 'auto', models: [{ id: 'auto', accessTier: 'unknown', isFree: false }] });
+  it('labels a keyed Gateway AUTO without describing its routing internals', () => {
+    // A keyed session keeps the plain label: the Gateway may route it anywhere.
+    const html = settingsPaneHtml({ ...gateway(), apiKeyStored: true, defaultModel: 'auto', models: [{ id: 'auto', accessTier: 'unknown', isFree: false }] });
     expect(html).toContain('>AUTO</option>');
     expect(html).not.toContain('AUTO · Gateway routing');
     expect(html).toContain('may select a free or paid route');
+  });
+
+  it('describes a keyless Gateway AUTO as the free defaults', () => {
+    // Without a key, `auto` is not full routing: the request omits the model
+    // and the Gateway answers with its pinned free defaults.
+    const html = settingsPaneHtml({ ...gateway(), apiKeyStored: false, defaultModel: 'auto', models: [{ id: 'auto', accessTier: 'unknown', isFree: false }] });
+    expect(html).toContain('AUTO · Gateway free defaults');
+    expect(html).toContain('The Gateway routes to its free default models.');
+    expect(html).not.toContain('may select a free or paid route');
+  });
+
+  it('lists the Gateway pinned defaults by their stealth name without a key', () => {
+    // The Gateway advertises a stealth route as paid and still serves it for
+    // nothing; section:'default' is what makes it selectable without a key.
+    const html = settingsPaneHtml({ ...gateway(), apiKeyStored: false, allowPaid: false, defaultModel: 'stealth one', models: [
+      { id: 'auto', accessTier: 'unknown', isFree: false },
+      { id: 'stealth one', name: 'Stealth One', accessTier: 'paid', isFree: false, section: 'default', capabilities: ['tools'] },
+      { id: 'stealth two', accessTier: 'paid', isFree: false, section: 'default' },
+      { id: 'owner/free-route', accessTier: 'free_trial', isFree: true },
+      { id: 'owner/paid-route', accessTier: 'paid', isFree: false },
+    ] });
+    expect(html).toContain('<option value="stealth one" selected>★ Stealth One</option>');
+    // No display name falls back to the id.
+    expect(html).toContain('<option value="stealth two">★ stealth two</option>');
+    // A free route still needs an account, and a paid route is not offered.
+    expect(html).not.toContain('value="owner/paid-route"');
+    expect(html).toContain('A Gateway default model. No key or sign-in is required.');
+    // The selected line uses the same name as the option, not the raw route id.
+    expect(html).toContain('Selected model: <strong>Stealth One</strong>');
+    // Two pinned defaults plus the free route count as free for this provider.
+    expect(html).toContain('<span>3 free</span>');
   });
 
   it('offers a masked write-only key field without returning stored credentials', () => {
@@ -94,14 +126,31 @@ describe('Gateway and provider Settings boundary', () => {
     expect(html).not.toMatch(/id="settings-api-key"[^>]*value="[^"]+"/);
   });
 
-  it('warns that a free Gateway model needs a key', () => {
+  it('offers the pinned defaults to a keyless session and keeps the key box optional', () => {
     const html = settingsPaneHtml({ ...gateway(), apiKeyStored: false,
       models: [{ id: 'owner/free-route', accessTier: 'free_trial', isFree: true }] });
-    expect(html).toContain('Free Gateway models need a website API key');
+    expect(html).toContain('The free default models need no key or sign-in');
+    // The box stays available for the account routes.
+    expect(html).toContain('Paste API key');
   });
 
   it('offers browser sign-in without accepting a token in the pane', () => {
     expect(settingsPaneHtml({ ...gateway(), loginMethod: 'browser' })).toContain('id="settings-browser-login"');
+  });
+
+  it('offers an explicit account-free action for the Gateway', () => {
+    // The key box cannot express "no key": an empty box on an ordinary save
+    // keeps whatever the profile records. Choosing the free defaults has to be
+    // a deliberate action, the way the CLI's sign-in menu offers it.
+    const html = settingsPaneHtml({ ...gateway(), apiKeyStored: false });
+    expect(html).toContain('id="settings-use-free"');
+    expect(html).toContain('Use free models without an account');
+    // The action is Gateway-only: a BYOK provider has no account-free tier.
+    expect(settingsPaneHtml({ ...emptySettings(), open: true, preset: 'nvidia-nim', providers: buildProviderChoices() }))
+      .not.toContain('id="settings-use-free"');
+    // A stored key is not silently dropped: the action is not offered, matching
+    // the CLI, which skips the sign-in menu when a reusable key exists.
+    expect(settingsPaneHtml({ ...gateway(), apiKeyStored: true })).not.toContain('id="settings-use-free"');
   });
 
   it('offers no Paid tab for the Gateway, which handles free routes only', () => {
@@ -117,9 +166,9 @@ describe('Gateway and provider Settings boundary', () => {
     expect(html).toContain('owner/free-route');
   });
 
-  it('points the Gateway key note at browser sign-in', () => {
+  it('points the Gateway key note at browser sign-in for the account routes', () => {
     const html = settingsPaneHtml({ ...gateway(), apiKeyStored: false });
-    expect(html).toContain('Free Gateway models need a website API key. Sign in with browser to get API Key');
+    expect(html).toContain('The free default models need no key or sign-in. Sign in with browser to use the account routes.');
   });
 
   it('omits the provider and owner rows under the selected model', () => {

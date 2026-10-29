@@ -9,6 +9,8 @@ const collect = async (adapter: DesktopOpenAIAdapter, signal?: AbortSignal) => {
 };
 const adapterFor = (text: string) => new DesktopOpenAIAdapter({ id: 'moderado-cloud', name: 'Gateway', baseUrl: 'https://example.test/v1', fetchImpl: async () => new Response(text) });
 const frame = (value: unknown) => `data: ${JSON.stringify(value)}\n\n`;
+/** A minimal complete stream: one text delta, a stop, then the sentinel. */
+const done = frame({ choices: [{ delta: { content: 'Hi.' }, finish_reason: 'stop' }] }) + 'data: [DONE]\n\n';
 
 describe('Desktop provider transport', () => {
   it('sends genuine image parts for mapped users and keeps ordinary text unchanged', async () => {
@@ -61,10 +63,32 @@ describe('Desktop provider transport', () => {
     await expect(collect(adapter)).rejects.not.toThrow('secret-test-body');
   });
 
-  it('explains the Gateway free-route key requirement on HTTP 401 without exposing the response body', async () => {
+  it('explains the rejected keyless defaults on HTTP 401 without exposing the response body', async () => {
     const adapter = new DesktopOpenAIAdapter({ id: 'moderado-cloud', name: 'Gateway', baseUrl: 'https://example.test/v1', fetchImpl: async () => new Response('private-body', { status: 401 }) });
-    await expect(collect(adapter)).rejects.toThrow(/Moderado website API key.*Settings/);
+    await expect(collect(adapter)).rejects.toThrow(/keyless free defaults.*Settings/);
     await expect(collect(adapter)).rejects.not.toThrow('private-body');
+  });
+
+  it('omits the model for a keyless Gateway AUTO request', async () => {
+    // A keyless session reaches the pinned defaults only by leaving `model`
+    // out; `auto` would ask for full routing and fail the free-route key check.
+    const bodies: string[] = [];
+    const adapter = new DesktopOpenAIAdapter({
+      id: 'moderado-cloud', name: 'Gateway', baseUrl: 'https://example.test/v1',
+      fetchImpl: async (_url, init) => { bodies.push(String(init?.body)); return new Response(done); },
+    });
+    for await (const _chunk of adapter.streamChat({ modelId: 'auto', messages: [{ role: 'user', content: 'hi' }] })) { /* drain */ }
+    expect(JSON.parse(bodies[0])).not.toHaveProperty('model');
+  });
+
+  it('sends the model for a keyed Gateway AUTO request', async () => {
+    const bodies: string[] = [];
+    const adapter = new DesktopOpenAIAdapter({
+      id: 'moderado-cloud', name: 'Gateway', baseUrl: 'https://example.test/v1', apiKey: 'mrd_test',
+      fetchImpl: async (_url, init) => { bodies.push(String(init?.body)); return new Response(done); },
+    });
+    for await (const _chunk of adapter.streamChat({ modelId: 'auto', messages: [{ role: 'user', content: 'hi' }] })) { /* drain */ }
+    expect(JSON.parse(bodies[0]).model).toBe('auto');
   });
 
   it('reports a rejected key instead of a missing one when the request carried a key', async () => {

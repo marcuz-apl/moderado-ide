@@ -11,7 +11,7 @@ describe('Settings preferences', () => {
   });
 
   it('defaults to free models, web search, English, a bounded approval wait, and a context budget', () => {
-    expect(defaultSettingsPreferences).toEqual({ allowPaidModels: false, allowUnknownModels: false, webSearchEnabled: true, showHistoryOnStartup: false, preferredLanguage: 'English', approvalTimeoutSeconds: 120, contextBudgetTokens: 48_000 });
+    expect(defaultSettingsPreferences).toEqual({ allowPaidModels: false, allowUnknownModels: false, webSearchEnabled: true, showHistoryOnStartup: false, preferredLanguage: 'English', approvalTimeoutSeconds: 120, contextBudgetTokens: 48_000, chatRetentionCount: 50 });
   });
 
   it('validates every supported preference with a typed value', () => {
@@ -26,6 +26,8 @@ describe('Settings preferences', () => {
       expect(parsePreferenceChange('approvalTimeoutSeconds', value)).toEqual({ ok: true, value: { key: 'approvalTimeoutSeconds', value } });
     for (const value of [4_000, 48_000, 200_000])
       expect(parsePreferenceChange('contextBudgetTokens', value)).toEqual({ ok: true, value: { key: 'contextBudgetTokens', value } });
+    for (const value of [10, 50, 1_000])
+      expect(parsePreferenceChange('chatRetentionCount', value)).toEqual({ ok: true, value: { key: 'chatRetentionCount', value } });
   });
 
   it('rejects unknown keys, invalid language values, and malformed timeout values', () => {
@@ -37,12 +39,14 @@ describe('Settings preferences', () => {
       expect(parsePreferenceChange('approvalTimeoutSeconds', value).ok).toBe(false);
     for (const value of [0, 3_999, 200_001, 1.5, NaN, Infinity, '48000', null, undefined])
       expect(parsePreferenceChange('contextBudgetTokens', value).ok).toBe(false);
+    for (const value of [0, 9, 1_001, 2.5, NaN, Infinity, '50', null, undefined])
+      expect(parsePreferenceChange('chatRetentionCount', value).ok).toBe(false);
   });
 
   it('renders only real features controls and reflects preference values', () => {
     const html = settingsFeaturesHtml({ ...defaultSettingsPreferences, allowPaidModels: true, approvalTimeoutSeconds: 60 });
     for (const title of ['Agent', 'Editor', 'Advanced']) expect(html).toContain(`>${title}</h3>`);
-    for (const key of ['allowPaidModels', 'allowUnknownModels', 'webSearchEnabled', 'showHistoryOnStartup', 'approvalTimeoutSeconds', 'contextBudgetTokens'])
+    for (const key of ['allowPaidModels', 'allowUnknownModels', 'webSearchEnabled', 'showHistoryOnStartup', 'approvalTimeoutSeconds', 'contextBudgetTokens', 'chatRetentionCount'])
       expect(html).toContain(`data-preference="${key}"`);
     expect(html).toMatch(/data-preference="allowPaidModels"[^>]*checked/);
     expect(html).toMatch(/data-preference="allowUnknownModels"(?![^>]*checked)/);

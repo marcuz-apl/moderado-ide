@@ -8,6 +8,9 @@ import { AgentEvent, ApprovalRequest } from '@moderado/contracts';
 import { AgentHost, RunOutcome, COMPACTED_STATUS_PREFIX } from './host.js';
 import { chatFileName, sessionMarkdown } from './session-export.js';
 import { searchChats } from './session-search.js';
+import { chatTitle } from './session-title.js';
+import { cleanupCandidates } from './chat-retention.js';
+import { moderadoGatewayEnvironmentFor } from './provider-catalog.js';
 import { RawDecision } from './approval.js';
 import { configPath, readConfig } from './profile.js';
 import { updateConfigCoordinated } from './coordination.js';
@@ -873,6 +876,10 @@ async function openDiffTab(requestId: string): Promise<void> {
         ...(discovery.id === 'moderado-cloud' ? {
           credentialReference: connection.credentialReference,
           credentialExpiresAt: 'credentialExpiresAt' in connection ? connection.credentialExpiresAt : undefined,
+          // The CLI reads this marker before its automatic probe, so the
+          // Dev/Prod choice made here must be recorded in the form it reads.
+          // A custom URL yields undefined, which drops a stale marker.
+          gatewayEnvironment: moderadoGatewayEnvironmentFor(connection.baseUrl),
         } : {}) };
       savePhase = 'profile persistence';
       const result = updateConfigCoordinated(configPath(), {
@@ -1300,6 +1307,7 @@ async function openDiffTab(requestId: string): Promise<void> {
     vscode.commands.registerCommand('moderado.exportChat', () => exportCurrentChat()),
     vscode.commands.registerCommand('moderado.searchChats', () => searchRecordedChats()),
     vscode.commands.registerCommand('moderado.branchChat', () => branchCurrentChat()),
+    vscode.commands.registerCommand('moderado.cleanUpChats', () => cleanUpOldChats()),
     vscode.commands.registerCommand('moderado.showSessions', async () => {
       const { sessions, invalid } = host.listSessions();
       if (invalid.length) {
@@ -1341,9 +1349,9 @@ async function openDiffTab(requestId: string): Promise<void> {
     const { sessions } = host.listSessions();
     view.recents = sessions.map((session) => ({
       id: session.id,
-      // The first user message is the session's title in every practical sense;
-      // it is user text, so it is escaped like any other transcript content.
-      title: savedSessionTitle(session.id) || firstLineOf(session) || 'Untitled session',
+      // A saved name wins; otherwise the chat is named after the first thing
+      // the user actually wrote. It is user text, so it is escaped downstream.
+      title: chatTitleOf(session.id, session),
       updatedAt: formatWhen(session.updatedAt),
       costLabel: costLabelOf(session.usage),
     }));
@@ -1364,7 +1372,7 @@ async function openDiffTab(requestId: string): Promise<void> {
       title: 'Rename chat',
       prompt: 'Enter a name for this chat',
       placeHolder: 'Chat name',
-      value: (savedSessionTitle(id) || firstLineOf(session) || 'Untitled session').slice(0, 120),
+      value: chatTitleOf(id, session).slice(0, 120),
       ignoreFocusOut: true,
       validateInput: (input: string) => {
         const title = input.trim();
@@ -1396,7 +1404,7 @@ async function openDiffTab(requestId: string): Promise<void> {
     const session = host.listSessions().sessions.find(item => item.id === id);
     if (!session) return;
     const choice = await vscode.window.showWarningMessage(
-      `Delete chat "${firstLineOf(session).slice(0, 80) || 'Untitled session'}"?`,
+      `Delete chat "${chatTitleOf(id, session)}"?`,
       { modal: true, detail: 'This permanently removes the saved chat and its attachments from this workspace’s shared Moderado history.' },
       'Delete',
     );
@@ -1465,7 +1473,7 @@ async function openDiffTab(requestId: string): Promise<void> {
     const matches = searchChats(
       sessions.map((session) => ({
         id: session.id,
-        title: savedSessionTitle(session.id) || firstLineOf(session) || 'Untitled session',
+        title: chatTitleOf(session.id, session),
         updatedAt: session.updatedAt,
         messages: session.messages,
       })),
@@ -1502,7 +1510,7 @@ async function openDiffTab(requestId: string): Promise<void> {
       void vscode.window.showInformationMessage('There is no chat to export yet.');
       return;
     }
-    const title = savedSessionTitle(session.id) || firstLineOf(session) || 'Untitled chat';
+    const title = chatTitleOf(session.id, session, 'Untitled chat');
     const target = await vscode.window.showSaveDialog({
       defaultUri: vscode.Uri.file(join(workspaceRoot, chatFileName(title))),
       filters: { Markdown: ['md'] },
@@ -1516,6 +1524,62 @@ async function openDiffTab(requestId: string): Promise<void> {
     } catch {
       void vscode.window.showErrorMessage('Could not write the export file. Choose another location and try again.');
     }
+  }
+
+  /**
+   * Offers to remove the oldest chats beyond the retention count.
+   *
+   * Nothing is deleted without a modal confirmation that says how many records
+   * would go, and the chat on screen is never among them. This is a command,
+   * not a background effect: the history belongs to the user.
+   */
+  async function cleanUpOldChats(): Promise<void> {
+    if (host.isRunning) {
+      void vscode.window.showInformationMessage('Stop the current run before cleaning up chats.');
+      return;
+    }
+    const { sessions } = host.listSessions();
+    const keep = readPreferences().chatRetentionCount;
+    const candidates = cleanupCandidates(
+      sessions.map((session) => ({
+        id: session.id,
+        title: chatTitleOf(session.id, session),
+        updatedAt: session.updatedAt,
+      })),
+      keep,
+      host.session?.id,
+    );
+    if (!candidates.length) {
+      void vscode.window.showInformationMessage(`You have ${sessions.length} chat(s); nothing is older than the ${keep} kept.`);
+      return;
+    }
+    const names = candidates.slice(0, 5).map((chat) => `"${chat.title.slice(0, 60)}"`).join(', ');
+    const choice = await vscode.window.showWarningMessage(
+      `Delete ${candidates.length} old chat(s)?`,
+      {
+        modal: true,
+        detail: `${names}${candidates.length > 5 ? ` and ${candidates.length - 5} more` : ''}. The ${keep} newest chats stay. This permanently deletes the saved chat files from this workspace's shared Moderado history.`,
+      },
+      'Delete',
+    );
+    if (choice !== 'Delete') return;
+    let deleted = 0;
+    for (const candidate of candidates) {
+      try {
+        if (!host.deleteSession(candidate.id)) continue;
+        deleted += 1;
+        try {
+          await context.workspaceState.update(sessionTitleKey(candidate.id), undefined);
+        } catch {
+          // The record is gone; a leftover display name only affects nothing.
+        }
+      } catch {
+        break;
+      }
+    }
+    invalidateRecents();
+    render();
+    void vscode.window.showInformationMessage(deleted ? `Deleted ${deleted} old chat(s).` : 'No chats were deleted.');
   }
 
   /** Resumes a recorded session in the panel: transcript + next-run session. */
@@ -1549,10 +1613,19 @@ async function openDiffTab(requestId: string): Promise<void> {
     void vscode.window.showInformationMessage(note ?? `Resumed session ${found.id.slice(0, 8)}.`);
   }
 
-  function firstLineOf(session: { messages: { role: string; content?: unknown }[] }): string {
-    const first = session.messages.find((m) => m.role === 'user');
-    const text = typeof first?.content === 'string' ? first.content : '';
-    return text.split('\n')[0].slice(0, 120).trim();
+  /**
+   * The name a chat is listed under.
+   *
+   * A name the user set always wins. Otherwise it is derived from the first
+   * usable line they wrote; deriving it keeps the name correct without a
+   * schema change the CLI would reject.
+   */
+  function chatTitleOf(
+    id: string,
+    session: { messages: { role: string; content?: unknown }[] },
+    fallback = 'Untitled session',
+  ): string {
+    return savedSessionTitle(id) || chatTitle(session.messages as never) || fallback;
   }
 
   /** A short, human date; falls back to the raw value if unparseable. */

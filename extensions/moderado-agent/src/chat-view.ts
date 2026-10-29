@@ -135,7 +135,8 @@ function emptyStateHtml(): string {
 }
 
 /** The RECENT list: newest sessions with their date and cost badge.
- * Shown only when the Chat History top-bar icon expands it. */
+ * Shown only when the Chat History top-bar icon expands it. The count is what
+ * the history costs, since deleting a chat is manual and one at a time. */
 function recentsHtml(state: ChatViewState): string {
   if (!state.historyOpen) return '';
   const recents = state.recents ?? [];
@@ -152,7 +153,7 @@ function recentsHtml(state: ChatViewState): string {
     )
     .join('');
   return `<section class="recents">
-    <header class="section-head"><span>RECENT</span><button id="search-chats" type="button">Search</button><button id="view-all-sessions" type="button">View All &rsaquo;</button></header>
+    <header class="section-head"><span>RECENT <span class="recents-count">${recents.length}</span></span><button id="search-chats" type="button">Search</button><button id="view-all-sessions" type="button">View All &rsaquo;</button></header>
     ${rows}
   </section>`;
 }
@@ -254,6 +255,7 @@ body { font-family: var(--vscode-font-family); font-size: 13px; color: var(--vsc
   .section-head { display: flex; align-items: center; justify-content: space-between; font-size: 0.72rem; letter-spacing: 0.06em; opacity: 0.7; margin: 0.6rem 0 0.3rem; }
   .section-head button { font-size: 0.72rem; opacity: 0.8; padding: 0.1rem 0.2rem; }
   .section-head button:hover { color: var(--vscode-textLink-foreground); }
+  .recents-count { opacity: 0.75; font-variant-numeric: tabular-nums; }
   .recent-item { display: flex; align-items: center; gap: 0.4rem; }
   .recent-item .recent-row { flex: 1; min-width: 0; }
   .rename-session, .delete-session { flex: 0 0 auto; font-size: 0.75rem; padding: 0.25rem; }
@@ -558,6 +560,7 @@ ${toolbarHtml(snapshot.historyOpen, snapshot.tokenUsage, snapshot.tokenUsageTitl
     const provider = document.getElementById('settings-provider');
     const setKey = document.getElementById('settings-set-key');
     const browserLogin = document.getElementById('settings-browser-login');
+    const useFree = document.getElementById('settings-use-free');
     const modelSelect = document.getElementById('settings-model-select');
     const apiKey = document.getElementById('settings-api-key');
     const baseUrl = document.getElementById('settings-base-url');
@@ -594,6 +597,9 @@ ${toolbarHtml(snapshot.historyOpen, snapshot.tokenUsage, snapshot.tokenUsageTitl
     });
     if (setKey) setKey.addEventListener('click', () => vscode.postMessage({ type: 'setProviderKey', ...readSettings(), loginMethod: 'manual' }));
     if (browserLogin) browserLogin.addEventListener('click', () => vscode.postMessage({ type: 'gatewayBrowserLogin', ...readSettings(), loginMethod: 'browser' }));
+    // The key box cannot say "no key": an empty box on an ordinary save keeps
+    // whatever the profile records. Choosing the free defaults is its own action.
+    if (useFree) useFree.addEventListener('click', () => vscode.postMessage({ type: 'saveSettings', ...readSettings(), loginMethod: 'public' }));
     for (const field of document.querySelectorAll('[data-preference]')) {
       field.addEventListener('change', () => {
         const value = field.type === 'checkbox' ? field.checked : field.type === 'number' ? Number(field.value) : field.value;

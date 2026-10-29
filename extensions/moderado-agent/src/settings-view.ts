@@ -21,6 +21,10 @@ export interface SettingsModel {
   /** Engine `AccessTier`: free_trial | paid | local | unknown. */
   accessTier: string;
   isFree: boolean;
+  /** Gateway display name, when the catalog advertises one. */
+  name?: string;
+  /** `default` marks a Gateway route usable without an account key. */
+  section?: 'default' | 'other';
   provider?: string;
   ownedBy?: string;
   capabilities?: string[];
@@ -142,9 +146,49 @@ function displayModelName(modelId: string): string {
   return modelId.replace(/\s*--\s*free[_ ]trial\s*$/i, '');
 }
 
+/**
+ * The name a model is shown under.
+ *
+ * The Gateway can publish a display name that differs from the id it routes by,
+ * so a stealth route is listed as "Stealth One" while the request still carries
+ * its canonical id.
+ */
+function modelName(model: SettingsModel): string {
+  return model.name ?? displayModelName(model.id);
+}
+
+/** The selected model's label, using the catalog's name when the route is known. */
+function selectedModelLabel(state: SettingsState): string {
+  const id = state.defaultModel ?? '';
+  const model = id === 'auto' ? undefined : eligibleModels(state).find((entry) => entry.id === id);
+  return model ? modelName(model) : displayModelName(id);
+}
+
 /** Moderado handles free routes only, so its picker has no Paid tab. */
 function gatewayFreeOnly(state: SettingsState): boolean {
   return state.preset === 'moderado-cloud';
+}
+
+/**
+ * A Gateway route the Gateway pins for account-free use.
+ *
+ * `section` decides this, not the cost tier: a pinned route can be advertised
+ * as paid and still cost nothing, because the Gateway routes it to its free
+ * defaults.
+ */
+function isPinnedDefault(model: SettingsModel): boolean {
+  return model.section === 'default';
+}
+
+/** A Gateway route a keyless session can select: a pinned default, or a free one. */
+function isGatewayUsable(model: SettingsModel): boolean {
+  return model.isFree || isPinnedDefault(model) || model.accessTier === 'local';
+}
+
+/** True when the selected Gateway connection holds no key, so it reaches only the free defaults. */
+function gatewayKeyless(state: SettingsState): boolean {
+  if (!gatewayFreeOnly(state)) return false;
+  return !(selectedChoice(state)?.hasCredential ?? state.apiKeyStored);
 }
 
 /**
@@ -157,18 +201,21 @@ function modelOptions(state: SettingsState): string {
   return tabModels(state)
     .map((model) => {
       const name = model.id === 'auto'
-        ? state.preset === 'moderado-cloud' ? 'AUTO' : 'AUTO · Free-first'
-        : displayModelName(model.id);
-      return `<option value="${escapeHtml(model.id)}"${model.id === state.defaultModel ? ' selected' : ''}>${escapeHtml(`${model.isFree ? '★ ' : ''}${name}`)}</option>`;
+        ? state.preset === 'moderado-cloud'
+          ? gatewayKeyless(state) ? 'AUTO · Gateway free defaults' : 'AUTO'
+          : 'AUTO · Free-first'
+        : modelName(model);
+      return `<option value="${escapeHtml(model.id)}"${model.id === state.defaultModel ? ' selected' : ''}>${escapeHtml(`${model.isFree || isPinnedDefault(model) ? '★ ' : ''}${name}`)}</option>`;
     })
     .join('');
 }
 
 function eligibleModels(state: SettingsState): SettingsModel[] {
   // Moderado handles free routes only, so paid and unclassified routes are not
-  // offered for it at all.
+  // offered for it at all. A pinned default is offered even when the Gateway
+  // advertises it as paid: a keyless session can select it for nothing.
   if (gatewayFreeOnly(state)) {
-    return state.models.filter((model) => model.id === 'auto' || model.isFree || model.accessTier === 'local');
+    return state.models.filter((model) => model.id === 'auto' || isGatewayUsable(model));
   }
   return state.models.filter(model => model.id === 'auto' || model.isFree || model.accessTier === 'local'
     || (model.accessTier === 'paid' && state.allowPaid) || (model.accessTier === 'unknown' && state.allowUnknown));
@@ -183,8 +230,8 @@ function paidTab(state: SettingsState): boolean {
 /** Models shown in the drop-down: Free shows free + AUTO, Paid shows paid. */
 function tabModels(state: SettingsState): SettingsModel[] {
   const eligible = eligibleModels(state);
-  if (paidTab(state)) return eligible.filter((m) => !m.isFree && m.id !== 'auto' && m.accessTier !== 'local');
-  return eligible.filter((m) => m.isFree || m.id === 'auto' || m.accessTier === 'local');
+  if (paidTab(state)) return eligible.filter((m) => !m.isFree && m.id !== 'auto' && m.accessTier !== 'local' && !isPinnedDefault(m));
+  return eligible.filter((m) => m.isFree || m.id === 'auto' || m.accessTier === 'local' || isPinnedDefault(m));
 }
 
 /** The left-hand settings navigation, matching the reference layout. */
@@ -209,7 +256,10 @@ function selectedModelDetails(state: SettingsState): string {
   const model = shown.find(entry => entry.id === state.defaultModel);
   if (!model) return '';
   return `<div class="selected-model-details">
-    ${model.id === 'auto' ? `<p class="note">${state.preset === 'moderado-cloud' ? 'Gateway selects the route and may select a free or paid route.' : 'Ranks eligible models and permits fallback.'}</p>` : ''}
+    ${model.id === 'auto' ? `<p class="note">${state.preset === 'moderado-cloud'
+      ? gatewayKeyless(state) ? 'The Gateway routes to its free default models.' : 'Gateway selects the route and may select a free or paid route.'
+      : 'Ranks eligible models and permits fallback.'}</p>` : ''}
+    ${isPinnedDefault(model) ? '<p class="note">A Gateway default model. No key or sign-in is required.</p>' : ''}
     ${model.capabilities?.length ? `<p class="note">Capabilities: ${escapeHtml(model.capabilities.join(', '))}</p>` : ''}
     ${model.dataNote ? `<p class="note">${escapeHtml(model.dataNote)}</p>` : ''}
   </div>`;
@@ -283,7 +333,8 @@ export function settingsPaneHtml(state: SettingsState): string {
     <input id="settings-api-key" type="password" autocomplete="off" spellcheck="false" maxlength="8192"
            placeholder="${keyPlaceholder}" value=""${disabled} />
     <p class="note">${keyNote}</p>
-    ${gateway ? '<p class="note">Free Gateway models need a website API key. Sign in with browser to get API Key</p>' : ''}
+    ${gateway ? '<p class="note">The free default models need no key or sign-in. Sign in with browser to use the account routes.</p>' : ''}
+    ${gateway && !keyStored ? `<button id="settings-use-free" type="button"${disabled}>Use free models without an account</button>` : ''}
     ${gateway ? `<button id="settings-browser-login" type="button"${disabled}>Sign in with browser</button>` : ''}`;
 
   const gatewayEnvironment = gateway ? `<fieldset class="gateway-environment">
@@ -312,10 +363,10 @@ export function settingsPaneHtml(state: SettingsState): string {
     <select id="settings-model-select"${disabled}>${modelOptions(state)}</select>
     <label class="sr-only" for="settings-model">Default model</label>
     <select id="settings-model" class="sr-only"${disabled}>${modelOptions(state)}</select>
-    <p class="note">Selected model: <strong>${escapeHtml(state.defaultModel ? displayModelName(state.defaultModel) : 'No model selected')}</strong></p>
+    <p class="note">Selected model: <strong>${escapeHtml(state.defaultModel ? selectedModelLabel(state) : 'No model selected')}</strong></p>
     ${selectedModelDetails(state)}
     <p class="summary">
-      <span>${state.models.filter((m) => m.isFree).length} free</span>
+      <span>${state.models.filter((m) => m.isFree || (gateway && isPinnedDefault(m))).length} free</span>
       <span>${eligibleModels(state).length} listed</span>
     </p>`;
 

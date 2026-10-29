@@ -78,6 +78,10 @@
         "title": "Moderado: Branch This Chat"
       },
       {
+        "command": "moderado.cleanUpChats",
+        "title": "Moderado: Clean Up Old Chats"
+      },
+      {
         "command": "moderado.togglePlanMode",
         "title": "Moderado: Toggle Plan Mode"
       }
@@ -98,6 +102,13 @@
           "minimum": 4000,
           "maximum": 200000,
           "description": "Tokens a prompt may take before the oldest turns of a long chat are summarised to fit the model. The saved chat keeps every message."
+        },
+        "moderado.chatRetentionCount": {
+          "type": "number",
+          "default": 50,
+          "minimum": 10,
+          "maximum": 1000,
+          "description": "How many of the newest chats a cleanup keeps. Nothing is removed until you confirm the list of old chats."
         },
         "moderado.allowPaidModels": {
           "type": "boolean",

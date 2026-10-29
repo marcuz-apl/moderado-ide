@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fetchDirectModels, fetchGatewayRoutes } from '../src/provider-discovery.js';
+import { fetchDirectModels, fetchGatewayRoutes, isPinnedDefault } from '../src/provider-discovery.js';
 import { isDesktopFreeModel } from '../src/provider-catalog.js';
 
 describe('Gateway model discovery', () => {
@@ -36,6 +36,25 @@ describe('Gateway model discovery', () => {
     expect(routes.map(route => route.access)).toEqual(['free', 'paid']);
   });
 
+  it('reads the stealth defaults, their display names and their section', async () => {
+    // The Gateway lists its pinned defaults first, marks them section:'default'
+    // and may advertise them as paid while serving them for nothing. A route
+    // with no capability list is a route with no capabilities, not a bad entry.
+    const routes = await fetchGatewayRoutes('https://gateway.example/v1', {
+      fetchImpl: async () => Response.json({ object: 'list', data: [
+        { id: 'stealth one', name: 'Stealth One', access: 'paid', section: 'default' },
+        { id: 'stealth two', access: 'paid', section: 'default' },
+        { id: 'vendor/free', access: 'free', section: 'other', capabilities: ['text'] },
+      ] }),
+    });
+    expect(routes).toEqual([
+      { id: 'stealth one', name: 'Stealth One', access: 'paid', section: 'default', capabilities: [] },
+      { id: 'stealth two', access: 'paid', section: 'default', capabilities: [] },
+      { id: 'vendor/free', access: 'free', section: 'other', capabilities: ['text'] },
+    ]);
+    expect(routes.filter(isPinnedDefault).map(route => route.id)).toEqual(['stealth one', 'stealth two']);
+  });
+
   it.each([
     ['wrong envelope', { object: 'array', data: [] }],
     ['missing ID', { object: 'list', data: [{ capabilities: [] }] }],
@@ -43,6 +62,8 @@ describe('Gateway model discovery', () => {
     ['malformed capabilities', { object: 'list', data: [{ id: 'route', capabilities: 'text' }] }],
     ['malformed metadata', { object: 'list', data: [{ id: 'route', capabilities: [], provider: 5 }] }],
     ['invalid access', { object: 'list', data: [{ id: 'route', capabilities: [], access: 'unknown' }] }],
+    ['invalid section', { object: 'list', data: [{ id: 'route', capabilities: [], section: 'pinned' }] }],
+    ['malformed name', { object: 'list', data: [{ id: 'route', capabilities: [], name: 7 }] }],
     ['mixed valid and malformed entries', { object: 'list', data: [{ id: 'good', capabilities: [] }, { id: 'bad', capabilities: null }] }],
   ])('rejects %s', async (_name, payload) => {
     await expect(fetchGatewayRoutes('https://gateway.example/v1', {

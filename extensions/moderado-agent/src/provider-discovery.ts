@@ -14,7 +14,14 @@ export interface DiscoveryOptions {
 
 export interface GatewayRoute {
   id: string;
+  /** Gateway display name. The public `id` stays canonical for routing. */
+  name?: string;
   access?: 'free' | 'paid';
+  /**
+   * `default` marks a route the Gateway pins for account-free use. Those routes
+   * are reachable without a website key; every other free route is not.
+   */
+  section?: 'default' | 'other';
   provider?: string;
   owned_by?: string;
   capabilities: string[];
@@ -23,12 +30,27 @@ export interface GatewayRoute {
 
 const GatewayRouteSchema = z.object({
   id: z.string().min(1),
+  name: z.string().optional(),
   access: z.enum(['free', 'paid']).optional(),
+  section: z.enum(['default', 'other']).optional(),
   provider: z.string().optional(),
   owned_by: z.string().optional(),
-  capabilities: z.array(z.string()),
+  // A stealth route advertises no capability list. Treating that as "no
+  // capabilities" is what the route means; refusing the whole catalog is not.
+  capabilities: z.array(z.string()).default([]),
   data_note: z.string().optional(),
 }).strict();
+
+/**
+ * True when the Gateway pins this route for account-free use.
+ *
+ * The marker, not `access`, decides this: a pinned route may be advertised as
+ * paid and still cost nothing, because the Gateway routes it to its free
+ * defaults.
+ */
+export function isPinnedDefault(route: { section?: 'default' | 'other' }): boolean {
+  return route.section === 'default';
+}
 
 const GatewayEnvelopeSchema = z.object({
   object: z.literal('list'),

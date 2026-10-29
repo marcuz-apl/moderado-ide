@@ -168,6 +168,38 @@ describe('host-only Settings credentials', () => {
     releaseFetch(new Response(JSON.stringify({ object: 'list', data: [] })));
   });
 
+  it('saves the account-free Gateway defaults without asking for a key', async () => {
+    // The free default models need no account, so choosing them must not open a
+    // key prompt. A profile that already held a key drops it, because the
+    // session is now keyless.
+    harness.profile = { connections: { 'moderado-cloud': { id: 'moderado-cloud', authMethod: 'manual', credentialReference: 'moderado/provider/moderado-cloud', baseUrl: 'http://127.0.0.1:4788/v1', defaultModel: 'auto' } } };
+    harness.keys.set('moderado/provider/moderado-cloud', 'mrd_stored_secret');
+    send('saveSettings', { ...form, loginMethod: 'public', modelId: 'stealth one' });
+    await vi.waitFor(() => expect(harness.write).toHaveBeenCalled());
+    expect(harness.prompt).not.toHaveBeenCalled();
+    const record = (harness.profile.connections as any)['moderado-cloud'];
+    expect(record).toMatchObject({ authMethod: 'public', defaultModel: 'stealth one' });
+    expect(record.credentialReference).toBeUndefined();
+  });
+
+  it.each([
+    ['http://127.0.0.1:4788/v1', 'development'],
+    ['https://modr.alfazen.org/v1', 'production'],
+    // A custom Gateway URL is an explicit choice of its own; the CLI honours the
+    // URL directly, so no marker is written and a stale one is dropped.
+    ['https://gateway.example/v1', undefined],
+  ])('records the built-in Gateway deployment for %s in the field the CLI reads', async (baseUrl, environment) => {
+    // The CLI lets `gatewayEnvironment` override its automatic probe, so a
+    // Dev/Prod choice made here has to be written in that form, not only as a
+    // base URL the CLI would treat as an automatic pick.
+    harness.profile = { connections: {} };
+    send('saveSettings', { ...form, loginMethod: 'public', baseUrl, modelId: 'auto' });
+    await vi.waitFor(() => expect(harness.write).toHaveBeenCalled());
+    const record = (harness.profile.connections as any)['moderado-cloud'];
+    if (environment === undefined) expect('gatewayEnvironment' in record).toBe(false);
+    else expect(record.gatewayEnvironment).toBe(environment);
+  });
+
   it('keeps a stored Gateway key when only the model changes', async () => {
     // The pane no longer sends an access method, so saving a model choice must
     // not silently unlink the credential the profile already records.
@@ -838,6 +870,74 @@ describe('chat branching', () => {
     expect(harness.histories).toHaveLength(1);
     expect(harness.resumed).toBe('');
     expect(harness.info).toHaveBeenCalledWith(expect.stringContaining('Stop the current run'));
+  });
+});
+
+describe('chat titles', () => {
+  it('names a chat from the first request without its markdown', async () => {
+    const session = {
+      ...createSession(harness.workspaceRoot),
+      messages: [{ role: 'user' as const, content: '### Fix the login bug\nand the logout too' }],
+    };
+    harness.histories = [session];
+
+    send('toggleHistory');
+    await vi.waitFor(() => expect(String(harness.messages.at(-1)?.recents)).toContain('Fix the login bug'));
+
+    const recents = String(harness.messages.at(-1)?.recents);
+    expect(recents).not.toContain('###');
+    expect(recents).not.toContain('logout');
+    // A chat with nothing written yet still gets a label.
+    harness.histories = [createSession(harness.workspaceRoot)];
+    send('showSessions');
+    await vi.waitFor(() => expect(String(harness.messages.at(-1)?.recents)).toContain('Untitled session'));
+  });
+});
+
+describe('chat cleanup', () => {
+  /** Sessions whose ages are predictable: index 0 is the oldest. */
+  const aged = (count: number) => Array.from({ length: count }, (_, index) => ({
+    ...createSession(harness.workspaceRoot),
+    updatedAt: `2026-09-${(index + 1).toString().padStart(2, '0')}T10:00:00.000Z`,
+    messages: [{ role: 'user' as const, content: `chat ${index}` }],
+  }));
+
+  it('deletes only the chats beyond the retention count, and never the one on screen', async () => {
+    const chats = aged(12);
+    harness.histories = chats;
+    harness.configValues.set('chatRetentionCount', 10);
+    // The oldest chat is open, so it must survive its own cleanup.
+    harness.currentId = chats[0].id;
+
+    await harness.commands.get('moderado.cleanUpChats')?.();
+
+    expect(harness.confirm).toHaveBeenCalledWith(expect.stringContaining('Delete 1 old chat(s)?'), expect.objectContaining({ modal: true }), 'Delete');
+    expect(harness.deleted.mock.calls.map(([id]) => id)).toEqual([chats[1].id]);
+    expect(harness.histories.map((chat) => chat.id)).toContain(chats[0].id);
+    expect(harness.histories).toHaveLength(11);
+  });
+
+  it('deletes nothing when the confirmation is dismissed', async () => {
+    harness.histories = aged(12);
+    harness.configValues.set('chatRetentionCount', 10);
+    harness.confirm.mockResolvedValue(undefined);
+
+    await harness.commands.get('moderado.cleanUpChats')?.();
+
+    expect(harness.confirm).toHaveBeenCalled();
+    expect(harness.deleted).not.toHaveBeenCalled();
+    expect(harness.histories).toHaveLength(12);
+  });
+
+  it('asks nothing when the history fits the retention count', async () => {
+    harness.histories = aged(10);
+    harness.configValues.set('chatRetentionCount', 10);
+
+    await harness.commands.get('moderado.cleanUpChats')?.();
+    await vi.waitFor(() => expect(harness.info).toHaveBeenCalled());
+    expect(harness.confirm).not.toHaveBeenCalled();
+    expect(harness.deleted).not.toHaveBeenCalled();
+    expect(harness.info).toHaveBeenCalledWith(expect.stringContaining('nothing is older'));
   });
 });
 

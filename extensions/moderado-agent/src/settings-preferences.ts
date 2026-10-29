@@ -11,6 +11,7 @@ export interface SettingsPreferences {
   preferredLanguage: PreferredLanguage;
   approvalTimeoutSeconds: number;
   contextBudgetTokens: number;
+  chatRetentionCount: number;
 }
 
 export const defaultSettingsPreferences: Readonly<SettingsPreferences> = Object.freeze({
@@ -21,6 +22,7 @@ export const defaultSettingsPreferences: Readonly<SettingsPreferences> = Object.
     preferredLanguage: 'English',
     approvalTimeoutSeconds: 120,
     contextBudgetTokens: 48_000,
+    chatRetentionCount: 50,
 });
 
 export type PreferenceChange = {
@@ -51,6 +53,10 @@ export function parsePreferenceChange(key: unknown, value: unknown): PreferenceC
       return typeof value === 'number' && Number.isFinite(value) && Number.isInteger(value) && value >= 4_000 && value <= 200_000
         ? { ok: true, value: { key, value } }
         : { ok: false, error: 'Context budget must be a whole number from 4000 to 200000 tokens.' };
+    case 'chatRetentionCount':
+      return typeof value === 'number' && Number.isFinite(value) && Number.isInteger(value) && value >= 10 && value <= 1_000
+        ? { ok: true, value: { key, value } }
+        : { ok: false, error: 'Chat retention must be a whole number from 10 to 1000 chats.' };
     default:
       return { ok: false, error: 'Unknown setting.' };
   }
@@ -87,5 +93,8 @@ export function settingsFeaturesHtml(preferences: SettingsPreferences): string {
     <label for="preference-contextBudgetTokens">Context budget (tokens)</label>
     <input id="preference-contextBudgetTokens" type="number" data-preference="contextBudgetTokens" min="4000" max="200000" step="1000" value="${escapeHtml(preferences.contextBudgetTokens)}" />
     <p class="note">When a chat grows past this, the oldest turns are summarised in the prompt to fit the model. The saved chat keeps every message.</p>
+    <label for="preference-chatRetentionCount">Chats kept by cleanup</label>
+    <input id="preference-chatRetentionCount" type="number" data-preference="chatRetentionCount" min="10" max="1000" step="10" value="${escapeHtml(preferences.chatRetentionCount)}" />
+    <p class="note">The newest chats kept when you run <em>Moderado: Clean Up Old Chats</em>. Nothing is deleted until you confirm the list.</p>
   </section>`;
 }

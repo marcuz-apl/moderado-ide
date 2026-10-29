@@ -1,5 +1,27 @@
 # Moderado IDE changelog
 
+## [Unreleased] - 2026-10-29
+
+**Feature: the Gateway's account-free default models**
+- **Type**: `feat` / `provider` / `patch`
+- **Key deliverables**:
+  - The Moderado Gateway now serves two stealth models that need no account. A keyless Moderado session lists them by their published name and can select one, exactly as the CLI does.
+  - `AUTO` on a keyless Gateway session means the Gateway's pinned free defaults, not full routing: the request is sent without a `model` field, which is the form the Gateway reads as "use your defaults".
+  - The catalog's `name` and `section` fields are read and preserved. `section: 'default'` marks a pinned route, and that marker, not the cost tier, decides whether a keyless session may use it: a pinned route can be advertised as paid and still cost nothing.
+  - The API Config pane gains **Use free models without an account**, the IDE's equivalent of the CLI's sign-in row. It is offered only when no key is stored, so it can never silently drop one.
+  - A keyless Gateway session records its cost as `$0.00` once the provider reports usage, matching the CLI's accounting for the same session.
+  - The Gateway key note, the provider description and the 401 message now describe the free defaults instead of asking for a website key.
+  - The Dev/Prod choice is written to the shared profile as `gatewayEnvironment`, the field the CLI reads before its automatic probe, so both applications use the same Gateway.
+  - A Gateway route that advertises no capability list is read as having none instead of rejecting the whole catalog.
+
+**Feature: chats are named from their first request, and old chats can be cleaned up**
+- **Type**: `feat` / `chat` / `patch`
+- **Key deliverables**:
+  - A chat is listed under the first usable line the user wrote, with heading, quote, list and emphasis markers removed, so a chat that opened with `### Fix the login bug` is listed as `Fix the login bug`.
+  - A name the user set still wins, and the delete prompt now shows the same name the list shows.
+  - `Moderado: Clean Up Old Chats` lists the chats beyond `Chats kept by cleanup` (10 to 1000, default 50) and deletes nothing without a modal confirmation. The chat on screen is never proposed.
+  - The RECENT header shows how many chats are stored, since deleting one is manual and one at a time.
+
 ## [v0.1.44] — 2026-10-23 (published)
 
 **Release summary**

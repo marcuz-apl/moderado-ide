@@ -397,6 +397,18 @@ describe('moderado settings pane', () => {
     expect(html.split('class="recent-cost"').length - 1).toBe(1);
   });
 
+  it('counts the saved chats in the RECENT header', () => {
+    const html = chatHtml(state({
+      historyOpen: true,
+      recents: [
+        { id: 's1', title: 'Fix the login bug', updatedAt: 'Sep 25', costLabel: null },
+        { id: 's2', title: 'Second task', updatedAt: 'Sep 20', costLabel: null },
+        { id: 's3', title: 'Third task', updatedAt: 'Sep 19', costLabel: null },
+      ],
+    }), preview);
+    expect(html).toContain('<span>RECENT <span class="recents-count">3</span></span>');
+  });
+
   it('escapes untrusted recent-session titles', () => {
     const html = chatHtml(state({
       historyOpen: true,
@@ -516,6 +528,14 @@ describe('moderado settings pane', () => {
     // A streamed row keeps its actions because the handler is delegated.
     expect(html).toContain("transcript.addEventListener('click'");
     expect(html).toContain("vscode.postMessage({ type: 'copyToClipboard', text })");
+  });
+
+  it('posts an explicit account-free save from the Gateway settings action', () => {
+    // The action must not carry the key box, or a stray typed key would turn
+    // the account-free choice back into a manual login.
+    const html = chatHtml(state({}), preview);
+    expect(html).toContain("document.getElementById('settings-use-free')");
+    expect(html).toContain("useFree.addEventListener('click', () => vscode.postMessage({ type: 'saveSettings', ...readSettings(), loginMethod: 'public' }))");
   });
 
   it('shows the auto-approve warning as a popup on an exclamation mark', () => {
