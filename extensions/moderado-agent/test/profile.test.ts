@@ -371,8 +371,12 @@ describe('config coordination', () => {
     const file = join(root, 'config.json');
     const worker = join(root, 'writer.mjs');
     const entry = resolve('src/coordination.ts');
+    // The writers wait far longer than the default for the lock: under the full
+    // parallel suite a child can take seconds to boot and its first critical
+    // section can stall, and a 5s bound then fails a correct protocol. What is
+    // under test is that both writes land, not how fast the lock is handed over.
     buildSync({
-      stdin: { contents: `import { updateConfigCoordinated } from ${JSON.stringify(entry)};\nconst [file, id] = process.argv.slice(2);\nconst result = updateConfigCoordinated(file, { connections: { [id]: { id } } });\nif (!result.written) { console.error(result.reason ?? result.conflict?.reason); process.exitCode = 1; }`, resolveDir: process.cwd(), sourcefile: 'writer.mjs' },
+      stdin: { contents: `import { updateConfigCoordinated } from ${JSON.stringify(entry)};\nconst [file, id] = process.argv.slice(2);\nconst result = updateConfigCoordinated(file, { connections: { [id]: { id } } }, { timeoutMs: 30_000 });\nif (!result.written) { console.error(result.reason ?? result.conflict?.reason); process.exitCode = 1; }`, resolveDir: process.cwd(), sourcefile: 'writer.mjs' },
       bundle: true, platform: 'node', format: 'esm', outfile: worker,
     });
     const launch = (id: string): Promise<void> => new Promise((resolvePromise, reject) => {
