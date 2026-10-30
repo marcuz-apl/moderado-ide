@@ -108,7 +108,7 @@ fs.writeFileSync(
     registerWebviewPanelSerializer: () => ({ dispose() {} }),
   },
   commands: { registerCommand: () => ({ dispose() {} }), executeCommand: async () => undefined, getCommands: () => [] },
-  workspace: { getConfiguration: () => ({ get: (_k, fallback) => fallback, update: async () => {} }), workspaceFolders: undefined },
+  workspace: { getConfiguration: () => ({ get: (_k, fallback) => fallback, update: async () => {} }), workspaceFolders: undefined, onDidChangeWorkspaceFolders: () => ({ dispose() {} }) },
   Uri: { file: (p) => ({ fsPath: p, scheme: 'file' }) },
   EventEmitter: class { constructor() { this.event = () => ({ dispose() {} }); } fire() {} dispose() {} },
   ViewColumn: { One: 1 },
