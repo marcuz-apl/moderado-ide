@@ -1,6 +1,6 @@
 {
-    "pinnedCommit":  "a3479fffc6e00ca8796893920930a258759243c5",
-    "sourceRepository":  "https://github.com/marcuz-apl/moderado.git",
-    "fileCount":  56,
-    "treeHash":  "560614629cf514de166026d21d18d29123e7314bc4e84b4e0a3951ce89dcbd8b"
+  "pinnedCommit": "3ebdf48b95ff17eae0f80667ebf2584bb193c10a",
+  "sourceRepository": "https://github.com/marcuz-apl/moderado.git",
+  "fileCount": 57,
+  "treeHash": "53e418bda1cbc0387485366c1228f44838e2b91eb2ba0be4a5ed22db5b09cd22"
 }

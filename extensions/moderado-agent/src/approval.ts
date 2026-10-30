@@ -86,8 +86,10 @@ export function hasCompletePreview(request: ApprovalRequest): boolean {
   const mutationTools = new Set(['write_file', 'edit_file']);
   if (mutationTools.has(request.toolName)) {
     if (!payload.targetFile?.trim()) return false;
-    if (isTruncatedPreview(payload.diffPreview) || isTruncatedPreview(payload.contentPreview)) return false;
-    return !!(payload.diffPreview?.trim() || payload.contentPreview?.trim());
+    // The generated diff is the complete proposed change; `contentPreview` was
+    // dropped from the pinned approval contract, and the IDE never sent one.
+    if (isTruncatedPreview(payload.diffPreview)) return false;
+    return !!payload.diffPreview?.trim();
   }
   if (request.toolName === 'run_command') {
     return Array.isArray(payload.command) && payload.command.length > 0 && !!payload.cwd?.trim();

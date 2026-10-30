@@ -9,8 +9,8 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const lock = JSON.parse(readFileSync(join(root, 'sources.lock.json'))).sources.moderado;
 const source = realpathSync(resolve(root, process.argv[2] || 'build/moderado-v0.4.8'));
 assert.ok(source.startsWith(join(root, 'build') + sep), 'Source must be an IDE-local cached upstream checkout');
-function run(cmd, args) {
-  const result = spawnSync(cmd, args, { cwd: source, encoding: 'utf8', shell: false });
+function run(cmd, args, cwd) {
+  const result = spawnSync(cmd, args, { cwd: cwd ?? source, encoding: 'utf8', shell: false });
   if (result.error) throw result.error;
   assert.equal(result.status, 0, result.stderr);
   return result.stdout.trim();
@@ -21,7 +21,9 @@ const staging = mkdtempSync(join(root, 'build/vendor-staging-'));
 const target = join(root, 'vendor/moderado');
 try {
   run('git', ['archive', '--format=tar', `--output=${join(staging, 'snapshot.tar')}`, lock.commit, 'packages', 'package.json', 'tsconfig.base.json', 'LICENSE']);
-  run('tar', ['-xf', join(staging, 'snapshot.tar'), '-C', staging]);
+  // Extract from inside the staging directory with a relative archive name: a
+  // Windows drive path confuses tar, which reads `E:` as a remote host.
+  run('tar', ['-xf', 'snapshot.tar'], staging);
   function excludeTests(directory) {
     for (const item of readdirSync(directory, { withFileTypes: true })) if (item.isDirectory()) {
       const child = join(directory, item.name);

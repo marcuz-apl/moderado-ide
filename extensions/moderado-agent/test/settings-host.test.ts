@@ -406,7 +406,7 @@ describe('default auto-approval', () => {
 
     const result = await promptForApproval({
       requestId: 'edit-no-view', toolName: 'edit_file', actionSummary: 'Edit source',
-      exactPayload: { targetFile: 'src/file.ts', contentPreview: 'complete replacement' }, timestamp: Date.now(),
+      exactPayload: { targetFile: 'src/file.ts', diffPreview: 'complete replacement' }, timestamp: Date.now(),
     }, new AbortController().signal);
 
     expect(result.status).toBe('denied');

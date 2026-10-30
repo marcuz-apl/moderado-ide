@@ -650,7 +650,7 @@ describe('AgentHost approvals', () => {
       requestId: 'r-deny',
       toolName: 'write_file',
       actionSummary: 'Create denied.md',
-      exactPayload: { targetFile: target, contentPreview: 'should not be written' },
+      exactPayload: { targetFile: target, diffPreview: 'should not be written' },
       timestamp: Date.now(),
     });
 
@@ -671,7 +671,7 @@ describe('AgentHost approvals', () => {
       requestId: 'r-timeout',
       toolName: 'write_file',
       actionSummary: 'Create slow.md',
-      exactPayload: { targetFile: join(root, 'slow.md'), contentPreview: 'x' },
+      exactPayload: { targetFile: join(root, 'slow.md'), diffPreview: 'x' },
       timestamp: Date.now(),
     });
 
@@ -690,7 +690,7 @@ describe('AgentHost approvals', () => {
       requestId: 'r-mismatch',
       toolName: 'write_file',
       actionSummary: 'Create x.md',
-      exactPayload: { targetFile: join(workspace(), 'x.md'), contentPreview: 'x' },
+      exactPayload: { targetFile: join(workspace(), 'x.md'), diffPreview: 'x' },
       timestamp: Date.now(),
     });
 

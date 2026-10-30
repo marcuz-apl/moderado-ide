@@ -7,7 +7,7 @@ function request(overrides: Partial<ApprovalRequest> = {}): ApprovalRequest {
     requestId: 'req-1',
     toolName: 'write_file',
     actionSummary: 'Create notes.md',
-    exactPayload: { targetFile: 'notes.md', contentPreview: 'hello' },
+    exactPayload: { targetFile: 'notes.md', diffPreview: 'replace notes.md with new content' },
     timestamp: Date.now(),
     ...overrides,
   };
@@ -16,7 +16,7 @@ function request(overrides: Partial<ApprovalRequest> = {}): ApprovalRequest {
 describe('hasCompletePreview', () => {
   it('requires a target file and content for a write', () => {
     expect(hasCompletePreview(request())).toBe(true);
-    expect(hasCompletePreview(request({ exactPayload: { contentPreview: 'x' } }))).toBe(false);
+    expect(hasCompletePreview(request({ exactPayload: { diffPreview: 'x' } }))).toBe(false);
     expect(hasCompletePreview(request({ exactPayload: { targetFile: 'a.md' } }))).toBe(false);
   });
 
@@ -38,7 +38,7 @@ describe('hasCompletePreview', () => {
 
   it('still refuses an apply_patch summary that is not a generated diff', () => {
     expect(hasCompletePreview(request({ toolName: 'apply_patch', exactPayload: { diffPreview: 'Patch 2 files' } }))).toBe(false);
-    expect(hasCompletePreview(request({ toolName: 'apply_patch', exactPayload: { targetFile: 'a.txt', contentPreview: 'x' } }))).toBe(false);
+    expect(hasCompletePreview(request({ toolName: 'apply_patch', exactPayload: { targetFile: 'a.txt', diffPreview: 'x' } }))).toBe(false);
     expect(hasCompletePreview(request({ toolName: 'apply_patch', exactPayload: {} }))).toBe(false);
   });
 
@@ -55,13 +55,13 @@ describe('hasCompletePreview', () => {
   it('rejects truncated write and edit previews but accepts an untruncated boundary value', () => {
     const boundary = 'x'.repeat(200_000);
     expect(hasCompletePreview(buildApprovalRequest({
-      toolName: 'write_file', actionSummary: 'Write file', payload: { targetFile: 'a.txt', contentPreview: boundary },
+      toolName: 'write_file', actionSummary: 'Write file', payload: { targetFile: 'a.txt', diffPreview: boundary },
     }))).toBe(true);
 
     const oversized = 'x'.repeat(200_001);
     for (const toolName of ['write_file', 'edit_file']) {
       const request = buildApprovalRequest({
-        toolName, actionSummary: 'Change file', payload: { targetFile: 'a.txt', contentPreview: oversized },
+        toolName, actionSummary: 'Change file', payload: { targetFile: 'a.txt', diffPreview: oversized },
       });
       expect(hasCompletePreview(request), `${toolName} must reject a capped content preview`).toBe(false);
     }

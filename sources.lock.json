@@ -22,12 +22,12 @@
     },
     "moderado": {
       "repository": "https://github.com/marcuz-apl/moderado.git",
-      "tag": "v0.4.10",
-      "tagObject": "a3479fffc6e00ca8796893920930a258759243c5",
-      "commit": "a3479fffc6e00ca8796893920930a258759243c5",
-      "version": "v0.4.10+2610105",
-      "role": "contracts-core-tools; IDE owns Gateway/provider adapters, discovery, model policy, transport, and routing, adapting CLI v0.4.10 behavior without CLI provider code at runtime",
-      "verification": "Tag and commit verified with git ls-remote. Contracts/core/tools diffs and MIT license reviewed; changes add optional Gateway route access metadata, make free-route website-key policy explicit, and update provider presets without new runtime dependencies or approval/jail policy changes. Owner requested v0.4.10 baseline on 2026-10-10."
+      "tag": "v0.4.54",
+      "tagObject": "bc1dc714754d55050fe003c0f29d16e29738c7b2",
+      "commit": "3ebdf48b95ff17eae0f80667ebf2584bb193c10a",
+      "version": "v0.4.54+2610296",
+      "role": "contracts-core-tools; IDE owns Gateway/provider adapters, discovery, model policy, transport, and routing, adapting the pinned CLI contracts without CLI provider code at runtime",
+      "verification": "Tag and commit verified against the IDE-local cached checkout at build/moderado-v0.4.54, cloned read-only from the sibling repository. Contracts/core/tools diff v0.4.10..v0.4.54 (741 insertions, about 500 of them tests) reviewed: a bounded tool-stall guard with an abort signal, an answer-detail system-prompt toggle, save_to_documents guidance and tool, ModelInventoryEntry name/section metadata, approval targetFile fallback to `name` for documents, and product-name strings from Moderado Cloud to Moderado. No approval, jail, or policy weakening found; no new runtime dependencies."
     }
   },
   "buildUse": "Source identities are verified. Use these revisions for the Windows x64 build with branding/product.json as the Desktop product overlay."

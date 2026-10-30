@@ -445,7 +445,7 @@ export function activate(context: vscode.ExtensionContext): ModeradoApi {
 async function openDiffTab(requestId: string): Promise<void> {
   const request = pendingApprovalRequests.get(requestId);
   if (!request) return;
-  const body = request.exactPayload.diffPreview || request.exactPayload.contentPreview;
+  const body = request.exactPayload.diffPreview;
   if (!body) return;
   const document = await vscode.workspace.openTextDocument({
     language: 'diff',
@@ -1771,7 +1771,7 @@ function previewText(request: ApprovalRequest): string {
   if (request.exactPayload.targetFile) parts.push(`Target: ${request.exactPayload.targetFile}`);
   if (request.exactPayload.cwd) parts.push(`Working directory: ${request.exactPayload.cwd}`);
   if (request.exactPayload.command?.length) parts.push(`Command: ${request.exactPayload.command.join(' ')}`);
-  const body = request.exactPayload.diffPreview || request.exactPayload.contentPreview;
+  const body = request.exactPayload.diffPreview;
   if (body) parts.push(body);
   return parts.join('\n\n');
 }

@@ -7,7 +7,9 @@ const SENSITIVE_PATTERNS = [
   /^\.env(\.[a-zA-Z0-9_\-]+)?$/i,
   /\.pem$/i,
   /\.key$/i,
-  /^id_[a-zA-Z0-9_]+/i,
+  // SSH key pairs only. A bare `^id_` prefix used to block legitimate files
+  // such as `id_notes.md` from ever being read or written.
+  /^id_(rsa|dsa|ecdsa|ed25519)(\.[a-zA-Z0-9]+)?$/i,
   /credentials\.json$/i,
 ];
 
@@ -189,11 +191,21 @@ export function canonicalizeRoot(workspaceRoot: string): string {
 }
 
 export function resolveInJail(workspaceRoot: string, targetPath: string): string {
+  return resolveInJailFromRoot(canonicalizeRoot(workspaceRoot), targetPath);
+}
+
+/**
+ * Resolve a path against an already-canonical root. Callers that resolve many
+ * paths in one operation (checkpoint digests, a diff over N files) canonicalize
+ * once and loop through this instead of paying a stat + realpath per path.
+ * The jail checks are identical: `canonicalRoot` must come from
+ * `canonicalizeRoot`, which is the only place that trusts the root.
+ */
+export function resolveInJailFromRoot(canonicalRoot: string, targetPath: string): string {
   if (!targetPath || targetPath.trim() === '') {
     throw new SecurityViolationError('Path argument cannot be empty.');
   }
 
-  const canonicalRoot = canonicalizeRoot(workspaceRoot);
   const normalizedTarget = normalizeCrossPlatformPath(targetPath, canonicalRoot);
   let absoluteTarget = path.resolve(canonicalRoot, normalizedTarget);
 
