@@ -1,5 +1,14 @@
 # Moderado IDE changelog
 
+## [Unreleased] - 2026-10-30
+
+**Feature: a fresh install connects to the Gateway without a key**
+- **Type**: `feat` / `provider` / `patch`
+- **Key deliverables**:
+  - A profile with nothing saved — or no `config.json` at all — now starts on the Gateway's pinned free defaults, so the IDE can connect without typing an API key. Nothing is written to the profile; the next saved connection replaces it.
+  - An active connection id that names a deleted connection falls back to a saved connection instead of reporting the whole profile as malformed.
+  - A profile that cannot be read still fails closed onto the offline fake provider with an explanation, so a broken file is never silently replaced.
+
 ## [Unreleased] - 2026-10-29
 
 **Feature: the Gateway's account-free default models**

@@ -28,15 +28,26 @@ As with CLI `v0.4.10`, IDE presents Gateway access in its unified provider
 connection flow rather than a separate login command.
 
 Gateway model listing is public. Its route catalog may include `access: 'free'`
-or `access: 'paid'`; the IDE uses that field for model cost classification and
-marks older catalogs without it as unknown cost. Free-route inference requires a valid
-Moderado website API key. The saved manual key or browser credential is
-resolved by the host and sent as a bearer token on Gateway completion requests.
-The `public` auth method remains a keyless connection for paid routes and
-public model listing. Gateway `auto` is selected by the server and may choose
-a free or paid route, so the IDE labels its cost unknown. It requires a key
-when the Gateway dispatches a free route. Direct BYOK and local provider
+or `access: 'paid'`, a display `name`, and a `section` marker;
+`section: 'default'` marks a route the Gateway pins for account-free use. The
+marker, not the cost tier, decides keyless access: a pinned default may be
+advertised `paid` and still cost nothing, because the Gateway routes it to its
+free defaults. Every other free route requires a valid Moderado website API
+key. The saved manual key or browser credential is resolved by the host and
+sent as a bearer token on Gateway completion requests.
+The `public` auth method is a keyless connection. On the Gateway it reaches the
+pinned free defaults and the paid routes; other free routes still need a key.
+A keyless `auto` request omits `model`, which is how the Gateway applies its
+pinned defaults; a keyed `auto` follows Gateway routing and may choose either
+access tier, so the IDE labels its cost unknown. Direct BYOK and local provider
 connections are unaffected.
+
+A profile with nothing saved — or no `config.json` at all — resolves a
+session-scoped keyless Gateway connection at the production base URL, so a
+fresh install can run without typing a key. Nothing is written to the profile:
+the next saved connection replaces it. The production Gateway is used directly
+rather than probing the development one; the settings pane's Dev/Prod choice is
+the explicit deployment control.
 
 The editor's own layout, extension database, caches, and update metadata use
 separate application data identified by Moderado IDE. Their location must
