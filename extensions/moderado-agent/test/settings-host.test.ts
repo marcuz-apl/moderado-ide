@@ -17,6 +17,7 @@ const harness = vi.hoisted(() => ({
   openDocument: vi.fn(), showDocument: vi.fn(),
   folderChange: undefined as undefined | () => void,
   workspaceTitles: new Map<string, unknown>(), listCalls: 0,
+  globalValues: new Map<string, unknown>(),
 }));
 vi.mock('vscode', () => ({
   version: '1.135.0', ConfigurationTarget: { Global: 1 }, ViewColumn: { One: 1 },
@@ -108,6 +109,9 @@ beforeEach(() => {
   activate({ subscriptions: [], workspaceState: {
     get: (key: string) => harness.workspaceTitles.get(key),
     update: async (key: string, value: unknown) => { if (value === undefined) harness.workspaceTitles.delete(key); else harness.workspaceTitles.set(key, value); },
+  }, globalState: {
+    get: (key: string) => harness.globalValues.get(key),
+    update: async (key: string, value: unknown) => { if (value === undefined) harness.globalValues.delete(key); else harness.globalValues.set(key, value); },
   }, secrets: { get: async (key: string) => harness.keys.get(key), store: async (key: string, value: string) => { harness.keys.set(key, value); }, delete: async (key: string) => { harness.keys.delete(key); } } } as any);
   harness.provider.resolveWebviewView({
     webview: { options: {}, html: '', onDidReceiveMessage: (receive: unknown) => { harness.receive = receive; },
@@ -932,6 +936,41 @@ describe('workspace re-scoping', () => {
     harness.folderChange?.();
     expect(harness.agentOptions).toBe(before);
     expect(harness.info).not.toHaveBeenCalledWith(expect.stringContaining('now scoped to'));
+  });
+});
+
+describe('MCP server trust', () => {
+  it('asks before trusting a configured server and launches nothing otherwise', async () => {
+    // An entry that does not validate as a server configuration is skipped
+    // without a prompt; only a real server can be trusted.
+    harness.profile = { mcpServers: { helper: { executable: 'helper.exe', args: ['--flag'] }, broken: 'nope' } };
+    harness.confirm.mockResolvedValue(undefined);
+
+    const trusted = await harness.agentOptions.getTrustedMcpServers();
+
+    expect(harness.confirm).toHaveBeenCalledWith(
+      expect.stringContaining('Trust the MCP server "helper"?'),
+      expect.objectContaining({ modal: true, detail: expect.stringContaining('your own user privileges') }),
+      'Trust this server',
+    );
+    expect(trusted).toEqual({});
+    expect(harness.globalValues.has('moderado.mcpTrustedServers')).toBe(false);
+  });
+
+  it('remembers a trust decision and returns the trusted server for runs', async () => {
+    harness.profile = { mcpServers: { helper: { executable: 'helper.exe', args: ['--flag'] }, disabled: { executable: 'x.exe', enabled: false } } };
+    harness.confirm.mockResolvedValue('Trust this server');
+
+    const trusted = await harness.agentOptions.getTrustedMcpServers();
+
+    expect(trusted).toMatchObject({ helper: { executable: 'helper.exe' } });
+    expect(trusted).not.toHaveProperty('disabled');
+    expect(harness.globalValues.get('moderado.mcpTrustedServers')).toEqual(['helper']);
+    // A remembered server is returned without asking again.
+    harness.confirm.mockClear();
+    const again = await harness.agentOptions.getTrustedMcpServers();
+    expect(Object.keys(again)).toEqual(['helper']);
+    expect(harness.confirm).not.toHaveBeenCalled();
   });
 });
 

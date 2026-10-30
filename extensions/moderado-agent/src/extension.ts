@@ -4,7 +4,7 @@ import { createContextAttachment, createFileAttachment, preparePrompt, type Draf
 import * as vscode from 'vscode';
 import { defaultSettingsPreferences, parsePreferenceChange, type SettingsPreferences } from './settings-preferences.js';
 import { IDE_VERSION } from './ide-version.js';
-import { AgentEvent, ApprovalRequest } from '@moderado/contracts';
+import { AgentEvent, ApprovalRequest, McpServerConfigSchema, type McpServerConfig } from '@moderado/contracts';
 import { AgentHost, RunOutcome, COMPACTED_STATUS_PREFIX, CONTEXT_WARNING_STATUS_PREFIX } from './host.js';
 import { chatFileName, sessionMarkdown } from './session-export.js';
 import { searchChats } from './session-search.js';
@@ -208,6 +208,70 @@ export function activate(context: vscode.ExtensionContext): ModeradoApi {
     syncActiveContext();
   })();
 
+  /** Trust decisions for configured MCP servers, remembered per user. */
+  const MCP_TRUSTED_KEY = 'moderado.mcpTrustedServers';
+
+  /** Configured MCP servers from the shared profile, validated at this boundary. */
+  function configuredMcpServers(): Record<string, McpServerConfig> {
+    const state = readConfig();
+    if (state.kind !== 'ok') return {};
+    const raw = (state.config as Record<string, unknown>).mcpServers;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+    const servers: Record<string, McpServerConfig> = {};
+    for (const [name, value] of Object.entries(raw as Record<string, unknown>)) {
+      if (!/^[a-z0-9_-]+$/i.test(name)) continue;
+      const parsed = McpServerConfigSchema.safeParse(value);
+      if (parsed.success) servers[name] = parsed.data;
+    }
+    return servers;
+  }
+
+  /**
+   * The MCP servers this run may launch: exactly those the user has trusted.
+   *
+   * A configured server that was never trusted is offered once per run with a
+   * modal that says what launching it means — it is an external process with
+   * the user's own privileges, not something confined to the workspace.
+   * Trusting is remembered; dismissing is not, so nothing is ever launched
+   * because a question was missed.
+   */
+  async function trustedMcpServers(): Promise<Record<string, McpServerConfig>> {
+    const configured = configuredMcpServers();
+    if (!Object.keys(configured).length) return {};
+    const trusted = new Set(context.globalState.get<string[]>(MCP_TRUSTED_KEY) ?? []);
+    const usable: Record<string, McpServerConfig> = {};
+    let changed = false;
+    for (const [name, server] of Object.entries(configured)) {
+      if (server.enabled === false) continue;
+      if (trusted.has(name)) {
+        usable[name] = server;
+        continue;
+      }
+      const command = [server.executable, ...server.args].join(' ');
+      const choice = await vscode.window.showWarningMessage(
+        `Trust the MCP server "${name}"?`,
+        {
+          modal: true,
+          detail: `"${command}" runs on this machine with your own user privileges. It is an external process, not confined to the workspace: it can read and change files and run programs anywhere your account can. Provider API keys are removed from its environment.`,
+        },
+        'Trust this server',
+      );
+      if (choice === 'Trust this server') {
+        trusted.add(name);
+        usable[name] = server;
+        changed = true;
+      }
+    }
+    if (changed) {
+      try {
+        await context.globalState.update(MCP_TRUSTED_KEY, [...trusted]);
+      } catch {
+        // Forgetting the decision only asks again next run.
+      }
+    }
+    return usable;
+  }
+
   let host = buildHost(workspaceRoot);
 
   /**
@@ -220,6 +284,7 @@ export function activate(context: vscode.ExtensionContext): ModeradoApi {
     return new AgentHost({
     workspaceRoot: root,
     nonInteractive: false,
+    getTrustedMcpServers: trustedMcpServers,
     // On Windows the key comes from Credential Manager; elsewhere the in-memory
     // default keeps Desktop usable without a keychain.
     credentialStore,

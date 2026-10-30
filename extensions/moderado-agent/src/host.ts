@@ -4,7 +4,7 @@ import { ImageAttachmentSchema, saveImageContext, loadImageContext, type ImageAt
 import { AgentLoop, PolicyManager, Router } from '@moderado/core';
 import { FakeProviderAdapter } from '@moderado/providers';
 import { z } from 'zod';
-import { createDefaultToolRegistry, generateDiffPreview, resolveInJail } from '@moderado/tools';
+import { createDefaultToolRegistry, createMcpTools, generateDiffPreview, resolveInJail } from '@moderado/tools';
 import {
   AgentEvent,
   ApprovalDecision,
@@ -14,6 +14,7 @@ import {
   IProviderAdapter,
   IToolDefinition,
   IToolRegistry,
+  McpServerConfig,
   ModelInventoryEntry,
 } from '@moderado/contracts';
 import { ApprovalCoordinator, RawDecision } from './approval.js';
@@ -62,6 +63,16 @@ export interface AgentHostOptions {
    * one. Omitted, the registry keeps its own approval policy.
    */
   isAutoApproved?: (toolName: string) => boolean;
+  /**
+   * The MCP servers the user has explicitly trusted, resolved at run start.
+   *
+   * The host never launches a configured server that this does not return, so
+   * trust is decided before discovery, not after it. Servers returned here are
+   * launched by the pinned transport with a sanitized child environment, and
+   * each of their tools keeps `requiresApproval`, so turning the Use MCP
+   * servers category off still asks per call.
+   */
+  getTrustedMcpServers?: () => Promise<Record<string, McpServerConfig>>;
   allowPaid?: boolean;
   allowUnknown?: boolean;
   pinnedModelId?: string;
@@ -547,7 +558,8 @@ export class AgentHost implements IApprovalHandler {
       const result = await new AgentLoop().run(input.task, {
         workspaceRoot: this.options.workspaceRoot,
         provider,
-        tools: this.toolsFor(preferences?.webSearchEnabled ?? true, input.planMode ?? false),
+        tools: await this.toolsFor(preferences?.webSearchEnabled ?? true, input.planMode ?? false,
+          this.options.getTrustedMcpServers ? await this.options.getTrustedMcpServers() : undefined),
         skillContext: [
           preferences ? `Respond in ${preferences.preferredLanguage}.` : undefined,
           'For simple conversational questions, answer directly and briefly. Do not volunteer the active model or session details unless asked.',
@@ -712,8 +724,30 @@ export class AgentHost implements IApprovalHandler {
       allowPaid: preferences?.allowPaidModels ?? this.options.allowPaid ?? false, allowUnknown: preferences?.allowUnknownModels ?? this.options.allowUnknown ?? false, requireTools: true });
   }
 
-  private toolsFor(webSearchEnabled: boolean, planMode: boolean): IToolRegistry {
+  private toolsFor(
+    webSearchEnabled: boolean,
+    planMode: boolean,
+    mcpServers?: Record<string, McpServerConfig>,
+  ): Promise<IToolRegistry> {
+    return this.assembleTools(webSearchEnabled, planMode, mcpServers);
+  }
+
+  /**
+   * Builds the run's tool registry.
+   *
+   * Only servers returned by `getTrustedMcpServers` reach this method, so trust
+   * always precedes the discovery that launches them. MCP tools are registered
+   * per run, keep `requiresApproval` from the adapter, and their names carry
+   * the `mcp.` prefix the auto-approve category maps on.
+   */
+  private async assembleTools(
+    webSearchEnabled: boolean,
+    planMode: boolean,
+    mcpServers?: Record<string, McpServerConfig>,
+  ): Promise<IToolRegistry> {
     const tools = createDefaultToolRegistry();
+    const mcpTools = mcpServers && Object.keys(mcpServers).length ? await createMcpTools(mcpServers) : [];
+    for (const tool of mcpTools) tools.register(tool);
     const base = webSearchEnabled ? tools : {
       register: tools.register.bind(tools),
       get: (name: string) => name === 'web_search' ? undefined : tools.get(name),

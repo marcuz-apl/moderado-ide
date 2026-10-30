@@ -140,6 +140,31 @@ describe('provider profile recovery', () => {
     expect(host.session?.usage).toMatchObject({ costKnown: true, costUsd: 0 });
   });
 
+  it('launches a trusted MCP server with provider credentials removed', async () => {
+    const fixture = join(realpathSync('.'), 'test', 'fixtures', 'mcp-echo-server.mjs');
+    const marker = join(workspace(), 'mcp-launched.json');
+    const { events, onEvent } = collector();
+    const host = new AgentHost({
+      workspaceRoot: workspace(), moderadoHome: configuredHome('moderado-cloud', { baseUrl: 'https://modr.alfazen.org/v1', authMethod: 'public' }), fetchImpl: fakeHTTP([{ id: 'stealth one', access: 'paid', section: 'default', capabilities: ['tools'] }]),
+      onEvent, promptForApproval: async () => undefined,
+      getTrustedMcpServers: async () => ({ echo: { executable: process.execPath, args: [fixture], enabled: true } }),
+    });
+    const savedToken = process.env.MODERADO_TOKEN;
+    process.env.MODERADO_TOKEN = 'secret-sentinel';
+    process.env.MCP_FIXTURE_LAUNCHED = marker;
+    try {
+      const result = await host.startRun({ task: 'Hello.', modelId: 'auto' });
+      expect(result.status).toBe('completed');
+    } finally {
+      delete process.env.MODERADO_TOKEN;
+      delete process.env.MCP_FIXTURE_LAUNCHED;
+    }
+    // The trusted server was launched, and the provider credential the test
+    // planted did not survive into its child environment.
+    expect(JSON.parse(readFileSync(marker, 'utf8'))).toEqual({ launched: true, moderadoTokenPresent: false });
+    expect(events.some((event) => event.type === 'completion')).toBe(true);
+  });
+
   it('warns in the transcript when a prompt stays over the context budget', async () => {
     const { events, onEvent } = collector();
     const home = configuredHome('moderado-cloud', { baseUrl: 'https://modr.alfazen.org/v1', authMethod: 'public' });
