@@ -2,6 +2,37 @@
 
 ## [Unreleased] - 2026-10-30
 
+**Feature: configured MCP servers run only after the user trusts them**
+- **Type**: `feat` / `agent` / `patch`
+- **Key deliverables**:
+  - MCP server discovery and execution (F8) now works. This was blocked on the pinned transport, which could not accept a sanitized child environment; the v0.4.54 advance removed that blocker.
+  - A configured server is offered once per run with a modal that names the executable and says what launching it means: an external process with the user's own privileges, not confined to the workspace, with provider API keys removed from its environment.
+  - Trust is remembered in editor state; dismissing is not, so nothing is launched because a question was missed. Only trusted servers reach the host, so trust always precedes discovery.
+  - Every MCP tool keeps per-call approval, and turning the Use MCP servers category off still asks per call.
+  - Offline tests use a JSON-RPC stdio fixture: a trusted server launches and joins the run, and a planted provider credential does not survive into the child environment.
+
+**Feature: the pinned Moderado source is now v0.4.54**
+- **Type**: `feat` / `agent` / `patch`
+- **Key deliverables**:
+  - The vendored contracts, core, and tools advance from v0.4.10 (October 10) to v0.4.54 after a reviewed diff: a bounded tool-stall guard, an answer-detail prompt toggle, `save_to_documents`, catalog `name`/`section` metadata, an approval `targetFile` fallback for documents, and the Moderado Cloud to Moderado strings. No approval, jail, or policy weakening found.
+  - The pinned approval payload drops the legacy `contentPreview` field; the IDE reads the generated diff only, which is what its write previews produce.
+  - The vendor export script works on Windows again: tar read the `E:` in a drive path as a remote host, so the archive is extracted from inside the staging directory by relative name.
+
+**Feature: the context estimate learns from what the provider reported**
+- **Type**: `feat` / `chat` / `patch`
+- **Key deliverables**:
+  - Compaction no longer assumes four characters per token for every provider. The estimate is calibrated per session from the tokens the provider actually reported for a sent prompt, bounded so one odd turn cannot swing it.
+  - Only a single-step run calibrates: a multi-step run's reported prompt tokens also count tool steps and would overcorrect.
+  - A prompt that stays over the configured budget even after summarising is announced in the transcript before it is sent, instead of the refusal arriving with no explanation.
+
+**Fix: the agent follows the window's folder changes**
+- **Type**: `fix` / `chat` / `patch`
+- **Key deliverables**:
+  - The file-tool jail and the session directory were rooted at the folder open at activation. A window that started without a folder and gained one later left the agent scoped to the old root, so file tools refused the new project and chats were filed under the wrong workspace.
+  - The root is now re-resolved on folder changes and the host is rebuilt for it. A change during a run is deferred until the run settles; the panel starts empty for the new workspace, whose history is on disk.
+
+## [Unreleased] - 2026-10-30
+
 **Feature: a fresh install connects to the Gateway without a key**
 - **Type**: `feat` / `provider` / `patch`
 - **Key deliverables**:
