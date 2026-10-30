@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatMessage } from '@moderado/contracts';
 import {
+  CHARS_PER_TOKEN,
   DEFAULT_CONTEXT_BUDGET_TOKENS,
+  calibrateCharsPerToken,
   compactConversation,
   conversationTokens,
   estimateTokens,
@@ -16,6 +18,41 @@ function turns(count: number, size = 400): ChatMessage[] {
     ? user(`request ${index} ${'u'.repeat(size)}`)
     : reply(`answer ${index} ${'a'.repeat(size)}`));
 }
+
+describe('token calibration', () => {
+  it('keeps the usual approximation when the provider agrees with the estimate', () => {
+    const estimated = estimateTokens('x'.repeat(400));
+    expect(calibrateCharsPerToken(estimated, estimated)).toBe(CHARS_PER_TOKEN);
+  });
+
+  it('lowers chars per token when the provider counts more tokens than estimated', () => {
+    // 400 chars estimated at 100 tokens; the provider says 200, so the text is
+    // really 2 chars per token and the next estimate must double.
+    const calibrated = calibrateCharsPerToken(100, 200);
+    expect(calibrated).toBe(2);
+    expect(estimateTokens('x'.repeat(400), calibrated!)).toBe(200);
+  });
+
+  it('refuses to learn from unusable observations and bounds the swing', () => {
+    expect(calibrateCharsPerToken(0, 100)).toBeUndefined();
+    expect(calibrateCharsPerToken(100, 0)).toBeUndefined();
+    expect(calibrateCharsPerToken(Number.NaN, 100)).toBeUndefined();
+    // One odd turn cannot swing the estimate without bound.
+    expect(calibrateCharsPerToken(100, 1)).toBeLessThanOrEqual(8);
+    expect(calibrateCharsPerToken(1, 100)).toBeGreaterThanOrEqual(1.5);
+  });
+
+  it('compacts earlier on the next turn after a calibrated estimate', () => {
+    const history = turns(20);
+    const options = { budgetTokens: 2_500 };
+    expect(compactConversation(history, 'next task', options).compacted).toBe(false);
+    // The provider counts roughly twice the estimate, so the same history no
+    // longer fits and the oldest turns are summarised.
+    const calibrated = calibrateCharsPerToken(conversationTokens(history), conversationTokens(history) * 2)!;
+    const narrowed = compactConversation(history, 'next task', { ...options, charsPerToken: calibrated });
+    expect(narrowed.compacted).toBe(true);
+  });
+});
 
 describe('context budget', () => {
   it('estimates four characters per token', () => {

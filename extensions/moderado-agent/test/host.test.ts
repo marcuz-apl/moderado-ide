@@ -140,6 +140,61 @@ describe('provider profile recovery', () => {
     expect(host.session?.usage).toMatchObject({ costKnown: true, costUsd: 0 });
   });
 
+  it('warns in the transcript when a prompt stays over the context budget', async () => {
+    const { events, onEvent } = collector();
+    const home = configuredHome('moderado-cloud', { baseUrl: 'https://modr.alfazen.org/v1', authMethod: 'public' });
+    const fetchImpl = fakeHTTP([{ id: 'stealth one', name: 'Stealth One', access: 'paid', section: 'default', capabilities: ['tools'] }]);
+    const host = new AgentHost({
+      workspaceRoot: workspace(), moderadoHome: home, fetchImpl, onEvent, promptForApproval: async () => undefined,
+      getPreferences: () => ({ allowPaidModels: false, allowUnknownModels: false, webSearchEnabled: true, showHistoryOnStartup: false, preferredLanguage: 'English', approvalTimeoutSeconds: 120, contextBudgetTokens: 4_000, chatRetentionCount: 50 }),
+    });
+    // Roughly 108000 characters: even the kept tail is over the 4000-token
+    // budget, so no digest can fit it and the run is warned before sending.
+    const history = Array.from({ length: 12 }, (_, index) => (
+      { role: 'user' as const, content: `request ${index} ${'u'.repeat(9_000)}` }
+    ));
+    await host.startRun({ task: 'Hello.', modelId: 'auto', session: { ...createSession(workspace()), messages: history } });
+
+    const warning = events.find((event) => event.type === 'progress' && String(event.status ?? '').startsWith('Context warning'));
+    expect(warning).toBeTruthy();
+  });
+
+  it('compacts sooner on the next turn after the provider counted more tokens', async () => {
+    const { events, onEvent } = collector();
+    const home = configuredHome('moderado-cloud', { baseUrl: 'https://modr.alfazen.org/v1', authMethod: 'public' });
+    // The provider counts far more tokens for the same prompt than the
+    // four-characters-per-token estimate does.
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async (_url, init) => {
+      if (init?.method !== 'POST') {
+        return Response.json({ object: 'list', data: [{ id: 'stealth one', access: 'paid', section: 'default', capabilities: ['tools'] }] });
+      }
+      return new Response(
+        'data: {"choices":[{"delta":{"content":"Hello."},"finish_reason":"stop"}]}\n\n'
+        + 'data: {"choices":[],"usage":{"prompt_tokens":6000,"completion_tokens":2,"total_tokens":6002}}\n\n'
+        + 'data: [DONE]\n\n',
+      );
+    });
+    const host = new AgentHost({
+      workspaceRoot: workspace(), moderadoHome: home, fetchImpl, onEvent, promptForApproval: async () => undefined,
+      getPreferences: () => ({ allowPaidModels: false, allowUnknownModels: false, webSearchEnabled: true, showHistoryOnStartup: false, preferredLanguage: 'English', approvalTimeoutSeconds: 120, contextBudgetTokens: 4_000, chatRetentionCount: 50 }),
+    });
+    // Twelve turns of about 600 characters each: roughly 1800 estimated
+    // tokens, under the 4000 budget, so the first turn is sent verbatim.
+    const history = Array.from({ length: 12 }, (_, index) => (
+      { role: 'user' as const, content: `request ${index} ${'x'.repeat(600)}` }
+    ));
+    const session = { ...createSession(workspace()), messages: history };
+    await host.startRun({ task: 'First turn.', modelId: 'auto', session });
+    expect(events.some((event) => event.type === 'progress' && String(event.status ?? '').startsWith('Summarised'))).toBe(false);
+
+    // The provider said 6000 tokens for that prompt, so the same history is
+    // now estimated well over the budget and the oldest turns are summarised.
+    await host.startRun({ task: 'Second turn.', modelId: 'auto', session });
+
+    const summarised = events.filter((event) => event.type === 'progress' && String(event.status ?? '').startsWith('Summarised'));
+    expect(summarised.length).toBe(1);
+  });
+
   it.each([
     ['config.json is not valid JSON: private-api-key excerpt', 'config.json is not valid JSON.'],
     ['config.json is empty.', 'config.json is empty.'],

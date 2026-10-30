@@ -20,7 +20,7 @@ import { ApprovalCoordinator, RawDecision } from './approval.js';
 import { ConfigState, canonicalWorkspaceRoot, configPath, discoverSkills, readConfig } from './profile.js';
 import { CredentialStore, MemoryCredentialStore, resolveCredential } from './credentials.js';
 import { SessionStore, StoredSession, conversationOf, createSession, saveSessionChecked } from './sessions.js';
-import { DEFAULT_CONTEXT_BUDGET_TOKENS, compactConversation } from './context-budget.js';
+import { DEFAULT_CONTEXT_BUDGET_TOKENS, calibrateCharsPerToken, compactConversation, conversationTokens, estimateTokens } from './context-budget.js';
 
 /**
  * How the host announces that a prompt was narrowed.
@@ -30,6 +30,13 @@ import { DEFAULT_CONTEXT_BUDGET_TOKENS, compactConversation } from './context-bu
  * the transcript instead of leaving it in the output channel.
  */
 export const COMPACTED_STATUS_PREFIX = 'Summarised';
+
+/**
+ * How the host announces that a prompt is still over the context budget after
+ * compaction. The extension host turns this status into a transcript note; the
+ * run itself is the user's call.
+ */
+export const CONTEXT_WARNING_STATUS_PREFIX = 'Context warning';
 import { DESKTOP_PROVIDER_PRESETS, MODERADO_BASE_URLS } from './provider-catalog.js';
 import { fetchGatewayRoutes, isPinnedDefault, type GatewayRoute } from './provider-discovery.js';
 import { DesktopOpenAIAdapter } from './provider-transport.js';
@@ -306,6 +313,12 @@ export class AgentHost implements IApprovalHandler {
   private current: StoredSession | null = null;
   /** Set by `startNewSession` so the next run does not resume the latest chat. */
   private newSessionPending = false;
+  /**
+   * Chars per token learned per session from what the provider actually
+   * reported for a sent prompt. In memory only: it is a hint, not state the
+   * shared profile or the CLI needs.
+   */
+  private calibration = new Map<string, number>();
 
   constructor(options: AgentHostOptions) {
     this.options = options;
@@ -432,10 +445,13 @@ export class AgentHost implements IApprovalHandler {
     try {
       // The stored conversation is what the record holds. The prompt is narrowed
       // to fit the model when the record has grown past the budget; the record
-      // itself is never reduced, so nothing the user wrote is lost.
+      // itself is never reduced, so nothing the user wrote is lost. The
+      // chars-per-token estimate is calibrated from what this provider actually
+      // reported for earlier prompts, so a dense tokenizer compacts sooner.
       const recorded = conversationOf(session.messages);
       const budgetTokens = preferences?.contextBudgetTokens ?? DEFAULT_CONTEXT_BUDGET_TOKENS;
-      const prompt = compactConversation(recorded, input.task, { budgetTokens });
+      const charsPerToken = this.calibration.get(session.id);
+      const prompt = compactConversation(recorded, input.task, { budgetTokens, ...(charsPerToken ? { charsPerToken } : {}) });
       const history = input.conversationHistory ?? prompt.messages;
       const sent = conversationOf(history);
       const scope = { workspaceRoot: this.options.workspaceRoot, sessionId: session.id, home: this.options.moderadoHome };
@@ -516,6 +532,18 @@ export class AgentHost implements IApprovalHandler {
           timestamp: Date.now(),
         });
       }
+      if (prompt.overBudget) {
+        // The estimate already failed once; still sending is the user's call,
+        // but a prompt the budget says cannot fit must not go out silently.
+        this.options.onEvent({
+          type: 'progress',
+          step: 0,
+          maxSteps: policy.maxSteps,
+          status: `${CONTEXT_WARNING_STATUS_PREFIX}: the prompt is about ${prompt.tokens} tokens, above the `
+            + `${budgetTokens}-token context budget. The provider may refuse it.`,
+          timestamp: Date.now(),
+        });
+      }
       const result = await new AgentLoop().run(input.task, {
         workspaceRoot: this.options.workspaceRoot,
         provider,
@@ -543,6 +571,16 @@ export class AgentHost implements IApprovalHandler {
       // Persist the turn so the conversation survives a restart and stays
       // readable by the CLI. A failed save must not lose the turn's result.
       const usage = result.usage;
+      // Calibrate the estimate from the provider's own count for this prompt,
+      // but only for a single-step run: a multi-step run's reported prompt
+      // tokens also count tool steps, so it would overcorrect. The baseline is
+      // the uncalibrated four-characters-per-token estimate, so the ratio is
+      // never computed against a number it has already moved.
+      if (usage && result.totalSteps === 1) {
+        const baseline = conversationTokens(prompt.messages) + estimateTokens(input.task);
+        const learned = calibrateCharsPerToken(baseline, usage.promptTokens);
+        if (learned !== undefined) this.calibration.set(session.id, learned);
+      }
       // A keyless Gateway session reaches the pinned free defaults and the paid
       // routes without an account, so nothing it can select costs the user. The
       // CLI records the same sessions at $0.00; without this the cost badge

@@ -17,6 +17,33 @@ import type { ChatMessage } from '@moderado/contracts';
 /** The budget used when nothing has been configured. */
 export const DEFAULT_CONTEXT_BUDGET_TOKENS = 48_000;
 
+/** The usual English approximation, and the baseline the calibration starts from. */
+export const CHARS_PER_TOKEN = 4;
+
+/**
+ * Bounds on the calibrated chars-per-token.
+ *
+ * One odd observation — a provider that counts its system prompt, or a turn
+ * that was mostly tool output — must not swing the estimate without bound.
+ */
+export const MIN_CHARS_PER_TOKEN = 1.5;
+export const MAX_CHARS_PER_TOKEN = 8;
+
+/**
+ * The chars-per-token the provider's own count implies.
+ *
+ * `estimatedTokens` is what the four-characters-per-token approximation said
+ * the sent prompt was; `actualTokens` is what the provider reported for it.
+ * A provider that counts more tokens means the text is denser than assumed,
+ * so the next estimate must rise. Undefined when either side is unusable.
+ */
+export function calibrateCharsPerToken(estimatedTokens: number, actualTokens: number): number | undefined {
+  if (!Number.isFinite(estimatedTokens) || !Number.isFinite(actualTokens)) return undefined;
+  if (estimatedTokens <= 0 || actualTokens <= 0) return undefined;
+  const charsPerToken = (estimatedTokens * CHARS_PER_TOKEN) / actualTokens;
+  return Math.min(MAX_CHARS_PER_TOKEN, Math.max(MIN_CHARS_PER_TOKEN, charsPerToken));
+}
+
 /** The narrowest budget the settings pane accepts. */
 export const MIN_CONTEXT_BUDGET_TOKENS = 4_000;
 
@@ -36,20 +63,21 @@ const DIGEST_LINE_CHARS = 160;
  * code, which is the safe direction: a slightly early compaction is harmless,
  * while an over-long prompt is refused by the provider.
  */
-export function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4);
+export function estimateTokens(text: string, charsPerToken: number = CHARS_PER_TOKEN): number {
+  const denominator = Number.isFinite(charsPerToken) && charsPerToken > 0 ? charsPerToken : CHARS_PER_TOKEN;
+  return Math.ceil(text.length / denominator);
 }
 
-function tokensOf(message: ChatMessage): number {
+function tokensOf(message: ChatMessage, charsPerToken: number): number {
   const content = typeof message.content === 'string'
     ? message.content
     : JSON.stringify(message.content ?? '');
-  return estimateTokens(content) + 4;
+  return estimateTokens(content, charsPerToken) + 4;
 }
 
 /** The tokens a whole message list is estimated to take. */
-export function conversationTokens(messages: readonly ChatMessage[]): number {
-  return messages.reduce((total, message) => total + tokensOf(message), 0);
+export function conversationTokens(messages: readonly ChatMessage[], charsPerToken: number = CHARS_PER_TOKEN): number {
+  return messages.reduce((total, message) => total + tokensOf(message, charsPerToken), 0);
 }
 
 export interface CompactionOptions {
@@ -57,6 +85,11 @@ export interface CompactionOptions {
   budgetTokens: number;
   /** The tail messages that stay verbatim when nothing else is needed. */
   keepRecent?: number;
+  /**
+   * Chars per token for the estimate, calibrated from what this provider
+   * actually reported for earlier prompts. Defaults to the usual approximation.
+   */
+  charsPerToken?: number;
 }
 
 export interface Compaction {
@@ -113,11 +146,12 @@ export function compactConversation(
 ): Compaction {
   const budget = Math.max(0, options.budgetTokens);
   const keepRecent = Math.max(0, options.keepRecent ?? 2);
-  const requestTokens = estimateTokens(task);
+  const charsPerToken = options.charsPerToken ?? CHARS_PER_TOKEN;
+  const requestTokens = estimateTokens(task, charsPerToken);
 
-  const tailTokens = (cut: number) => history.slice(cut).reduce((total, message) => total + tokensOf(message), 0);
+  const tailTokens = (cut: number) => history.slice(cut).reduce((total, message) => total + tokensOf(message, charsPerToken), 0);
   const fits = (cut: number): boolean => {
-    const digest = cut === 0 ? 0 : estimateTokens(digestOf(history.slice(0, cut)));
+    const digest = cut === 0 ? 0 : estimateTokens(digestOf(history.slice(0, cut)), charsPerToken);
     return requestTokens + tailTokens(cut) + digest <= budget;
   };
 

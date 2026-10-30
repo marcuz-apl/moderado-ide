@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import { defaultSettingsPreferences, parsePreferenceChange, type SettingsPreferences } from './settings-preferences.js';
 import { IDE_VERSION } from './ide-version.js';
 import { AgentEvent, ApprovalRequest } from '@moderado/contracts';
-import { AgentHost, RunOutcome, COMPACTED_STATUS_PREFIX } from './host.js';
+import { AgentHost, RunOutcome, COMPACTED_STATUS_PREFIX, CONTEXT_WARNING_STATUS_PREFIX } from './host.js';
 import { chatFileName, sessionMarkdown } from './session-export.js';
 import { searchChats } from './session-search.js';
 import { chatTitle } from './session-title.js';
@@ -253,7 +253,7 @@ export function activate(context: vscode.ExtensionContext): ModeradoApi {
       // A narrowed prompt is shown, so a model that has lost the start of a long
       // chat is explained rather than mysterious. Other progress events stay in
       // the output channel.
-      if (event.type === 'progress' && event.status.startsWith(COMPACTED_STATUS_PREFIX)) {
+      if (event.type === 'progress' && (event.status.startsWith(COMPACTED_STATUS_PREFIX) || event.status.startsWith(CONTEXT_WARNING_STATUS_PREFIX))) {
         append({ kind: 'tool', label: 'Context', text: event.status });
       }
       if (event.type === 'assistant_delta') appendDelta(event.delta);
