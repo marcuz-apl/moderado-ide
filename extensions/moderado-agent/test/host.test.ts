@@ -6,7 +6,7 @@ import { AgentEvent, ApprovalRequest } from '@moderado/contracts';
 import { resolveInJail } from '@moderado/tools';
 import { AgentHost, previewFor, resolveProvider } from '../src/host.js';
 import { MemoryCredentialStore } from '../src/credentials.js';
-import { canonicalWorkspaceRoot, discoverSkills, readConfig } from '../src/profile.js';
+import { canonicalWorkspaceRoot, configPath, discoverSkills, readConfig } from '../src/profile.js';
 import { DesktopOpenAIAdapter } from '../src/provider-transport.js';
 import { preparePrompt } from '../src/attachments.js';
 import { createSession, SessionStore } from '../src/sessions.js';
@@ -34,6 +34,14 @@ function configuredHome(id: string, connection: Record<string, unknown>, extra: 
   return home;
 }
 
+/** A home whose config.json cannot be parsed: the fail-closed fake path. */
+function invalidHome(): string {
+  const home = tempDirectory('moderado-home-');
+  mkdirSync(join(home, '.moderado'));
+  writeFileSync(join(home, '.moderado', 'config.json'), '{ not json');
+  return home;
+}
+
 function fakeHTTP(data: unknown[]) {
   return vi.fn<typeof fetch>().mockImplementation(async (_url, init) => init?.method === 'POST'
     ? new Response('data: {"choices":[{"delta":{"content":"Hello."},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n')
@@ -41,10 +49,49 @@ function fakeHTTP(data: unknown[]) {
 }
 
 describe('provider profile recovery', () => {
-  it('identifies missing settings with the actual profile path and setup steps', async () => {
-    const path = join(workspace(), '.moderado', 'config.json');
-    const result = await resolveProvider({ kind: 'missing' }, new MemoryCredentialStore(), {}, undefined, undefined, path);
-    expect(result.reason).toBe(`No provider settings found at ${path}. Open Settings → API Config, enter URL/key, load models and Save settings.`);
+  it('starts a fresh profile on the Gateway keyless defaults instead of refusing', async () => {
+    // A new install has no config.json at all. The Gateway serves its pinned
+    // free defaults without an account, so the session starts there — the way
+    // the CLI starts an empty profile — instead of blocking on setup.
+    const home = tempDirectory('moderado-host-');
+    const result = await resolveProvider(readConfig(home), new MemoryCredentialStore(), {}, undefined, undefined, configPath(home));
+    expect(result.reason).toBeUndefined();
+    expect(result).toMatchObject({ connectionId: 'moderado-cloud', hasApiKey: false, defaultModel: 'auto' });
+    expect(result.discoverGatewayRoutes).toBeTypeOf('function');
+  });
+
+  it('starts an empty profile on the Gateway keyless defaults too', async () => {
+    const home = tempDirectory('moderado-host-');
+    mkdirSync(join(home, '.moderado'));
+    writeFileSync(join(home, '.moderado', 'config.json'), JSON.stringify({ activeConnectionId: '', connections: {} }));
+    const result = await resolveProvider(readConfig(home), new MemoryCredentialStore(), {}, undefined, undefined, configPath(home));
+    expect(result).toMatchObject({ connectionId: 'moderado-cloud', hasApiKey: false });
+  });
+
+  it('falls back to a saved connection when the active id dangles', async () => {
+    // An active id that names a deleted connection must not report the whole
+    // profile as malformed while another usable connection is saved.
+    const home = tempDirectory('moderado-host-');
+    mkdirSync(join(home, '.moderado'));
+    writeFileSync(join(home, '.moderado', 'config.json'), JSON.stringify({
+      activeConnectionId: 'gone',
+      connections: { ollama: { id: 'ollama', kind: 'openai-compatible', baseUrl: 'http://127.0.0.1:11434/v1' } },
+    }));
+    const result = await resolveProvider(readConfig(home), new MemoryCredentialStore(), {}, undefined, undefined, configPath(home));
+    expect(result.connectionId).toBe('ollama');
+  });
+
+  it('runs a fresh install against the Gateway defaults with no key and no saved profile', async () => {
+    const home = tempDirectory('moderado-host-');
+    const fetchImpl = fakeHTTP([{ id: 'stealth one', name: 'Stealth One', access: 'paid', section: 'default', capabilities: ['tools'] }]);
+    const host = new AgentHost({ workspaceRoot: workspace(), moderadoHome: home, fetchImpl, onEvent: () => {}, promptForApproval: async () => undefined });
+    const result = await host.startRun({ task: 'Hello.', modelId: 'auto' });
+
+    expect(result.status).toBe('completed');
+    const post = fetchImpl.mock.calls.find(([, init]) => init?.method === 'POST')!;
+    // Keyless `auto` omits `model` so the Gateway applies its pinned defaults.
+    expect(JSON.parse(String(post[1]?.body))).not.toHaveProperty('model');
+    expect(post[1]?.headers).not.toHaveProperty('Authorization');
   });
 
   it('names the missing key when a free Gateway route is used without one', async () => {
@@ -843,7 +890,9 @@ describe('AgentHost tool approvals end to end', () => {
 describe('AgentHost new session', () => {
   it('starts a distinct session after the user asks for a new one', async () => {
     const workspaceRoot = workspace();
-    const home = tempDirectory('moderado-home-');
+    // The fake provider keeps this offline: session isolation is what is under
+    // test, not the provider.
+    const home = invalidHome();
     const host = new AgentHost({ workspaceRoot, moderadoHome: home, onEvent: () => {}, promptForApproval: async () => undefined });
 
     const first = await host.startRun({ task: 'First turn.' });
@@ -914,9 +963,11 @@ describe('AgentHost session persistence', () => {
   });
 
   it('exposes model options with cost classification', async () => {
+    // A profile that cannot be read fails closed onto the offline fake
+    // provider; a fresh profile goes to the Gateway's keyless defaults instead.
     const host = new AgentHost({
       workspaceRoot: tempDirectory('moderado-ws-'),
-      moderadoHome: tempDirectory('moderado-home-'),
+      moderadoHome: invalidHome(),
       onEvent: () => {},
       promptForApproval: async () => undefined,
     });
@@ -932,10 +983,11 @@ describe('AgentHost run', () => {
   it('completes a bounded turn against the vendored core with a fake provider', async () => {
     const { events, onEvent } = collector();
     // Every run test must use an isolated home so the developer's real
-    // ~/.moderado is never written.
+    // ~/.moderado is never written. An unreadable profile resolves the offline
+    // fake provider; a fresh profile would reach the real Gateway.
     const host = new AgentHost({
       workspaceRoot: workspace(),
-      moderadoHome: tempDirectory('moderado-home-'),
+      moderadoHome: invalidHome(),
       onEvent,
       promptForApproval: async () => undefined,
     });
@@ -950,7 +1002,7 @@ describe('AgentHost run', () => {
   it('routes free-first by default and does not select a paid model', async () => {
     const host = new AgentHost({
       workspaceRoot: workspace(),
-      moderadoHome: tempDirectory('moderado-home-'),
+      moderadoHome: invalidHome(),
       onEvent: () => {},
       promptForApproval: async () => undefined,
     });

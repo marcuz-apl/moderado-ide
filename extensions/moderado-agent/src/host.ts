@@ -30,7 +30,7 @@ import { DEFAULT_CONTEXT_BUDGET_TOKENS, compactConversation } from './context-bu
  * the transcript instead of leaving it in the output channel.
  */
 export const COMPACTED_STATUS_PREFIX = 'Summarised';
-import { DESKTOP_PROVIDER_PRESETS } from './provider-catalog.js';
+import { DESKTOP_PROVIDER_PRESETS, MODERADO_BASE_URLS } from './provider-catalog.js';
 import { fetchGatewayRoutes, isPinnedDefault, type GatewayRoute } from './provider-discovery.js';
 import { DesktopOpenAIAdapter } from './provider-transport.js';
 import { DesktopModelRouter } from './model-router.js';
@@ -138,6 +138,33 @@ function fakeResolution(reason: string): ProviderResolution {
 }
 
 /**
+ * The session connection for a profile with nothing saved.
+ *
+ * The Gateway serves its pinned free defaults without an account, so a fresh
+ * install starts there instead of blocking on setup, the way the CLI starts an
+ * empty profile. Nothing is written to the profile: this is the session's
+ * connection until the user saves one of their own, after which the saved
+ * record wins.
+ *
+ * The production Gateway is used directly rather than probing the development
+ * one: the settings pane has an explicit Dev/Prod choice, and a probe would add
+ * latency to every unconfigured run.
+ */
+function keylessGatewayResolution(
+  fetchImpl?: typeof fetch,
+  imageContext?: ReadonlyMap<string, readonly ImageAttachment[]>,
+): ProviderResolution {
+  const baseUrl = MODERADO_BASE_URLS.production;
+  return {
+    adapter: new DesktopOpenAIAdapter({ baseUrl, id: 'moderado-cloud', name: 'Moderado', fetchImpl, imageContext }),
+    connectionId: 'moderado-cloud',
+    defaultModel: 'auto',
+    hasApiKey: false,
+    discoverGatewayRoutes: (signal?: AbortSignal) => fetchGatewayRoutes(baseUrl, { fetchImpl, signal }),
+  };
+}
+
+/**
  * Builds the adapter for `state`'s active connection.
  *
  * Returns the fake adapter when no usable connection is configured, so the
@@ -157,7 +184,8 @@ export async function resolveProvider(
     return fakeResolution(reason);
   };
   if (state.kind === 'missing') {
-    return unavailable(`No provider settings found at ${profilePath}. Open Settings → API Config, enter URL/key, load models and Save settings.`);
+    // A profile that does not exist yet is a fresh install, not a broken one.
+    return keylessGatewayResolution(fetchImpl, imageContext);
   }
   if (state.kind === 'invalid') {
     // JSON parser diagnostics can quote plaintext config contents. Expose only
@@ -174,9 +202,13 @@ export async function resolveProvider(
   const connections = parsedConnections.data;
   const activeId = state.config.activeConnectionId;
   if (activeId !== undefined && typeof activeId !== 'string') throw new Error('The active provider connection is malformed.');
-  const connectionId = typeof activeId === 'string' ? activeId : Object.keys(connections)[0];
+  // A dangling active id falls back to a saved connection instead of reporting
+  // the whole profile as malformed; the CLI resolves the same way.
+  const connectionId = typeof activeId === 'string' && connections[activeId] !== undefined
+    ? activeId
+    : Object.keys(connections)[0];
   if (connectionId === undefined) {
-    return unavailable('No provider connection is configured. Run "Moderado: Configure Provider Connection".');
+    return keylessGatewayResolution(fetchImpl, imageContext);
   }
   const parsed = ConnectionSchema.safeParse(connections[connectionId]);
   if (!parsed.success || parsed.data.id !== connectionId) throw new Error('The saved provider connection is malformed. Open Moderado Settings to review it.');

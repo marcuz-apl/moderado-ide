@@ -70,12 +70,16 @@ function homeWithConfig(contents: unknown): string {
 const noEnv = {} as NodeJS.ProcessEnv;
 
 describe('provider resolution', () => {
-  it('falls back to the fake provider and explains why when nothing is configured', async () => {
+  it('starts an empty profile on the Gateway keyless defaults instead of the fake provider', async () => {
+    // The Gateway serves its pinned free defaults without an account, so a
+    // profile with nothing saved can still run. Nothing is written to config:
+    // the next saved connection replaces this session-scoped resolution.
     const home = homeWithConfig({});
-    const { adapter, reason } = await resolveProvider(readConfig(home), new MemoryCredentialStore(), noEnv);
-    expect(adapter).toBeInstanceOf(FakeProviderAdapter);
-    // The fallback must be visible, not a silent pretend-run.
-    expect(reason).toMatch(/No provider connection/i);
+    const { adapter, reason, connectionId, hasApiKey } = await resolveProvider(readConfig(home), new MemoryCredentialStore(), noEnv);
+    expect(adapter).not.toBeInstanceOf(FakeProviderAdapter);
+    expect(reason).toBeUndefined();
+    expect(connectionId).toBe('moderado-cloud');
+    expect(hasApiKey).toBe(false);
   });
 
   it('falls back to the fake provider when the profile is corrupt', async () => {
