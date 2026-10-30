@@ -153,10 +153,13 @@ export function activate(context: vscode.ExtensionContext): ModeradoApi {
   let recentsDirty = true;
 
   // Prefer the real editor workspace root so a session directory matches what the
-  // CLI would derive for the same folder.
-  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-  const workspaceRoot =
-    workspaceFolder?.uri.fsPath ?? process.cwd();
+  // CLI would derive for the same folder. It is re-resolved when the window's
+  // folder changes, because the file-tool jail and the session directory are
+  // both rooted here.
+  function currentWorkspaceRoot(): string {
+    return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+  }
+  let workspaceRoot = currentWorkspaceRoot();
 
   const draftAttachments = new Map<string, DraftAttachment>();
   let pickingAttachments = false;
@@ -171,7 +174,7 @@ export function activate(context: vscode.ExtensionContext): ModeradoApi {
     settings,
     autoApprove,
     recents: [],
-    workspaceLabel: workspaceFolderLabel(workspaceFolder, workspaceRoot),
+    workspaceLabel: workspaceFolderLabel(vscode.workspace.workspaceFolders?.[0], workspaceRoot),
   };
 
   /**
@@ -205,8 +208,17 @@ export function activate(context: vscode.ExtensionContext): ModeradoApi {
     syncActiveContext();
   })();
 
-  const host = new AgentHost({
-    workspaceRoot,
+  let host = buildHost(workspaceRoot);
+
+  /**
+   * Builds the agent for one workspace root.
+   *
+   * Extracted so the window's folder change can re-scope the file-tool jail and
+   * the session directory, which are both rooted where the host points.
+   */
+  function buildHost(root: string): AgentHost {
+    return new AgentHost({
+    workspaceRoot: root,
     nonInteractive: false,
     // On Windows the key comes from Credential Manager; elsewhere the in-memory
     // default keeps Desktop usable without a keychain.
@@ -247,8 +259,52 @@ export function activate(context: vscode.ExtensionContext): ModeradoApi {
       if (event.type === 'assistant_delta') appendDelta(event.delta);
     },
     promptForApproval: (request, signal) => askHuman(request, signal),
-  });
+    });
+  }
 
+  let pendingRescope = false;
+
+  /**
+   * Re-scopes the agent to the window's current folder.
+   *
+   * The file-tool jail and the session directory are both rooted at the
+   * workspace, so a folder change used to leave the agent scoped to the
+   * previous root: file tools refused the new project and chats were filed
+   * under the wrong workspace. A change during a run is deferred until the run
+   * settles, because rebuilding the host cancels it.
+   */
+  function reScopeWorkspace(): void {
+    const root = currentWorkspaceRoot();
+    if (root === workspaceRoot) return;
+    if (host.isRunning || view.running) {
+      pendingRescope = true;
+      return;
+    }
+    workspaceRoot = root;
+    host.dispose();
+    host = buildHost(root);
+    // The on-screen conversation belongs to the previous workspace; it stays in
+    // that workspace's history on disk and the panel starts empty for this one.
+    attachmentEpoch++;
+    draftAttachments.clear();
+    view.transcript = [];
+    view.pendingApproval = null;
+    view.tokenUsage = undefined;
+    invalidateRecents();
+    render();
+    void vscode.window.showInformationMessage(
+      `Moderado is now scoped to ${workspaceFolderLabel(vscode.workspace.workspaceFolders?.[0], root)}.`,
+    );
+  }
+
+  /** Applies a folder change that was deferred because a run was active. */
+  function applyPendingRescope(): void {
+    if (!pendingRescope) return;
+    pendingRescope = false;
+    reScopeWorkspace();
+  }
+
+  context.subscriptions.push(vscode.workspace.onDidChangeWorkspaceFolders(() => reScopeWorkspace()));
   context.subscriptions.push({ dispose: () => host.dispose() });
 
   /** Coalesces streamed assistant text into a single transcript entry. */
@@ -1246,6 +1302,7 @@ async function openDiffTab(requestId: string): Promise<void> {
       host.cancel();
       view.running = false;
       render();
+      applyPendingRescope();
       vscode.window.showInformationMessage('Moderado run cancelled.');
     }),
     vscode.commands.registerCommand('moderado.togglePlanMode', async () => {
@@ -1693,6 +1750,7 @@ async function openDiffTab(requestId: string): Promise<void> {
       view.pendingApproval = null;
       invalidateRecents();
       render();
+      applyPendingRescope();
     }
   }
 

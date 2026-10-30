@@ -15,6 +15,7 @@ const harness = vi.hoisted(() => ({
   commands: new Map<string, (...args: unknown[]) => unknown>(), saveDialog: vi.fn(), written: [] as { path: string; text: string }[], info: vi.fn(), resumed: '', running: false,
   disposeView: undefined as undefined | (() => void),
   openDocument: vi.fn(), showDocument: vi.fn(),
+  folderChange: undefined as undefined | () => void,
   workspaceTitles: new Map<string, unknown>(), listCalls: 0,
 }));
 vi.mock('vscode', () => ({
@@ -28,6 +29,7 @@ vi.mock('vscode', () => ({
     showTextDocument: harness.showDocument,
   },
   workspace: { get workspaceFolders() { return [{ uri: { fsPath: harness.workspaceRoot } }]; }, findFiles: harness.findFiles,
+    onDidChangeWorkspaceFolders: (listener: () => void) => { harness.folderChange = listener; return { dispose: vi.fn() }; },
     openTextDocument: harness.openDocument,
     fs: { writeFile: async (uri: { fsPath: string }, data: Uint8Array) => { harness.written.push({ path: uri.fsPath, text: new TextDecoder().decode(data) }); } },
     getConfiguration: () => ({ get: (key: string, fallback: unknown) => harness.configValues.has(key) ? harness.configValues.get(key) : fallback, update: harness.configUpdate }) },
@@ -891,6 +893,45 @@ describe('chat titles', () => {
     harness.histories = [createSession(harness.workspaceRoot)];
     send('showSessions');
     await vi.waitFor(() => expect(String(harness.messages.at(-1)?.recents)).toContain('Untitled session'));
+  });
+});
+
+describe('workspace re-scoping', () => {
+  it('rebuilds the agent for the new folder when the window folder changes', () => {
+    const before = harness.agentOptions;
+    const next = realpathSync(mkdtempSync(join(tmpdir(), 'moderado-rescope-')));
+    harness.workspaceRoot = next;
+
+    harness.folderChange?.();
+
+    expect(harness.agentOptions).not.toBe(before);
+    expect(harness.agentOptions.workspaceRoot).toBe(next);
+    // The panel says where the agent is now scoped, because the conversation
+    // the reader was looking at belongs to the previous workspace.
+    expect(harness.info).toHaveBeenCalledWith(expect.stringContaining('now scoped to'));
+  });
+
+  it('defers a folder change until the active run settles', async () => {
+    const initial = harness.agentOptions;
+    harness.running = true;
+    const next = realpathSync(mkdtempSync(join(tmpdir(), 'moderado-rescope-')));
+    harness.workspaceRoot = next;
+
+    harness.folderChange?.();
+    expect(harness.agentOptions).toBe(initial);
+
+    // The deferred change is applied when the run's finally block runs.
+    harness.running = false;
+    send('prompt', { text: 'After the run.' });
+    await vi.waitFor(() => expect(harness.runs.length).toBeGreaterThanOrEqual(1));
+    await vi.waitFor(() => expect(harness.agentOptions.workspaceRoot).toBe(next));
+  });
+
+  it('leaves the agent alone when the folder did not actually change', () => {
+    const before = harness.agentOptions;
+    harness.folderChange?.();
+    expect(harness.agentOptions).toBe(before);
+    expect(harness.info).not.toHaveBeenCalledWith(expect.stringContaining('now scoped to'));
   });
 });
 
