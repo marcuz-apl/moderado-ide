@@ -15,7 +15,7 @@ const harness = vi.hoisted(() => ({
   commands: new Map<string, (...args: unknown[]) => unknown>(), saveDialog: vi.fn(), written: [] as { path: string; text: string }[], info: vi.fn(), resumed: '', running: false,
   disposeView: undefined as undefined | (() => void),
   openDocument: vi.fn(), showDocument: vi.fn(),
-  folderChange: undefined as undefined | () => void,
+  folderChange: undefined as (() => void) | undefined,
   workspaceTitles: new Map<string, unknown>(), listCalls: 0,
   globalValues: new Map<string, unknown>(),
 }));
