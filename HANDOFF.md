@@ -21,7 +21,7 @@ The IDE connects to the Gateway without a key from the first launch, MCP servers
 
 ## In progress
 
-- GitHub Actions run `41125274990` (`platform=windows`, artifact-only, no publish) was dispatched from master so the owner can test the stealth models and MCP on Windows.
+- GitHub Actions run `41175520883` (`platform=windows`, artifact-only, no publish) is building master for owner testing. A first dispatch (`41125274990`) failed at the extension offline suite: the oxc transform rejected the unparenthesized union in the harness's `folderChange` field (`undefined as undefined | () => void`), which the local tsc and vitest accepted. The type is now parenthesized; the run also confirmed the v0.4.54 vendoring and vendored-package build work on CI.
 
 ## Working tree
 
